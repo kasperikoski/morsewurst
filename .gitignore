@@ -1,0 +1,77 @@
+# Python cache and tooling
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Build and packaging output
+build/
+dist/
+*.spec
+Output/
+*.exe
+*.msi
+*.zip
+
+# Inno Setup temporary/output files
+*.iss~
+*.bak
+
+# Local exports and generated project snapshots
+export_project.py
+export_network.py
+morsewurst_project.txt
+morsewurst_network_export.txt
+Morsewurst Project Folder/
+
+# Raspberry Pi deployment helper files
+/server/
+
+# Local relay/server configuration with possible secrets
+relay.toml
+relay.env
+*.env
+
+# Local app settings
+network_settings.json
+ui_settings.json
+
+# Python packaging metadata
+*.egg-info/
+.eggs/
+
+# Coverage and test output
+.coverage
+htmlcov/
+
+# IDE and OS metadata
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Logs and temporary files
+*.log
+*.tmp
+
+# Serial/debug captures and local dumps
+*.jsonl
+*_debug.json
+*_snapshot.json
+
+# App data / local database
+data/
+*.sqlite
+*.sqlite3
+*.db
+
+# Debug snapshots
+debug/
+latest_round_debug.json
+debug_history.jsonl

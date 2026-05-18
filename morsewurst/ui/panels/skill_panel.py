@@ -1,0 +1,73 @@
+# ============================================================
+# morsewurst/ui/panels/skill_panel.py
+# ============================================================
+
+from __future__ import annotations
+
+import tkinter as tk
+from tkinter import ttk
+
+
+def _metric_cell(parent: ttk.Frame, column: int, label: str, variable: tk.StringVar) -> None:
+    cell = ttk.Frame(parent)
+    cell.grid(row=0, column=column, sticky=tk.W, padx=(0, 12))
+
+    ttk.Label(
+        cell,
+        text=label,
+        font=("Segoe UI", 7),
+        foreground="#666666",
+    ).pack(anchor=tk.W)
+
+    ttk.Label(
+        cell,
+        textvariable=variable,
+        font=("Segoe UI", 8, "bold"),
+    ).pack(anchor=tk.W)
+
+
+def build_skill_panel(app: tk.Misc, parent: ttk.Frame) -> None:
+    """Build the skill rating panel."""
+
+    skill = ttk.LabelFrame(parent, text="Taitotaso")
+    skill.pack(fill=tk.X, pady=(8, 0))
+
+    ttk.Label(
+        skill,
+        textvariable=app.skill_title_var,
+        font=("Segoe UI", 12, "bold"),
+        justify=tk.LEFT,
+    ).pack(anchor=tk.W, padx=8, pady=(5, 0))
+
+    ttk.Label(
+        skill,
+        textvariable=app.skill_rating_var,
+        font=("Consolas", 9),
+        justify=tk.LEFT,
+    ).pack(anchor=tk.W, padx=8, pady=(3, 0))
+
+    factors_grid = ttk.Frame(skill)
+    factors_grid.pack(anchor=tk.W, padx=8, pady=(5, 0), fill=tk.X)
+
+    _metric_cell(factors_grid, 0, "Tarkkuus", app.skill_accuracy_value_var)
+    _metric_cell(factors_grid, 1, "Puhtaus", app.skill_cleanliness_value_var)
+    _metric_cell(factors_grid, 2, "Ajoitus", app.skill_timing_value_var)
+    _metric_cell(factors_grid, 3, "Korjaus", app.skill_adjustment_value_var)
+
+    confidence_grid = ttk.Frame(skill)
+    confidence_grid.pack(anchor=tk.W, padx=8, pady=(4, 0), fill=tk.X)
+
+    _metric_cell(confidence_grid, 0, "Luottamus", app.skill_confidence_value_var)
+    _metric_cell(confidence_grid, 1, "Merkit", app.skill_mastery_value_var)
+    _metric_cell(confidence_grid, 2, "Kattavuus", app.skill_coverage_value_var)
+    _metric_cell(confidence_grid, 3, "Min.kier.", app.skill_used_rounds_value_var)
+    _metric_cell(confidence_grid, 4, "Yht.kier.", app.skill_total_used_rounds_value_var)
+
+    ttk.Label(
+        skill,
+        textvariable=app.skill_warning_var,
+        font=("Segoe UI", 8),
+        justify=tk.LEFT,
+        foreground="#8a5a00",
+        wraplength=320,
+    ).pack(anchor=tk.W, padx=8, pady=(3, 5))

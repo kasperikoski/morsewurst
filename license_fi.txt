@@ -1,0 +1,60 @@
+MORSEWURST
+KÄYTTÖEHDOT JA VASTUUVAPAUSLAUSEKE
+
+Lue nämä ehdot huolellisesti ennen ohjelman asentamista ja käyttämistä. Asentamalla tai käyttämällä tätä ohjelmaa hyväksyt nämä ehdot.
+
+1. Ohjelmiston keskeneräisyys
+
+Tämä ohjelma on keskeneräinen ja kehitysvaiheessa oleva ohjelmisto. Ohjelma ei välttämättä toimi oikein, täydellisesti, keskeytyksettä tai virheettömästi.
+
+Ohjelmassa voi esiintyä virheitä, toimintahäiriöitä, puutteita, yhteensopivuusongelmia, tietojen virheellistä käsittelyä, odottamatonta toimintaa tai muita ongelmia. Ohjelmaa ei tule käyttää tilanteissa, joissa virheellinen toiminta voisi aiheuttaa vahinkoa, taloudellista menetystä, tietojen katoamista, turvallisuusriskejä tai muuta haittaa.
+
+2. Käyttö omalla vastuulla
+
+Käyttäjä asentaa ja käyttää ohjelmaa täysin omalla vastuullaan.
+
+Ohjelman kehittäjä, tekijänoikeuksien haltija tai muu ohjelman jakeluun osallistuva taho ei vastaa mistään ohjelman käytöstä, asentamisesta, poistamisesta, toimimattomuudesta, virheellisestä toiminnasta tai muusta ohjelmaan liittyvästä seikasta aiheutuvasta vahingosta.
+
+Tämä vastuuvapaus koskee muun muassa suoria ja epäsuoria vahinkoja, välillisiä vahinkoja, taloudellisia menetyksiä, menetettyä voittoa, tietojen katoamista, laitteisto- tai ohjelmistovaurioita, käyttökatkoja, virheellisiä tuloksia, kolmansille osapuolille aiheutuvia vahinkoja sekä muita mahdollisia seurauksia.
+
+Ohjelman kehittäjä ei vastaa siitä, soveltuuko ohjelma käyttäjän tarkoitukseen tai toimiiko se käyttäjän laitteistossa, käyttöjärjestelmässä tai muussa ohjelmistoympäristössä.
+
+3. Ei takuuta
+
+Ohjelma toimitetaan sellaisenaan ilman mitään nimenomaista tai oletettua takuuta.
+
+Ohjelman kehittäjä ei anna takuuta ohjelman toimivuudesta, virheettömyydestä, turvallisuudesta, jatkuvasta saatavuudesta, yhteensopivuudesta, tarkkuudesta tai soveltuvuudesta mihinkään tiettyyn käyttötarkoitukseen.
+
+4. Ei ylläpitovelvollisuutta
+
+Ohjelman kehittäjällä ei ole velvollisuutta ylläpitää, päivittää, korjata, kehittää, tukea tai jatkaa ohjelmiston saatavilla pitämistä.
+
+Ohjelman kehittäjä pidättää oikeuden tehdä ohjelmaan muutoksia, poistaa ominaisuuksia, lisätä ominaisuuksia, muuttaa ohjelman toimintaa tai lopettaa ohjelman kehittämisen ja jakelun ilman erillistä ilmoitusta.
+
+5. Tekijänoikeudet ja muut oikeudet
+
+Tämä ohjelma, sen nimi, lähdekoodi, käyttöliittymä, toiminnallisuudet, dokumentaatio, tekstit, tekniset ratkaisut, visuaaliset elementit ja muu ohjelmaan liittyvä aineisto ovat tekijänoikeuksien ja muiden immateriaalioikeuksien suojaamia, ellei erikseen toisin ilmoiteta.
+
+Kaikki oikeudet pidätetään ohjelman tekijälle tai muulle oikeudenhaltijalle.
+
+6. Käyttöoikeus
+
+Käyttäjälle myönnetään rajoitettu, henkilökohtainen ja ei-yksinomainen oikeus asentaa ja käyttää ohjelmaa.
+
+Tämä käyttöoikeus ei siirrä käyttäjälle omistusoikeutta ohjelmaan, sen lähdekoodiin, nimeen, dokumentaatioon, teknisiin ratkaisuihin tai muuhun ohjelmaan liittyvään aineistoon.
+
+7. Jälleenmyynti ja jakelu
+
+Ohjelmaa ei saa myydä, jälleenmyydä, vuokrata, lisensoida, kaupallisesti hyödyntää, sisällyttää maksulliseen tuotteeseen tai palveluun eikä muuten luovuttaa eteenpäin kaupallisessa tarkoituksessa ilman tekijänoikeuksien haltijan etukäteen antamaa kirjallista lupaa.
+
+Ohjelman muokkaaminen, kopioiminen, uudelleenjakelu tai julkaiseminen muussa muodossa on sallittua vain, jos siihen on saatu tekijänoikeuksien haltijan lupa tai jos erillinen kirjallinen lisenssi sen nimenomaisesti sallii.
+
+8. Muutokset ehtoihin
+
+Ohjelman kehittäjä pidättää oikeuden muuttaa näitä käyttöehtoja ja vastuuvapauslauseketta. Uudet ehdot koskevat ohjelman myöhempiä versioita ja jakeluita.
+
+9. Sovellettavan lain rajoitukset
+
+Tätä vastuuvapauslauseketta sovelletaan niin laajasti kuin soveltuva laki sallii. Mikäli jokin tämän tekstin kohta katsotaan pätemättömäksi tai täytäntöönpanokelvottomaksi, muut kohdat jäävät edelleen voimaan mahdollisimman laajasti lain sallimissa rajoissa.
+
+Hyväksymällä nämä ehdot käyttäjä vahvistaa ymmärtävänsä, että ohjelma on keskeneräinen, sitä käytetään omalla vastuulla, eikä ohjelman kehittäjä vastaa ohjelman käytöstä aiheutuvista virheistä, vioista, vahingoista, menetyksistä tai muista seurauksista.

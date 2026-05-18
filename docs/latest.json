@@ -1,0 +1,11 @@
+{
+  "app": "MorseWurst",
+  "latest_version": "0.99.0",
+  "release_date": "2026-05-18",
+  "release_url": "https://github.com/kasperikoski/morsewurst/releases",
+  "download_url": "",
+  "release_notes": [
+    "Initial update manifest for MorseWurst.",
+    "The application can now check whether a newer version is available."
+  ]
+}
