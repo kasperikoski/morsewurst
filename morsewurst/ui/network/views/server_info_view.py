@@ -105,7 +105,7 @@ class ServerInfoViewMixin:
             return False
 
         try:
-            return bool(manager.is_running)
+            return bool(getattr(manager, "control_channel_ready", False))
         except Exception:
             return False
 

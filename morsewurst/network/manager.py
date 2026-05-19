@@ -76,6 +76,7 @@ class NetworkManager:
         self._seq = 0
         self._closed = threading.Event()
         self._closed.set()
+        self._control_ready_event = threading.Event()
 
     @property
     def mode(self) -> str:
@@ -84,6 +85,11 @@ class NetworkManager:
     @property
     def is_running(self) -> bool:
         return self._mode in {"host", "client"}
+    
+    @property
+    def control_channel_ready(self) -> bool:
+        """True when server info and ping messages can be sent safely."""
+        return self._control_ready_event.is_set()
 
     def _create_tone_player(self, playback_settings: PlaybackSettings) -> TonePlayer:
         return TonePlayer(
@@ -99,6 +105,7 @@ class NetworkManager:
 
     def start_host(self, settings: NetworkSettings) -> None:
         self.stop()
+        self._control_ready_event.clear()
         self._settings = settings
         self.playback_settings = settings.playback
         self.tone_player.stop()
@@ -115,6 +122,7 @@ class NetworkManager:
 
     def connect_to_room(self, settings: NetworkSettings) -> None:
         self.stop()
+        self._control_ready_event.clear()
         self._settings = settings
         self.playback_settings = settings.playback
         self.tone_player.stop()
@@ -134,6 +142,7 @@ class NetworkManager:
             return
 
         self.stop()
+        self._control_ready_event.clear()
         self._settings = settings
         self._mode = "client"
         self._start_loop()
@@ -168,6 +177,8 @@ class NetworkManager:
                             )
                         )
                     )
+
+                    self._control_ready_event.set()
 
                     reconnect_delay = 1.0
 
@@ -205,6 +216,7 @@ class NetworkManager:
 
             except Exception as exc:
                 self._lobby_websocket = None
+                self._control_ready_event.clear()
 
                 if self._stop_event is not None and self._stop_event.is_set():
                     break
@@ -230,6 +242,7 @@ class NetworkManager:
                 reconnect_delay = min(reconnect_delay * 2.0, 30.0)
 
         self._lobby_websocket = None
+        self._control_ready_event.clear()
 
     async def _lobby_receiver_loop(self, websocket: Any) -> None:
         async for raw in websocket:
@@ -293,6 +306,7 @@ class NetworkManager:
     def stop(self) -> None:
         if self._loop is None:
             self._mode = "stopped"
+            self._control_ready_event.clear()
             self.jitter_buffer.clear()
             self.tone_player.stop()
             self._lobby_websocket = None
@@ -345,6 +359,7 @@ class NetworkManager:
         self._client_send_queue = None
         self._client_websocket = None
         self._lobby_websocket = None
+        self._control_ready_event.clear()
         self._mode = "stopped"
         self.jitter_buffer.clear()
         self.tone_player.stop()
@@ -403,6 +418,8 @@ class NetworkManager:
             return
         if self._loop is None:
             return
+        if not self.control_channel_ready:
+            return
 
         message = {
             "v": 4,
@@ -419,13 +436,13 @@ class NetworkManager:
             asyncio.run_coroutine_threadsafe(self._send_lobby_message(message), self._loop)
             return
 
-        self._status("warning", "Server info -pyyntöä ei voitu lähettää, koska yhteys ei ole valmis.")
-
 
     def request_server_ping(self) -> None:
         if not self.is_running:
             return
         if self._loop is None:
+            return
+        if not self.control_channel_ready:
             return
 
         message = make_client_ping(sender_id=self.client_id)
@@ -437,8 +454,6 @@ class NetworkManager:
         if self._lobby_websocket is not None:
             asyncio.run_coroutine_threadsafe(self._send_lobby_message(message), self._loop)
             return
-
-        self._status("warning", "Server pingiä ei voitu lähettää, koska yhteys ei ole valmis.")
 
 
     async def _enqueue_client_message(self, message: Dict[str, Any]) -> bool:
@@ -544,6 +559,7 @@ class NetworkManager:
 
         while self._stop_event is not None and not self._stop_event.is_set():
             self._client_send_queue = None
+            self._control_ready_event.clear()
 
             try:
                 async with connect(
@@ -563,6 +579,7 @@ class NetworkManager:
                     self._client_send_queue = asyncio.Queue(
                         maxsize=int(config.CLIENT_SEND_QUEUE_MAX_MESSAGES)
                     )
+                    self._control_ready_event.set()
 
                     room_name = str(welcome.get("room_name") or settings.room)
                     room_id = str(welcome.get("room_id") or "")
@@ -618,6 +635,7 @@ class NetworkManager:
             except Exception as exc:
                 self._client_websocket = None
                 self._client_send_queue = None
+                self._control_ready_event.clear()
 
                 if self._stop_event is not None and self._stop_event.is_set():
                     break
@@ -644,6 +662,7 @@ class NetworkManager:
 
         self._client_websocket = None
         self._client_send_queue = None
+        self._control_ready_event.clear()
 
     async def _client_authenticate(self, websocket: Any, settings: NetworkSettings) -> dict[str, Any]:
         await websocket.send(

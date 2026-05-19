@@ -68,13 +68,16 @@ class LobbyViewMixin:
         self._render_public_rooms()
         self._render_remembered_private_rooms()
 
-        if not self.public_rooms:
+        startup_complete = bool(getattr(self, "_network_startup_complete", True))
+
+        if startup_complete and not self.public_rooms:
             self._refresh_public_rooms_async()
 
         self._update_server_info_views()
-        self.after(100, lambda: self._request_server_info(silent=True))
 
-        self.after(150, self._ensure_lobby_presence)
+        if startup_complete:
+            self.after(100, lambda: self._request_server_info(silent=True))
+            self.after(150, self._ensure_lobby_presence)
 
     def _ensure_lobby_presence(self) -> None:
         if self.connected_room_key or self.connected_room_id:

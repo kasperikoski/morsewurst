@@ -66,9 +66,22 @@ class AdvancedSettingsWindow(tk.Toplevel):
         except Exception:
             pass
 
-        self.app.settings_controller.save_ui_settings()
-        self.app.history_controller.load_tables()
+        try:
+            self.app.settings_controller.save_ui_settings()
+        except Exception:
+            pass
+
+        try:
+            self.grab_release()
+        except tk.TclError:
+            pass
+
         self.destroy()
+
+        try:
+            self.app.after_idle(self.app.history_controller.load_tables)
+        except Exception:
+            pass
 
     def _center_on_parent(self, app: tk.Misc) -> None:
         x = app.winfo_rootx() + max(0, (app.winfo_width() - self.winfo_width()) // 2)

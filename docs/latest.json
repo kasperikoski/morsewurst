@@ -1,11 +1,13 @@
 {
   "app": "MorseWurst",
-  "latest_version": "0.99.0",
-  "release_date": "2026-05-18",
+  "latest_version": "0.99.1",
+  "release_date": "2026-05-19",
   "release_url": "https://github.com/kasperikoski/morsewurst/releases",
   "download_url": "",
   "release_notes": [
-    "Initial update manifest for MorseWurst.",
-    "The application can now check whether a newer version is available."
+    "Improved Morsewurst Network startup and connection handling.",
+    "Improved reconnect stability and relay readiness detection.",
+    "Enhanced overall network user experience and startup flow.",
+    "Various bug fixes, UI improvements and internal cleanup."
   ]
 }

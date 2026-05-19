@@ -13,6 +13,7 @@ from morsewurst.network.public_rooms import PublicRoom
 from morsewurst.network.settings_store import load_network_settings, network_settings_path
 from morsewurst.ui.network.lobby_actions import LobbyActionsMixin
 from morsewurst.ui.network.server_queries import NetworkServerQueriesMixin
+from morsewurst.ui.network.startup_sequence import NetworkStartupSequenceMixin
 from morsewurst.ui.network.views import (
     CallsignViewMixin,
     LobbyViewMixin,
@@ -31,6 +32,7 @@ from morsewurst.ui.network_matrix_theme import (
 
 class NetworkLobbyWindow(
     tk.Toplevel,
+    NetworkStartupSequenceMixin,
     NetworkWidgetsMixin,
     CallsignViewMixin,
     LobbyViewMixin,
@@ -44,6 +46,7 @@ class NetworkLobbyWindow(
 
     def __init__(self, app: tk.Misc) -> None:
         super().__init__(app)
+        self.withdraw()
 
         self.app = app
         self.settings = load_network_settings()
@@ -104,6 +107,8 @@ class NetworkLobbyWindow(
         self.server_info_value_vars: dict[str, tk.StringVar] = {}
         self._server_summary_after_id: str | None = None
 
+        self._init_network_startup_state()
+
         self.title("Morsewurst Network")
         self.transient(app)
         self.geometry("1280x740")
@@ -159,7 +164,10 @@ class NetworkLobbyWindow(
         self.footer.grid(row=2, column=0, sticky="ew", pady=(12, 0))
         self.footer.columnconfigure(0, weight=1)
 
-        if self._needs_first_callsign():
+        needs_first_callsign = self._needs_first_callsign()
+
+        if needs_first_callsign:
+            self._network_startup_complete = True
             self.show_callsign_view()
         else:
             self.show_lobby_view()
@@ -167,16 +175,13 @@ class NetworkLobbyWindow(
         self._poll_status()
         self._refresh_server_summary()
 
-        self.after(100, self._request_initial_server_snapshot)
-
-        self._schedule_server_info_auto_refresh(
-            delay_ms=max(5, int(self._server_info_refresh_seconds)) * 1000
-        )
-
         self.protocol("WM_DELETE_WINDOW", self.close)
         self.bind("<Escape>", lambda _event: self.close())
-        self.after(50, self._center_on_parent)
-        self.after(100, self.bring_to_front)
+
+        if needs_first_callsign:
+            self._show_network_window()
+        else:
+            self._start_network_startup_sequence()
 
     def _build_window_chrome(self) -> None:
         self.window_chrome = tk.Frame(

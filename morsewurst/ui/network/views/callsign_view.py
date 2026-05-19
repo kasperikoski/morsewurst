@@ -72,4 +72,15 @@ class CallsignViewMixin:
 
         self.callsign_var.set(callsign)
         self._save_current_settings(last_room=self.settings.last_room)
+
+        try:
+            self._network_startup_complete = False
+        except Exception:
+            pass
+
         self.show_lobby_view()
+
+        try:
+            self._start_network_startup_sequence()
+        except Exception:
+            self.after(150, self._ensure_lobby_presence)

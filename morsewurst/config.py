@@ -9,7 +9,7 @@ import sys
 from pathlib import Path
 
 APP_NAME = "Morsewurst"
-APP_VERSION = "0.99.0"
+APP_VERSION = "0.99.1"
 
 # ============================================================
 # Update check
@@ -37,6 +37,11 @@ SOUND_DIR = resource_path("Assets/sounds")
 
 STARTUP_SCREEN_IMAGE = resource_path("Assets/img/startup_screen.png")
 STARTUP_SCREEN_MIN_MS = 3000
+
+# Network splash screen shown while the lobby connection is being prepared.
+NETWORK_STARTUP_SCREEN_IMAGE = resource_path("Assets/img/network_startup_screen.png")
+NETWORK_STARTUP_SCREEN_MIN_MS = 3000
+NETWORK_STARTUP_READY_TIMEOUT_SECONDS = 12.0
 
 APP_DATA_DIR = Path(os.environ.get("APPDATA", str(Path.home()))) / "Morsewurst"
 DATA_DIR = APP_DATA_DIR / "data"

@@ -106,6 +106,14 @@ def _positive_float(value: Any) -> Optional[float]:
     return number
 
 
+def _int_or_none(value: Any) -> Optional[int]:
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, int):
+        return value
+    return None
+
+
 def _gap_cutoffs(
     estimate: SourceTimingEstimate,
     source: str,
@@ -246,14 +254,18 @@ def _char_info(
 ) -> dict[str, Any]:
     first = elements[0] if elements else {}
     last = elements[-1] if elements else {}
+
+    first_t0 = _int_or_none(first.get("t0"))
+    last_t1 = _int_or_none(last.get("t1"))
+
     source = str(first.get("source") or first.get("src") or "unknown")
     return {
         "ch": decoded_char,
         "code": code,
         "source": source,
-        "char_time_us": int(last.get("t1") or 0),
-        "first_element_us": int(first.get("t0")) if isinstance(first.get("t0"), int) else None,
-        "last_element_us": int(last.get("t1")) if isinstance(last.get("t1"), int) else None,
+        "char_time_us": last_t1 if last_t1 is not None else 0,
+        "first_element_us": first_t0,
+        "last_element_us": last_t1,
         "gap_before_us": gap_before_us,
         "gap_before_units": gap_before_units,
         "gap_kind": gap_kind,

@@ -61,6 +61,7 @@ class RuntimeController:
         app.keyboard_morse_press_t0_us: int | None = None
         app.keyboard_morse_press_key = ""
         app.keyboard_morse_time_base = time.monotonic()
+        app.keyboard_morse_monitor_controls: list[tk.Widget] = []
 
         app.start_trigger_timestamps: list[float] = []
         app.start_trigger_count = 7
@@ -226,6 +227,20 @@ class RuntimeController:
                 str(getattr(config, "KEYBOARD_MORSE_DEFAULT_KEY", "space"))
             )
         )
+
+        app.keyboard_morse_monitor_sound_var = tk.BooleanVar(
+            value=bool(getattr(config, "DEFAULT_KEYBOARD_MORSE_MONITOR_SOUND", True))
+        )
+        app.keyboard_morse_monitor_frequency_hz_var = tk.IntVar(
+            value=int(getattr(config, "DEFAULT_KEYBOARD_MORSE_MONITOR_FREQUENCY_HZ", 750))
+        )
+        app.keyboard_morse_monitor_volume_percent_var = tk.IntVar(
+            value=int(getattr(config, "DEFAULT_KEYBOARD_MORSE_MONITOR_VOLUME_PERCENT", 35))
+        )
+        app.keyboard_morse_monitor_waveform_var = tk.StringVar(
+            value=str(getattr(config, "DEFAULT_KEYBOARD_MORSE_MONITOR_WAVEFORM", "sine"))
+        )
+        
 
         app.use_timing_profile_var = tk.BooleanVar(
             value=bool(getattr(config, "DECODER_USE_TIMING_PROFILE_DEFAULT", True))

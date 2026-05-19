@@ -31,6 +31,7 @@ tests/
   test_challenge.py
   test_jitter_buffer.py
   test_network_protocol.py
+  test_network_ui_imports.py
   test_scoring.py
   test_settings_store.py
   test_timing_profile.py

@@ -274,30 +274,21 @@ class LobbyActionsMixin:
         if not text or self._should_hide_status(level, text):
             return
 
+        level_key = str(level or "info").strip().lower()
         lowered = text.lower()
 
-        if lowered.startswith("Yhteys aulaan katkesi"):
-            if self.current_view == "lobby":
-                self.status_var.set("STANDBY")
-            self.room_status_var.set(text)
-            self._append_log("warning", text)
-            return
-
-        if lowered.startswith("lobby-yhteyttä yritetään uudelleen"):
-            if self.current_view == "lobby":
-                self.status_var.set("STANDBY")
-            self.room_status_var.set(text)
-            self._append_log("warning", text)
-            return
-
-        if lowered.startswith("Yhteys aulaan muodostettu"):
+        if lowered.startswith("yhteys aulaan muodostettu"):
             if self.current_view == "lobby":
                 self.status_var.set("STANDBY")
             self.room_status_var.set(text)
             self._append_log("info", text)
             return
 
-        if level == "error":
+        if self._is_transient_connection_status(level_key, lowered):
+            self._handle_transient_connection_status(text)
+            return
+
+        if level_key == "error":
             self._handle_connection_error(text)
             return
 
@@ -306,11 +297,32 @@ class LobbyActionsMixin:
             return
 
         if "katkesi" in lowered:
-            self._handle_connection_error(text)
+            self._handle_transient_connection_status(text)
             return
 
         self.room_status_var.set(text)
-        self._append_log(level, text)
+        self._append_log(level_key, text)
+
+    def _is_transient_connection_status(self, level: str, lowered_text: str) -> bool:
+        if level == "debug":
+            return False
+
+        transient_prefixes = (
+            "yhteys aulaan katkesi",
+            "lobby-yhteyttä yritetään uudelleen",
+            "yhteys katkesi:",
+        )
+
+        return lowered_text.startswith(transient_prefixes)
+
+    def _handle_transient_connection_status(self, text: str) -> None:
+        if self.connected_room_key or self.connected_room_id:
+            self.status_var.set("RECONNECTING")
+        elif self.current_view == "lobby":
+            self.status_var.set("RETRYING")
+
+        self.room_status_var.set(text)
+        self._append_log("warning", text)
 
     def _is_connection_success(self, text: str) -> bool:
         lowered = text.lower()
@@ -397,6 +409,12 @@ class LobbyActionsMixin:
 
         if "reserved" in lowered or "varattu" in lowered:
             return f"Room name '{room_name}' is reserved and cannot be created as a private room."
+        
+        if "getaddrinfo failed" in lowered or "errno 11002" in lowered:
+            return (
+                "Server address could not be resolved. "
+                "Check the network connection or DNS, then try again."
+            )
 
         return text
 
@@ -507,6 +525,11 @@ class LobbyActionsMixin:
             pass
 
     def close(self) -> None:
+        try:
+            self._cancel_network_startup_sequence()
+        except Exception:
+            pass
+        
         try:
             if self._poll_after_id is not None:
                 self.after_cancel(self._poll_after_id)
