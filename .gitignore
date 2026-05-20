@@ -10,6 +10,9 @@ __pycache__/
 venv/
 env/
 
+# Local user files
+/Morsewurst Project Folder/
+
 # Build and packaging output
 build/
 dist/

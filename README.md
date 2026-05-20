@@ -6,6 +6,8 @@ The application receives real-time keying telemetry from the keyer, decodes the 
 
 <img src="docs/images/main-window.png" alt="Main window" width="900">
 
+<img src="docs/images/network-window.png" alt="Network window" width="900">
+
 ## Current status
 
 MorseWurst is under active development and is now usable as a serious local Morse training application.
