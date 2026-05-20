@@ -26,8 +26,10 @@ Output/
 # Local exports and generated project snapshots
 export_project.py
 export_network.py
+export_tests.py
 morsewurst_project.txt
 morsewurst_network_export.txt
+morsewurst_tests_export.txt
 
 # Raspberry Pi deployment helper files
 /server/

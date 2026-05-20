@@ -103,6 +103,12 @@ class NetworkLobbyWindow(
         self.server_summary_var = tk.StringVar(value="SERVER: updating...")
         self.server_room_status_var = tk.StringVar(value="SERVER STATUS: updating...")
 
+        self.network_quality_state = "standby"
+        self.network_quality_hold_until_monotonic = 0.0
+        self.network_quality_var = tk.StringVar(value="QUALITY: STANDBY")
+        self.network_quality_detail_var = tk.StringVar(value="Network idle.")
+        self.network_quality_label: tk.Label | None = None
+
         self.server_info_window: tk.Toplevel | None = None
         self.server_info_value_vars: dict[str, tk.StringVar] = {}
         self._server_summary_after_id: str | None = None
@@ -270,17 +276,45 @@ class NetworkLobbyWindow(
         )
         status.grid(row=0, column=1, sticky="e")
 
+        self.network_quality_label = make_label(
+            header,
+            variable=self.network_quality_var,
+            font=MatrixTheme.small_font,
+            foreground=MatrixTheme.text_dim,
+            background=MatrixTheme.background,
+        )
+        self.network_quality_label.grid(row=1, column=1, sticky="e", pady=(3, 0))
+
     def _render_footer(self) -> None:
         for child in self.footer.winfo_children():
             child.destroy()
 
+        status_line = tk.Frame(self.footer, background=MatrixTheme.background)
+        status_line.grid(row=0, column=0, sticky="w")
+
         make_label(
-            self.footer,
+            status_line,
             variable=self.room_status_var,
             font=MatrixTheme.small_font,
             foreground=MatrixTheme.text_dim,
             background=MatrixTheme.background,
-        ).grid(row=0, column=0, sticky="w")
+        ).pack(side=tk.LEFT)
+
+        make_label(
+            status_line,
+            " ",
+            font=MatrixTheme.small_font,
+            foreground=MatrixTheme.text_dim,
+            background=MatrixTheme.background,
+        ).pack(side=tk.LEFT)
+
+        make_label(
+            status_line,
+            variable=self.network_quality_detail_var,
+            font=MatrixTheme.small_font,
+            foreground=MatrixTheme.text_dim,
+            background=MatrixTheme.background,
+        ).pack(side=tk.LEFT)
 
         if self.current_view == "lobby":
             make_button(self.footer, "CLOSE", self.close).grid(row=0, column=1, sticky="e")

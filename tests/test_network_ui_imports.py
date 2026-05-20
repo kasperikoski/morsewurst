@@ -105,6 +105,11 @@ EXPECTED_INTERNAL_METHODS = {
     "_append_log",
     "_center_on_parent",
     "bring_to_front",
+    "_set_network_quality",
+    "_network_quality_from_ping",
+    "_update_network_quality_from_server_pong",
+    "_is_buffer_quality_warning",
+    "_refresh_network_quality_indicator",
 }
 
 

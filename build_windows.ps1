@@ -16,11 +16,14 @@ $RequiredFiles = @(
     "installer.iss",
     "Assets\morse.ico",
     "Assets\img\startup_screen.png",
+    "Assets\img\network_startup_screen.png",
     "morsewurst\ui\network\__init__.py",
     "morsewurst\ui\network\lobby_window.py",
     "morsewurst\ui\network\lobby_state.py",
     "morsewurst\ui\network\lobby_actions.py",
     "morsewurst\ui\network\server_queries.py",
+    "morsewurst\ui\network\startup_screen.py",
+    "morsewurst\ui\network\startup_sequence.py",
     "morsewurst\ui\network\widgets.py",
     "morsewurst\ui\network\views\__init__.py",
     "morsewurst\ui\network\views\callsign_view.py",
@@ -66,6 +69,8 @@ python -m PyInstaller `
     --hidden-import morsewurst.ui.network.lobby_state `
     --hidden-import morsewurst.ui.network.lobby_actions `
     --hidden-import morsewurst.ui.network.server_queries `
+    --hidden-import morsewurst.ui.network.startup_screen `
+    --hidden-import morsewurst.ui.network.startup_sequence `
     --hidden-import morsewurst.ui.network.widgets `
     --hidden-import morsewurst.ui.network.views.callsign_view `
     --hidden-import morsewurst.ui.network.views.lobby_view `

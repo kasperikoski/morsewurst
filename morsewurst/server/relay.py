@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import logging
 import ssl
 import time
@@ -57,6 +58,21 @@ class LobbySession:
     last_seen_at: float = field(default_factory=time.time)
 
 
+SERVER_OUTBOUND_QUEUE_MAX_MESSAGES = 250
+SERVER_SEND_TIMEOUT_SECONDS = 2.0
+
+
+@dataclass(slots=True)
+class ClientOutbound:
+    client_id: str
+    callsign: str
+    websocket: Any
+    queue: asyncio.Queue[str]
+    task: asyncio.Task[None]
+    dropped_messages: int = 0
+    created_at: float = field(default_factory=time.time)
+
+
 class RelayServer:
     """Headless multi-room WebSocket relay for MorseWurst tone telemetry."""
 
@@ -74,6 +90,7 @@ class RelayServer:
         self._cleanup_task: asyncio.Task[None] | None = None
         self._server_info_task: asyncio.Task[None] | None = None
         self._lobby_clients: dict[Any, LobbySession] = {}
+        self._outbound_clients: dict[Any, ClientOutbound] = {}
 
     async def start(self, *, ssl_context: ssl.SSLContext | None = None) -> None:
         host = self.config.server.host
@@ -101,18 +118,14 @@ class RelayServer:
     async def stop(self) -> None:
         if self._server_info_task is not None:
             self._server_info_task.cancel()
-            try:
+            with contextlib.suppress(BaseException):
                 await self._server_info_task
-            except Exception:
-                pass
             self._server_info_task = None
 
         if self._cleanup_task is not None:
             self._cleanup_task.cancel()
-            try:
+            with contextlib.suppress(BaseException):
                 await self._cleanup_task
-            except Exception:
-                pass
             self._cleanup_task = None
 
         for session in list(self._lobby_clients.values()):
@@ -121,6 +134,9 @@ class RelayServer:
             except Exception:
                 pass
         self._lobby_clients.clear()
+
+        for websocket in list(self._outbound_clients):
+            await self._stop_outbound_sender(websocket)
 
         for room in list(self.registry.rooms.values()):
             for session in list(room.clients.values()):
@@ -446,6 +462,9 @@ class RelayServer:
                 peers=peers,
             ),
         )
+
+        self._start_outbound_sender(session)
+
         await self._broadcast(
             room,
             make_peer_event(event_type="peer_joined", client_id=session.client_id, callsign=session.callsign),
@@ -464,11 +483,15 @@ class RelayServer:
         )
 
     async def _unregister_client(self, session: ClientSession) -> None:
-        self.user_registry.record_disconnect(session)
+        await self._stop_outbound_sender(session.websocket)
 
         async with self._lock:
             room = self.registry.rooms.get(session.room_key)
             if room is None:
+                return
+
+            current_session = room.clients.get(session.websocket)
+            if current_session is None:
                 return
 
             self.registry.remove_client(session)
@@ -482,11 +505,14 @@ class RelayServer:
             if should_save_private_rooms:
                 self.registry.save_persisted_private_rooms()
 
+        self.user_registry.record_disconnect(session)
+
         await self._broadcast(
             room,
             make_peer_event(event_type="peer_left", client_id=session.client_id, callsign=session.callsign),
             exclude=session.websocket,
         )
+
         LOGGER.info(
             "%s left room key='%s' room_id='%s'.",
             session.callsign,
@@ -494,10 +520,109 @@ class RelayServer:
             session.room_id,
         )
 
+    def _start_outbound_sender(self, session: ClientSession) -> None:
+        if session.websocket in self._outbound_clients:
+            return
+
+        queue: asyncio.Queue[str] = asyncio.Queue(maxsize=SERVER_OUTBOUND_QUEUE_MAX_MESSAGES)
+
+        outbound = ClientOutbound(
+            client_id=session.client_id,
+            callsign=session.callsign,
+            websocket=session.websocket,
+            queue=queue,
+            task=asyncio.create_task(
+                self._outbound_sender_loop(
+                    websocket=session.websocket,
+                    client_id=session.client_id,
+                    callsign=session.callsign,
+                    queue=queue,
+                )
+            ),
+        )
+
+        self._outbound_clients[session.websocket] = outbound
+
+    async def _stop_outbound_sender(self, websocket: Any) -> None:
+        outbound = self._outbound_clients.pop(websocket, None)
+        if outbound is None:
+            return
+
+        task = outbound.task
+        current_task = asyncio.current_task()
+
+        if task is current_task:
+            return
+
+        task.cancel()
+        with contextlib.suppress(BaseException):
+            await task
+
+
+    async def _outbound_sender_loop(
+        self,
+        *,
+        websocket: Any,
+        client_id: str,
+        callsign: str,
+        queue: asyncio.Queue[str],
+    ) -> None:
+        try:
+            while True:
+                encoded = await queue.get()
+
+                try:
+                    await asyncio.wait_for(
+                        websocket.send(encoded),
+                        timeout=SERVER_SEND_TIMEOUT_SECONDS,
+                    )
+                except asyncio.TimeoutError:
+                    LOGGER.warning(
+                        "Dropping slow client %s (%s): send timed out after %.1f s.",
+                        callsign,
+                        client_id,
+                        SERVER_SEND_TIMEOUT_SECONDS,
+                    )
+                    await self._drop_stale_websockets([websocket])
+                    return
+                except Exception as exc:
+                    LOGGER.warning(
+                        "Dropping client %s (%s): send failed: %s",
+                        callsign,
+                        client_id,
+                        exc,
+                    )
+                    await self._drop_stale_websockets([websocket])
+                    return
+
+        except asyncio.CancelledError:
+            raise
+
+
+    async def _queue_outbound_message(self, session: ClientSession, encoded: str) -> bool:
+        outbound = self._outbound_clients.get(session.websocket)
+        if outbound is None:
+            return False
+
+        try:
+            outbound.queue.put_nowait(encoded)
+            return True
+        except asyncio.QueueFull:
+            outbound.dropped_messages += 1
+
+            LOGGER.warning(
+                "Dropping slow client %s (%s): outbound queue full (%s messages).",
+                session.callsign,
+                session.client_id,
+                SERVER_OUTBOUND_QUEUE_MAX_MESSAGES,
+            )
+
+            return False
+
     async def _broadcast(self, room: RoomState, message: dict[str, Any], *, exclude: Any = None) -> None:
         async with self._lock:
             targets = [
-                session.websocket
+                session
                 for session in room.clients.values()
                 if session.websocket is not exclude
             ]
@@ -508,11 +633,10 @@ class RelayServer:
         encoded = encode_message(message)
         stale: list[Any] = []
 
-        for websocket in targets:
-            try:
-                await websocket.send(encoded)
-            except Exception:
-                stale.append(websocket)
+        for session in targets:
+            queued = await self._queue_outbound_message(session, encoded)
+            if not queued:
+                stale.append(session.websocket)
 
         if stale:
             await self._drop_stale_websockets(stale)
@@ -551,6 +675,8 @@ class RelayServer:
                 self.registry.save_persisted_private_rooms()
 
         for room, session in removed:
+            await self._stop_outbound_sender(session.websocket)
+
             self.user_registry.record_disconnect(session)
 
             LOGGER.warning(

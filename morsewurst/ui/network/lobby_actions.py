@@ -20,6 +20,7 @@ from morsewurst.network.settings_store import (
     sanitize_room_name,
     save_network_settings,
 )
+from morsewurst.ui.network_matrix_theme import MatrixTheme
 
 class LobbyActionsMixin:
     def join_public_room(self, room: PublicRoom) -> None:
@@ -110,6 +111,7 @@ class LobbyActionsMixin:
 
         self.status_var.set("STANDBY")
         self.room_status_var.set(f"Left {room_title}.")
+        self._set_network_quality("standby", "Network idle.", force=True)
         self.show_lobby_view()
 
     def _network_settings(self, *, room_name: str, password: str) -> NetworkSettings:
@@ -194,6 +196,191 @@ class LobbyActionsMixin:
         except Exception as exc:
             self._append_log("warning", f"Live settings update failed: {exc}")
             return False
+        
+    def _set_network_quality(
+        self,
+        state: str,
+        detail: str = "",
+        *,
+        force: bool = False,
+        hold_seconds: float = 0.0,
+    ) -> None:
+        state_key = str(state or "standby").strip().lower()
+        now = time.monotonic()
+
+        current_state = str(getattr(self, "network_quality_state", "standby") or "standby")
+        hold_until = float(getattr(self, "network_quality_hold_until_monotonic", 0.0) or 0.0)
+
+        # Keep temporary buffer warnings visible long enough to be useful.
+        if (
+            not force
+            and now < hold_until
+            and current_state == "buffer_too_low"
+            and state_key in {"good", "unstable", "checking"}
+        ):
+            return
+
+        labels = {
+            "standby": "QUALITY STANDBY",
+            "checking": "QUALITY CHECKING",
+            "good": "QUALITY GOOD",
+            "unstable": "QUALITY UNSTABLE",
+            "buffer_too_low": "QUALITY BUFFER TOO LOW",
+            "server_not_responding": "QUALITY SERVER NOT RESPONDING",
+            "reconnecting": "QUALITY RECONNECTING",
+        }
+
+        default_details = {
+            "standby": "Network idle.",
+            "checking": "Waiting for server response.",
+            "good": "Connection looks stable.",
+            "unstable": "Connection is usable, but latency or timing looks unstable.",
+            "buffer_too_low": "Received tones are arriving late. Increase the jitter buffer if this continues.",
+            "server_not_responding": "The relay server is not responding to recent checks.",
+            "reconnecting": "Connection interrupted. Morsewurst is trying to reconnect.",
+        }
+
+        warning_color = getattr(MatrixTheme, "warning", MatrixTheme.text_dim)
+        error_color = getattr(MatrixTheme, "error", warning_color)
+
+        colors = {
+            "standby": MatrixTheme.text_dim,
+            "checking": MatrixTheme.text_dim,
+            "good": MatrixTheme.accent,
+            "unstable": warning_color,
+            "buffer_too_low": warning_color,
+            "server_not_responding": error_color,
+            "reconnecting": warning_color,
+        }
+
+        if state_key not in labels:
+            state_key = "checking"
+
+        if hold_seconds > 0:
+            self.network_quality_hold_until_monotonic = max(
+                hold_until,
+                now + float(hold_seconds),
+            )
+        elif force:
+            self.network_quality_hold_until_monotonic = 0.0
+
+        self.network_quality_state = state_key
+
+        label_text = labels[state_key]
+        detail_text = detail or default_details[state_key]
+
+        try:
+            self.network_quality_var.set(label_text)
+            self.network_quality_detail_var.set(detail_text)
+        except Exception:
+            pass
+
+        label = getattr(self, "network_quality_label", None)
+        if label is not None:
+            try:
+                label.configure(foreground=colors.get(state_key, MatrixTheme.text_dim))
+            except Exception:
+                pass
+
+    def _network_quality_from_ping(self, ping_ms: int | None) -> tuple[str, str]:
+        if ping_ms is None:
+            return "checking", "Waiting for server ping."
+
+        if ping_ms <= 250:
+            return "good", f"Connection looks stable. Ping {ping_ms} ms."
+
+        if ping_ms <= 700:
+            return "unstable", f"Connection is usable, but latency is elevated. Ping {ping_ms} ms."
+
+        return "unstable", f"High latency detected. Ping {ping_ms} ms."
+
+    def _update_network_quality_from_server_pong(self) -> None:
+        ping_ms = self._latest_server_ping_ms()
+        state, detail = self._network_quality_from_ping(ping_ms)
+        self._set_network_quality(state, detail)
+
+    def _is_buffer_quality_warning(self, lowered_text: str) -> bool:
+        patterns = (
+            "myöhässä tullut tone",
+            "liian myöhässä tullut tone",
+            "nosta viivepuskuri",
+            "viivepuskuri on jo maksimi",
+        )
+        return any(pattern in lowered_text for pattern in patterns)
+
+    def _refresh_network_quality_indicator(self) -> None:
+        manager = getattr(self.app, "network_manager", None)
+
+        if manager is None:
+            self._set_network_quality("standby", "Network manager is not available.", force=True)
+            return
+
+        try:
+            is_running = bool(manager.is_running)
+        except Exception:
+            is_running = False
+
+        if not is_running:
+            self._set_network_quality("standby", "Network idle.", force=True)
+            return
+
+        try:
+            control_ready = bool(getattr(manager, "control_channel_ready", False))
+        except Exception:
+            control_ready = False
+
+        if not control_ready:
+            if self.connected_room_key or self.connected_room_id:
+                self._set_network_quality(
+                    "reconnecting",
+                    "Control channel is not ready. Reconnecting...",
+                    force=True,
+                )
+            else:
+                self._set_network_quality(
+                    "checking",
+                    "Waiting for lobby control channel.",
+                    force=True,
+                )
+            return
+
+        if self.server_info_error_text:
+            self._set_network_quality(
+                "server_not_responding",
+                f"Server query failed: {self.server_info_error_text}",
+                force=True,
+            )
+            return
+
+        pong = self._latest_server_pong()
+        if not pong:
+            self._set_network_quality("checking", "Waiting for first server ping.")
+            return
+
+        try:
+            received_monotonic = float(pong.get("client_received_monotonic") or 0.0)
+        except Exception:
+            received_monotonic = 0.0
+
+        if received_monotonic > 0:
+            age_seconds = time.monotonic() - received_monotonic
+
+            if age_seconds > 120.0:
+                self._set_network_quality(
+                    "server_not_responding",
+                    f"No recent server ping. Last response {age_seconds:.0f} s ago.",
+                    force=True,
+                )
+                return
+
+            if age_seconds > 75.0:
+                self._set_network_quality(
+                    "unstable",
+                    f"Server ping is getting old. Last response {age_seconds:.0f} s ago.",
+                )
+                return
+
+        self._update_network_quality_from_server_pong()
 
     def _reset_receive_playback_after_resume_if_needed(self) -> None:
         now = time.monotonic()
@@ -248,6 +435,8 @@ class LobbyActionsMixin:
 
                 self._handle_status(level, text)
 
+            self._refresh_network_quality_indicator()
+
         except Exception:
             pass
 
@@ -268,6 +457,7 @@ class LobbyActionsMixin:
         if level == "server_pong" or message_type == "server_pong":
             self.last_server_pong = payload
             self._update_server_info_views()
+            self._update_network_quality_from_server_pong()
             return
 
     def _handle_status(self, level: str, text: str) -> None:
@@ -277,9 +467,25 @@ class LobbyActionsMixin:
         level_key = str(level or "info").strip().lower()
         lowered = text.lower()
 
+        if level_key == "server_pong" or lowered.startswith("server ping:"):
+            self._append_log("success", text)
+            return
+
+        if self._is_buffer_quality_warning(lowered):
+            self._set_network_quality(
+                "buffer_too_low",
+                text,
+                hold_seconds=20.0,
+            )
+
         if lowered.startswith("yhteys aulaan muodostettu"):
             if self.current_view == "lobby":
                 self.status_var.set("STANDBY")
+            self._set_network_quality(
+                "checking",
+                "Lobby connected. Waiting for server ping.",
+                force=True,
+            )
             self.room_status_var.set(text)
             self._append_log("info", text)
             return
@@ -321,6 +527,8 @@ class LobbyActionsMixin:
         elif self.current_view == "lobby":
             self.status_var.set("RETRYING")
 
+        self._set_network_quality("reconnecting", text, force=True)
+
         self.room_status_var.set(text)
         self._append_log("warning", text)
 
@@ -361,6 +569,11 @@ class LobbyActionsMixin:
 
         self.status_var.set("ONLINE")
         self.room_status_var.set(f"Connected to {title}.")
+        self._set_network_quality(
+            "checking",
+            "Connected. Waiting for server ping.",
+            force=True,
+        )
 
         self._remember_successful_private_room()
 
@@ -390,6 +603,11 @@ class LobbyActionsMixin:
 
         self.status_var.set("ERROR")
         self.room_status_var.set(message)
+        self._set_network_quality(
+            "server_not_responding",
+            message,
+            force=True,
+        )
 
         if self.current_view != "lobby":
             self.show_lobby_view()
@@ -529,7 +747,7 @@ class LobbyActionsMixin:
             self._cancel_network_startup_sequence()
         except Exception:
             pass
-        
+
         try:
             if self._poll_after_id is not None:
                 self.after_cancel(self._poll_after_id)

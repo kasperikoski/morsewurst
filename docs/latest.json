@@ -1,13 +1,14 @@
 {
   "app": "MorseWurst",
-  "latest_version": "0.99.1",
-  "release_date": "2026-05-19",
+  "latest_version": "0.99.2",
+  "release_date": "2026-05-20",
   "release_url": "https://github.com/kasperikoski/morsewurst/releases",
   "download_url": "",
   "release_notes": [
-    "Improved Morsewurst Network startup and connection handling.",
-    "Improved reconnect stability and relay readiness detection.",
-    "Enhanced overall network user experience and startup flow.",
-    "Various bug fixes, UI improvements and internal cleanup."
+    "Improved Morsewurst Network relay robustness with per-client outbound queues.",
+    "Added broader real WebSocket relay integration tests.",
+    "Added a visible network quality indicator for connection health and jitter buffer warnings.",
+    "Improved ping, server status and network UI feedback.",
+    "Various bug fixes, UI refinements and internal cleanup."
   ]
 }

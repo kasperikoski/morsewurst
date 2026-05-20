@@ -296,9 +296,20 @@ class NetworkServerQueriesMixin:
                 if kind == "server_info":
                     self.server_info_error_text = message
                     self._update_server_info_views()
+                    self._set_network_quality(
+                        "server_not_responding",
+                        f"Server query failed: {message}",
+                        force=True,
+                    )
 
-                if kind == "server_pong" and not silent:
-                    self._show_notice(f"Server ping failed: {message}", "warning")
+                if kind == "server_pong":
+                    self._set_network_quality(
+                        "server_not_responding",
+                        f"Server ping failed: {message}",
+                        force=True,
+                    )
+                    if not silent:
+                        self._show_notice(f"Server ping failed: {message}", "warning")
 
                 if kind == "server_info" and not silent:
                     self._show_notice(f"Server query failed: {message}", "warning")
@@ -321,13 +332,14 @@ class NetworkServerQueriesMixin:
                 payload["client_received_monotonic"] = time.monotonic()
                 self.last_server_pong = payload
                 self._update_server_info_views()
+                self._update_network_quality_from_server_pong()
 
                 if not silent:
                     ping_ms = self._latest_server_ping_ms()
                     if ping_ms is not None:
-                        self._show_notice(f"Server ping: {ping_ms} ms.", "success")
+                        self._append_log("success", f"Server ping: {ping_ms} ms.")
                     else:
-                        self._show_notice("Server ping received.", "success")
+                        self._append_log("success", "Server ping received.")
                 continue
 
         if (
