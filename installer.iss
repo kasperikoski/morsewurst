@@ -1,5 +1,5 @@
 #define MyAppName "Morsewurst"
-#define MyAppVersion "0.99"
+#define MyAppVersion "0.99.2"
 #define MyAppPublisher "Kasperi Koski"
 #define MyAppExeName "Morsewurst.exe"
 
@@ -10,8 +10,8 @@ AppVersion={#MyAppVersion}
 AppPublisher={#MyAppPublisher}
 DefaultGroupName={#MyAppName}
 AllowNoIcons=yes
-OutputDir=installer_output
-OutputBaseFilename=MorsewurstSetup
+OutputDir=installer
+OutputBaseFilename=MorsewurstSetup_{#MyAppVersion}
 SetupIconFile=Assets\morse.ico
 Compression=lzma
 SolidCompression=yes

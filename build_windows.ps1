@@ -14,6 +14,7 @@ $RequiredFiles = @(
     "main.py",
     "requirements.txt",
     "installer.iss",
+    "installer.iss",
     "Assets\morse.ico",
     "Assets\img\startup_screen.png",
     "Assets\img\network_startup_screen.png",

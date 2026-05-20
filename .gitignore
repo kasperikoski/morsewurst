@@ -22,6 +22,10 @@ Output/
 *.msi
 *.zip
 
+# Keep released Windows installer in the repository
+!installer/
+!installer/*.exe
+
 # Inno Setup temporary/output files
 *.iss~
 *.bak
