@@ -49,7 +49,7 @@ class ClientInfo:
 
 
 class RoomServer:
-    """Small single-room WebSocket server for local MorseWurst testing.
+    """Small single-room WebSocket server for local Morsewurst testing.
 
     The Raspberry Pi deployment uses morsewurst.server.relay instead. This class
     remains for the older console host mode and local tests.

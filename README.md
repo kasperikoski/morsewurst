@@ -1,6 +1,6 @@
-# MorseWurst
+# Morsewurst
 
-MorseWurst is a Python-based desktop training application for practising Morse code with the MorseWurst Keyer.
+Morsewurst is a Python-based desktop training application for practising Morse code with the Morsewurst Keyer.
 
 The application receives real-time keying telemetry from the keyer, decodes the signal, measures sending accuracy and timing quality, and gives detailed feedback about Morse performance. The goal is to make Morse practice measurable, visible and easier to improve over time.
 
@@ -10,13 +10,13 @@ The application receives real-time keying telemetry from the keyer, decodes the 
 
 ## Current status
 
-MorseWurst is under active development and is now usable as a serious local Morse training application.
+Morsewurst is under active development and is now usable as a serious local Morse training application.
 
 The core local training workflow is functional and continues to be refined. The project also includes network practice features, update-checking infrastructure and experimental online components that will be developed further over time.
 
 ## Main features
 
-- Real-time Morse input from the MorseWurst Keyer
+- Real-time Morse input from the Morsewurst Keyer
 - Adaptive decoding based on the user's sending rhythm
 - Profile-aware timing analysis
 - Accuracy, cleanliness, speed and timing scoring
@@ -26,14 +26,15 @@ The core local training workflow is functional and continues to be refined. The 
 - Skill and progress tracking
 - Practice history stored locally
 - WX-MOR practice mode for weather-oriented Morse training
-- Experimental network practice support
+- Morsewurst Network for online practice through a relay server
+- Network quality indicator with ping and jitter-buffer feedback
 - Windows-oriented desktop use
 - Update-checking support through a remote manifest
 
 ## Requirements
 
 - Python 3.11 or newer recommended
-- A MorseWurst Keyer or compatible serial telemetry source
+- A Morsewurst Keyer or compatible serial telemetry source
 - Windows is the main development target
 
 Install Python dependencies with:
@@ -72,6 +73,22 @@ Then start the program:
 python main.py
 ```
 
+## Testing
+
+The project includes a pytest-based regression suite for the core Morse logic, adaptive decoding, scoring, timing profiles, WX-MOR generation, settings handling, network protocol validation, jitter-buffer scheduling and relay integration.
+
+Run all tests from the project root:
+
+```bash
+python -m pytest
+```
+
+The relay integration tests require the real `websockets` package. Install test dependencies with:
+
+```bash
+python -m pip install pytest websockets
+```
+
 ## Building on Windows
 
 The project includes a Windows build script:
@@ -82,9 +99,9 @@ The project includes a Windows build script:
 
 Build and installer tooling are part of the project workflow and may continue to evolve as the application matures.
 
-## MorseWurst Keyer firmware and build documentation
+## Morsewurst Keyer firmware and build documentation
 
-The ESP32-S3 firmware for the MorseWurst Keyer is included in the repository.
+The ESP32-S3 firmware for the Morsewurst Keyer is included in the repository.
 
 The Arduino firmware source can be found in:
 
@@ -117,28 +134,33 @@ docs/Morsewurst_keyer_rakennusohje.md
 morsewurst/
   core/        Morse decoding, adaptive timing, scoring and training logic
     wxmor/     WX-MOR weather-oriented Morse training data and logic
-  hardware/    Serial input from the MorseWurst Keyer
+  hardware/    Serial input from the Morsewurst Keyer
   network/     Network practice client logic
   server/      Relay server components
   storage/     Local database handling
-  ui/          Tkinter user interface, panels and controllers
+  ui/          Tkinter user interface, panels, windows and controllers
 Assets/        Sounds, images and application assets
+docs/          Firmware, screenshots, update manifest and documentation
+server/        Relay server deployment helpers
+tests/         Pytest regression and integration tests
 main.py        Application entry point
 ```
 
 ## Network features
 
-MorseWurst includes network practice support for connecting users through a relay server. The network system is already present in the application and is being actively developed, but it should still be treated as an evolving feature compared with the local training workflow.
+Morsewurst includes network practice support for connecting users through a relay server. Users can join public rooms or create private rooms and exchange real-time Morse tone telemetry.
+
+The network system includes relay-side room handling, client reconnect logic, ping and server status checks, jitter-buffered receive playback and a visible network quality indicator. Morsewurst Network is still an actively developed prototype, so occasional glitches and unexpected behaviour may occur.
 
 ## Updates
 
-MorseWurst can check for updates by reading a small remote JSON manifest. The first version of the update system only notifies the user when a newer version is available and opens the release or download page in the browser.
+Morsewurst can check for updates by reading a small remote JSON manifest. The first version of the update system only notifies the user when a newer version is available and opens the release or download page in the browser.
 
 It does not yet download or install updates automatically.
 
 ## Data and privacy
 
-MorseWurst stores practice history locally on the user's computer.
+Morsewurst stores practice history locally on the user's computer.
 
 Network features may send real-time practice-related telemetry through the configured relay server when the user chooses to use network practice. Local training does not require network access.
 

@@ -36,7 +36,7 @@ except ImportError:  # pragma: no cover
 
 
 class NetworkManager:
-    """Thread-safe facade for MorseWurst WebSocket networking.
+    """Thread-safe facade for Morsewurst WebSocket networking.
 
     Tkinter stays in the main thread. This manager owns an asyncio event loop in
     a background thread and exposes synchronous methods for the UI.

@@ -47,7 +47,7 @@ class AppLifecycleController:
         if replaced_path is not None:
             messagebox.showwarning(
                 config.APP_NAME,
-                "Tietokanta ei ollut yhteensopiva tämän MorseWurst-version kanssa.\n\n"
+                "Tietokanta ei ollut yhteensopiva tämän Morsewurst-version kanssa.\n\n"
                 "Vanhaa tietokantaa ei poistettu, vaan se siirrettiin varmuuskopioksi:\n\n"
                 f"{replaced_path}\n\n"
                 "Ohjelma loi uuden tyhjän tietokannan.",

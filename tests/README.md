@@ -1,16 +1,25 @@
 # Morsewurst pytest regression tests
 
-This folder contains a first pytest-based regression suite for Morsewurst. It focuses on pure or lightweight code paths that can be tested without opening the Tkinter application.
+This folder contains a pytest-based regression suite for Morsewurst. It focuses on pure or lightweight code paths where possible, and also includes local WebSocket relay integration tests that start a temporary relay server during the test run.
 
-Covered areas include challenge generation, text scoring normalization, adaptive decoding, adaptive timing, round scoring, timing profiles, WX-MOR generation and validation, network protocol message sanitation, network settings persistence, and jitter-buffer scheduling logic with a fake tone player.
+Covered areas include challenge generation, text scoring normalization, adaptive decoding, adaptive timing, round scoring, timing profiles, WX-MOR generation and validation, network protocol message sanitation, network settings persistence, jitter-buffer scheduling logic with a fake tone player, network UI package/import structure, and real local WebSocket relay behaviour including room joins, private rooms, ping/server-info handling, tone broadcast, slow-client protection and relay cleanup.
 
-## Install pytest
+## Install test dependencies
+
+For the basic regression tests:
 
 ```bash
 python -m pip install pytest
 ```
 
-If you run the network-related tests in an environment that does not have the full project dependencies installed, `tests/conftest.py` provides a small fallback stub for `websockets` so the pure protocol tests can still import. Real network connection tests are intentionally not included in this first package.
+For the relay integration tests, install the real `websockets` package as well:
+
+```bash
+python -m pip install pytest websockets
+```
+
+If you run the network-related tests in an environment that does not have the full project dependencies installed, `tests/conftest.py` provides a small fallback stub for `websockets` so the pure protocol tests can still import. The relay integration tests require the real `websockets` package and are skipped if it is not available.
+
 
 ## Where to place the files
 
@@ -56,14 +65,4 @@ python -m pytest tests/test_adaptive_decoder.py
 
 ```bash
 python -m pytest tests/test_network_protocol.py::test_tone_event_sanitization_and_validation
-```
-
-## Recommended Git usage
-
-Commit these tests with the project. After each refactor, run `python -m pytest` before committing. This gives a quick signal if core behavior changed unexpectedly.
-
-A sensible first commit message would be:
-
-```text
-Add pytest regression suite for core Morsewurst logic
 ```

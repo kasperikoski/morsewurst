@@ -74,7 +74,7 @@ class ClientOutbound:
 
 
 class RelayServer:
-    """Headless multi-room WebSocket relay for MorseWurst tone telemetry."""
+    """Headless multi-room WebSocket relay for Morsewurst tone telemetry."""
 
     def __init__(self, config: RelayServerConfig) -> None:
         self.config = config
@@ -111,7 +111,7 @@ class RelayServer:
             close_timeout=5,
         )
         scheme = "wss" if ssl_context is not None else "ws"
-        LOGGER.info("Starting MorseWurst relay on %s://%s:%s", scheme, host, port)
+        LOGGER.info("Starting Morsewurst relay on %s://%s:%s", scheme, host, port)
         LOGGER.info("Configured rooms: %s", ", ".join(sorted(self.registry.rooms)) or "none")
         await self._server.wait_closed()
 

@@ -17,7 +17,7 @@ from morsewurst.network.defaults import DEFAULT_RELAY_URI
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="MorseWurst WebSocket network test tool")
+    parser = argparse.ArgumentParser(description="Morsewurst WebSocket network test tool")
     sub = parser.add_subparsers(dest="mode", required=True)
 
     host = sub.add_parser("host", help="hostaa huone suoraan tästä koneesta")
