@@ -53,9 +53,11 @@ class EffectiveWpmController:
         if not result.get("ok"):
             messagebox.showinfo(
                 config.APP_NAME,
-                "Harjoitusnopeutta ei voitu vielä arvioida.\n\n"
-                f"{result.get('reason', '')}\n\n"
-                "Tallenna ensin muutama riittävän tarkka ja puhdas kierros.",
+                app.i18n.t(
+                    "effective_wpm.not_enough_data",
+                    "Practice speed could not be estimated yet.\n\n{reason}\n\nSave a few accurate and clean rounds first.",
+                    reason=str(result.get("reason", "")),
+                ),
             )
             return
 
@@ -65,9 +67,12 @@ class EffectiveWpmController:
         if used_rounds < minimum_required:
             messagebox.showinfo(
                 config.APP_NAME,
-                "Harjoitusnopeuden arviointiin on vielä liian vähän dataa.\n\n"
-                f"Sopivia kierroksia löytyi: {used_rounds}\n"
-                f"Tarvitaan vähintään: {minimum_required}",
+                app.i18n.t(
+                    "effective_wpm.too_few_rounds",
+                    "Not enough data to estimate practice speed.\n\nSuitable rounds found: {used}\nMinimum required: {min_req}",
+                    used=used_rounds,
+                    min_req=minimum_required,
+                ),
             )
             return
 
@@ -79,22 +84,35 @@ class EffectiveWpmController:
         app.settings_controller.save_ui_settings()
 
         app.status_var.set(
-            f"Todistettu PARIS-mediaani {raw_wpm:.1f} WPM. "
-            f"Tavoite-WPM asetettu arvoon {optimized_wpm} (+1 WPM)."
+            app.i18n.t(
+                "effective_wpm.result_message",
+                "Proven PARIS median {raw_wpm} WPM. Target WPM set to {optimized_wpm} (+1 WPM).",
+                raw_wpm=f"{raw_wpm:.1f}",
+                optimized_wpm=optimized_wpm,
+            )
         )
         app.settings = app.challenge_settings_controller.settings_from_ui()
         app.timer_var.set(app.practice_controller.reference_time_label())
 
         messagebox.showinfo(
             config.APP_NAME,
-            "Harjoitusnopeus arvioitu historian perusteella.\n\n"
-            f"Käytettyjä kierroksia: {used_rounds}\n"
-            f"Viimeisiä kierroksia tarkasteltu: {recent_rounds}\n"
-            f"Minimitarkkuus: {min_accuracy} %\n"
-            f"Minimipuhtaus: {min_cleanliness} %\n"
-            f"Todistettu PARIS-mediaaninopeus: {raw_wpm:.1f} WPM\n"
-            "Harjoitukseen lisätty nousuvara: +1 WPM\n\n"
-            f"Asetettu tavoite-WPM: {optimized_wpm}",
+            app.i18n.t(
+                "effective_wpm.detail_dialog",
+                "Practice speed estimated from history.\n\n"
+                "Rounds used: {used}\n"
+                "Recent rounds examined: {recent}\n"
+                "Minimum accuracy: {min_acc}%\n"
+                "Minimum cleanliness: {min_clean}%\n"
+                "Proven PARIS median speed: {raw_wpm} WPM\n"
+                "Added challenge margin: +1 WPM\n\n"
+                "Set target WPM: {optimized_wpm}",
+                used=used_rounds,
+                recent=recent_rounds,
+                min_acc=min_accuracy,
+                min_clean=min_cleanliness,
+                raw_wpm=f"{raw_wpm:.1f}",
+                optimized_wpm=optimized_wpm,
+            ),
         )
 
     def _optimized_target_wpm(self, raw_wpm: float) -> int:

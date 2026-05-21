@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import tkinter as tk
 
+from morsewurst.i18n import I18nService
 from morsewurst.ui.controllers import (
     AppLifecycleController,
     AudioController,
@@ -30,6 +31,8 @@ from morsewurst.ui.controllers import (
 class MorsewurstApp(tk.Tk):
     def __init__(self) -> None:
         super().__init__()
+
+        self.i18n = I18nService()
 
         self.window_controller = WindowController(self)
         self.app_lifecycle_controller = AppLifecycleController(self)

@@ -1,14 +1,12 @@
 {
   "app": "Morsewurst",
-  "latest_version": "0.99.2",
-  "release_date": "2026-05-20",
+  "latest_version": "0.99.3",
+  "release_date": "2026-05-21",
   "release_url": "https://github.com/kasperikoski/morsewurst/releases",
   "download_url": "",
   "release_notes": [
-    "Improved Morsewurst Network relay robustness with per-client outbound queues.",
-    "Added broader real WebSocket relay integration tests.",
-    "Added a visible network quality indicator for connection health and jitter buffer warnings.",
-    "Improved ping, server status and network UI feedback.",
-    "Various bug fixes, UI refinements and internal cleanup."
+    "Added multilingual user interface support.",
+    "Morsewurst currently supports English and Finnish.",
+    "Various bug fixes and UI refinements."
   ]
 }

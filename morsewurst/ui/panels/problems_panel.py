@@ -13,7 +13,7 @@ import morsewurst.config as config
 def build_problems_panel(app: tk.Misc, parent: ttk.Frame) -> None:
     """Build the most difficult characters panel."""
 
-    problems = ttk.LabelFrame(parent, text="Vaikeimmat merkit")
+    problems = ttk.LabelFrame(parent, text=app.i18n.t("problems.title"))
     problems.pack(fill=tk.BOTH, expand=True, pady=(10, 0))
 
     columns = ("char", "attempts", "errors", "rate")
@@ -33,10 +33,10 @@ def build_problems_panel(app: tk.Misc, parent: ttk.Frame) -> None:
     )
 
     definitions = [
-        ("char", "Merkki", 60),
-        ("attempts", "Yritykset", 75),
-        ("errors", "Virheet", 65),
-        ("rate", "Virhe %", 70),
+        ("char", app.i18n.t("problems.column.char"), 60),
+        ("attempts", app.i18n.t("problems.column.attempts"), 75),
+        ("errors", app.i18n.t("problems.column.errors"), 65),
+        ("rate", app.i18n.t("problems.column.error_rate"), 70),
     ]
 
     for col, title, width in definitions:

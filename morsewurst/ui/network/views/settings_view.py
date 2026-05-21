@@ -27,14 +27,14 @@ class SettingsViewMixin:
 
         make_label(
             panel,
-            "NETWORK SETTINGS",
+            self.tr("network.settings.title"),
             font=("Consolas", 22, "bold"),
             foreground=MatrixTheme.accent,
         ).grid(row=0, column=0, sticky="w")
 
         make_label(
             panel,
-            "Changes are saved locally. Playback and transmit settings are applied immediately when possible.",
+            self.tr("network.settings.description"),
             foreground=MatrixTheme.text_dim,
             wraplength=980,
         ).grid(row=1, column=0, sticky="ew", pady=(4, 18))
@@ -56,19 +56,23 @@ class SettingsViewMixin:
         self._settings_text_field(
             left,
             row=0,
-            title="Callsign",
-            help_text="Choose the callsign shown to other users.",
+            title=self.tr("network.settings.callsign.title"),
+            help_text=self.tr("network.settings.callsign.help"),
             variable=self.callsign_var,
             width=34,
         )
 
-        self._section_title(left, 1, "AUDIO PLAYBACK")
+        self._section_title(
+            left,
+            1,
+            self.tr("network.settings.audio_playback.title"),
+        )
 
         self._settings_text_field(
             left,
             row=2,
-            title="Tone frequency",
-            help_text="Local playback tone used for received Morse audio.",
+            title=self.tr("network.settings.tone_frequency.title"),
+            help_text=self.tr("network.settings.tone_frequency.help"),
             variable=self.frequency_var,
             width=16,
             suffix="Hz",
@@ -77,8 +81,8 @@ class SettingsViewMixin:
         self._settings_scale_field(
             left,
             row=3,
-            title="Volume",
-            help_text="Local receive playback volume.",
+            title=self.tr("network.settings.volume.title"),
+            help_text=self.tr("network.settings.volume.help"),
             variable=self.volume_percent_var,
             minimum=0,
             maximum=100,
@@ -91,20 +95,21 @@ class SettingsViewMixin:
 
         self._make_checkbutton(
             audio_toggles,
-            "Playback enabled",
+            self.tr("network.settings.playback_enabled"),
             self.playback_enabled_var,
         ).pack(anchor="w")
 
-        self._section_title(right, 0, "RECEPTION BUFFER")
+        self._section_title(
+            right,
+            0,
+            self.tr("network.settings.reception_buffer.title"),
+        )
 
         self._settings_scale_field(
             right,
             row=1,
-            title="Jitter buffer",
-            help_text=(
-                "Higher values improve timing stability on slower connections; "
-                "lower values reduce delay. Recommended: 750 ms."
-            ),
+            title=self.tr("network.settings.jitter_buffer.title"),
+            help_text=self.tr("network.settings.jitter_buffer.help"),
             variable=self.jitter_buffer_var,
             minimum=250,
             maximum=5000,
@@ -112,23 +117,41 @@ class SettingsViewMixin:
             suffix="ms",
         )
 
-        self._section_title(right, 2, "LOCAL NETWORK MODE")
+        self._section_title(
+            right,
+            2,
+            self.tr("network.settings.local_network_mode.title"),
+        )
 
         network_toggles = tk.Frame(right, background=MatrixTheme.panel)
         network_toggles.grid(row=3, column=0, sticky="ew", pady=(8, 0))
 
         self._make_checkbutton(
             network_toggles,
-            "Transmit enabled",
+            self.tr("network.settings.transmit_enabled"),
             self.transmit_enabled_var,
         ).pack(anchor="w")
 
         buttons = tk.Frame(panel, background=MatrixTheme.panel)
         buttons.grid(row=3, column=0, sticky="w", pady=(22, 0))
 
-        make_button(buttons, "SAVE", self.save_settings).pack(side=tk.LEFT)
-        make_button(buttons, "RESET TO DEFAULTS", self.reset_playback_defaults).pack(side=tk.LEFT, padx=(10, 0))
-        make_button(buttons, "BACK", self._back_from_settings).pack(side=tk.LEFT, padx=(10, 0))
+        make_button(
+            buttons,
+            self.tr("network.button.save"),
+            self.save_settings,
+        ).pack(side=tk.LEFT)
+
+        make_button(
+            buttons,
+            self.tr("network.button.reset_to_defaults"),
+            self.reset_playback_defaults,
+        ).pack(side=tk.LEFT, padx=(10, 0))
+
+        make_button(
+            buttons,
+            self.tr("network.button.back"),
+            self.show_lobby_view if not self.connected_room_key else self.show_room_view,
+        ).pack(side=tk.LEFT, padx=(10, 0))
 
     def _section_title(self, parent: tk.Misc, row: int, text: str) -> None:
         make_label(
@@ -285,4 +308,7 @@ class SettingsViewMixin:
         self.volume_percent_var.set(100)
         self.jitter_buffer_var.set(750)
         self.save_settings(last_room=self.connected_room_key or self.settings.last_room)
-        self._show_notice("Playback defaults restored: 650 Hz, 100 %, 750 ms.", "success")
+        self._show_notice(
+            self.tr("network.settings.defaults_restored"),
+            "success",
+        )

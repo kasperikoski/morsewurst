@@ -8,6 +8,9 @@ from typing import TYPE_CHECKING, Any, Optional, Tuple
 
 import morsewurst.config as config
 
+SOURCE_ADAPTIVE_TELEMETRY = "adaptive_telemetry"
+SOURCE_HID = "hid"
+
 if TYPE_CHECKING:
     from morsewurst.models import ScoreSummary
     from morsewurst.ui.app import MorsewurstApp
@@ -319,10 +322,10 @@ class ResultsController:
         return "-" if value is None else f"{value:.1f}"
 
     def selected_source_text(self) -> Tuple[str, str]:
-        """Return the current source text and its source label for scoring."""
+        """Return the current source text and its stable source identifier for scoring."""
         app = self.app
 
         if app.use_telemetry_as_truth_var.get():
-            return app.round.telemetry_text, "adaptiivinen telemetria"
+            return app.round.telemetry_text, SOURCE_ADAPTIVE_TELEMETRY
 
-        return app.input_var.get(), "HID"
+        return app.input_var.get(), SOURCE_HID

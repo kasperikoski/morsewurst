@@ -79,6 +79,27 @@ class LobbyViewMixin:
             self.after(100, lambda: self._request_server_info(silent=True))
             self.after(150, self._ensure_lobby_presence)
 
+    def _count_key(self, base_key: str, count: int) -> str:
+        return f"{base_key}_one" if int(count) == 1 else f"{base_key}_many"
+
+    def _public_room_i18n_key(self, room: PublicRoom, part: str) -> str:
+        room_id = str(room.id or room.name or "").strip().lower()
+        room_id = room_id.replace(" ", "_").replace("-", "").replace(".", "")
+        return f"network.public_room.{room_id}.{part}"
+
+    def _localized_public_room_name(self, room: PublicRoom) -> str:
+        return self.tr(
+            self._public_room_i18n_key(room, "name"),
+            default=room.name,
+        )
+
+    def _localized_public_room_description(self, room: PublicRoom) -> str:
+        fallback = room.description or self.tr("network.public_rooms.default_description")
+        return self.tr(
+            self._public_room_i18n_key(room, "description"),
+            default=fallback,
+        )
+
     def _ensure_lobby_presence(self) -> None:
         if self.connected_room_key or self.connected_room_id:
             return
@@ -106,7 +127,7 @@ class LobbyViewMixin:
 
         make_label(
             panel,
-            f"CALLSIGN: {sanitize_callsign(self.callsign_var.get())}",
+            self.tr("network.lobby.callsign", callsign=sanitize_callsign(self.callsign_var.get())),
             font=MatrixTheme.heading_font,
             foreground=MatrixTheme.accent,
         ).grid(row=0, column=0, sticky="w")
@@ -119,21 +140,21 @@ class LobbyViewMixin:
             background=MatrixTheme.panel,
         ).grid(row=0, column=1, sticky="e", padx=(18, 12))
 
-        make_button(panel, "SERVER INFO", self.show_server_info_window).grid(
+        make_button(panel, self.tr("network.button.server_info"), self.show_server_info_window).grid(
             row=0,
             column=2,
             sticky="e",
             padx=(0, 8),
         )
 
-        make_button(panel, "PING", self._request_server_ping).grid(
+        make_button(panel, self.tr("network.button.ping"), self._request_server_ping).grid(
             row=0,
             column=3,
             sticky="e",
             padx=(0, 8),
         )
 
-        make_button(panel, "SETTINGS", self.show_settings_view).grid(
+        make_button(panel, self.tr("network.button.settings"), self.show_settings_view).grid(
             row=0,
             column=4,
             sticky="e",
@@ -148,14 +169,14 @@ class LobbyViewMixin:
 
         make_label(
             panel,
-            "PUBLIC ROOMS",
+            self.tr("network.public_rooms.title"),
             font=MatrixTheme.heading_font,
             foreground=MatrixTheme.accent,
         ).grid(row=0, column=0, sticky="w")
 
         make_label(
             panel,
-            "Open rooms from the relay server. No password required.",
+            self.tr("network.public_rooms.description"),
             foreground=MatrixTheme.text_dim,
             wraplength=340,
         ).grid(row=1, column=0, sticky="ew", pady=(4, 8))
@@ -173,7 +194,7 @@ class LobbyViewMixin:
 
         make_button(
             status_row,
-            "REFRESH",
+            self.tr("network.button.refresh"),
             lambda: self._refresh_public_rooms_async(force=True),
         ).grid(row=0, column=1, sticky="e", padx=(12, 0))
 
@@ -190,14 +211,14 @@ class LobbyViewMixin:
 
         make_label(
             panel,
-            "REMEMBERED PRIVATE ROOMS",
+            self.tr("network.remembered_rooms.title"),
             font=MatrixTheme.heading_font,
             foreground=MatrixTheme.accent,
         ).grid(row=0, column=0, sticky="w")
 
         make_label(
             panel,
-            "Previously used private rooms saved locally on this computer.",
+            self.tr("network.remembered_rooms.description"),
             foreground=MatrixTheme.text_dim,
             wraplength=340,
         ).grid(row=1, column=0, sticky="ew", pady=(4, 8))
@@ -220,27 +241,41 @@ class LobbyViewMixin:
 
         make_label(
             panel,
-            "CREATE OR JOIN PRIVATE ROOM",
+            self.tr("network.private_room.title"),
             font=MatrixTheme.heading_font,
             foreground=MatrixTheme.accent,
         ).grid(row=0, column=0, sticky="w")
 
         make_label(
             panel,
-            "Private rooms use a room name and password. The display name is remembered as written. A separate Room ID is assigned by the server.",
+            self.tr("network.private_room.description"),
             foreground=MatrixTheme.text_dim,
             wraplength=340,
         ).grid(row=1, column=0, sticky="ew", pady=(4, 14))
 
-        make_label(panel, "Room name", foreground=MatrixTheme.text_dim).grid(row=2, column=0, sticky="w")
+        make_label(
+            panel,
+            self.tr("network.private_room.room_name"),
+            foreground=MatrixTheme.text_dim,
+        ).grid(row=2, column=0, sticky="w")
+
         room_entry = make_entry(panel, self.private_room_var, width=32)
         room_entry.grid(row=3, column=0, sticky="ew", pady=(4, 10))
 
-        make_label(panel, "Password", foreground=MatrixTheme.text_dim).grid(row=4, column=0, sticky="w")
+        make_label(
+            panel,
+            self.tr("network.private_room.password"),
+            foreground=MatrixTheme.text_dim,
+        ).grid(row=4, column=0, sticky="w")
+
         password_entry = make_entry(panel, self.private_password_var, show="*", width=32)
         password_entry.grid(row=5, column=0, sticky="ew", pady=(4, 14))
 
-        make_button(panel, "CREATE OR JOIN", self.join_private_room).grid(row=6, column=0, sticky="w")
+        make_button(
+            panel,
+            self.tr("network.button.create_or_join"),
+            self.join_private_room,
+        ).grid(row=6, column=0, sticky="w")
 
         help_box = tk.Frame(panel, background=MatrixTheme.panel_alt, padx=12, pady=10)
         help_box.grid(row=7, column=0, sticky="ew", pady=(18, 0))
@@ -248,7 +283,7 @@ class LobbyViewMixin:
 
         make_label(
             help_box,
-            "Tip",
+            self.tr("network.private_room.tip_title"),
             font=MatrixTheme.heading_font,
             foreground=MatrixTheme.accent,
             background=MatrixTheme.panel_alt,
@@ -256,7 +291,7 @@ class LobbyViewMixin:
 
         make_label(
             help_box,
-            "Click a remembered room to fill these fields. Double-click a remembered room to join immediately.",
+            self.tr("network.private_room.tip_text"),
             foreground=MatrixTheme.text_dim,
             background=MatrixTheme.panel_alt,
             wraplength=300,
@@ -276,20 +311,21 @@ class LobbyViewMixin:
             child.destroy()
 
         if self._public_rooms_loading:
-            self.public_rooms_status_var.set("Loading public rooms...")
-            self._empty_row(frame, "Please wait.").grid(row=0, column=0, sticky="ew")
+            self.public_rooms_status_var.set(self.tr("network.public_rooms.loading"))
+            self._empty_row(frame, self.tr("network.public_rooms.please_wait")).grid(row=0, column=0, sticky="ew")
             return
 
         if not self.public_rooms:
-            self.public_rooms_status_var.set("No public rooms loaded.")
+            self.public_rooms_status_var.set(self.tr("network.public_rooms.none_loaded"))
             self._empty_row(
                 frame,
-                "No public rooms are available yet. Press REFRESH to try again.",
+                self.tr("network.public_rooms.none_available"),
             ).grid(row=0, column=0, sticky="ew")
             return
 
+        count = len(self.public_rooms)
         self.public_rooms_status_var.set(
-            f"{len(self.public_rooms)} room{'s' if len(self.public_rooms) != 1 else ''}."
+            self.tr(self._count_key("network.public_rooms.count", count), count=count)
         )
 
         for index, room in enumerate(self.public_rooms):
@@ -303,15 +339,18 @@ class LobbyViewMixin:
 
         make_label(
             row,
-            room.name.upper(),
+            self._localized_public_room_name(room).upper(),
             font=MatrixTheme.heading_font,
             foreground=MatrixTheme.text,
             background=MatrixTheme.panel_alt,
         ).grid(row=0, column=0, sticky="w")
 
-        description = room.description or "Public channel without a password."
+        description = self._localized_public_room_description(room)
         if room.max_clients > 0:
-            description = f"{description} Users: {room.client_count}/{room.max_clients}."
+            description = (
+                f"{description} "
+                f"{self.tr('network.public_rooms.users', current=room.client_count, max=room.max_clients)}"
+            )
 
         make_label(
             row,
@@ -323,7 +362,7 @@ class LobbyViewMixin:
 
         make_button(
             row,
-            "JOIN",
+            self.tr("network.button.join"),
             lambda selected_room=room: self.join_public_room(selected_room),
         ).grid(row=0, column=1, rowspan=2, sticky="e", padx=(12, 0))
 
@@ -356,15 +395,16 @@ class LobbyViewMixin:
         rooms = self._remembered_private_rooms()
 
         if not rooms:
-            self.remembered_rooms_status_var.set("No remembered private rooms.")
+            self.remembered_rooms_status_var.set(self.tr("network.remembered_rooms.none"))
             self._empty_row(
                 frame,
-                "Private rooms will appear here after a successful private room connection.",
+                self.tr("network.remembered_rooms.none_help"),
             ).grid(row=0, column=0, sticky="ew")
             return
 
+        count = len(rooms)
         self.remembered_rooms_status_var.set(
-            f"{len(rooms)} remembered room{'s' if len(rooms) != 1 else ''}."
+            self.tr(self._count_key("network.remembered_rooms.count", count), count=count)
         )
 
         for index, room in enumerate(rooms):
@@ -381,7 +421,7 @@ class LobbyViewMixin:
         row = tk.Frame(parent, background=MatrixTheme.panel_alt, padx=12, pady=10)
         row.columnconfigure(0, weight=1)
 
-        title = room.display_name or room.room_id or "Private room"
+        title = room.display_name or room.room_id or self.tr("network.remembered_rooms.default_title")
 
         title_label = make_label(
             row,
@@ -394,14 +434,14 @@ class LobbyViewMixin:
 
         join_button = make_button(
             row,
-            "JOIN",
+            self.tr("network.button.join"),
             lambda selected_room=room: self._join_remembered_private_room(selected_room),
         )
         join_button.grid(row=0, column=1, sticky="e", padx=(10, 0))
 
         forget_button = make_button(
             row,
-            "FORGET",
+            self.tr("network.button.forget"),
             lambda selected_room=room: self._forget_remembered_private_room(selected_room),
         )
         forget_button.grid(row=0, column=2, sticky="e", padx=(8, 0))
@@ -423,7 +463,7 @@ class LobbyViewMixin:
         self.private_room_var.set(display_name)
         self.private_password_var.set(room.saved_password or "")
         self.server_uri_var.set(room.server_uri or self._server_uri())
-        self._show_notice(f"Loaded remembered room '{display_name}'.", "info")
+        self._show_notice(self.tr("network.room.loaded_remembered", room=display_name), "info")
 
     def _join_remembered_private_room(self, room: RememberedPrivateRoom) -> None:
         self._select_remembered_private_room(room)
@@ -440,7 +480,7 @@ class LobbyViewMixin:
         save_network_settings(self.settings)
 
         self._render_remembered_private_rooms()
-        self._show_notice(f"Forgot private room '{display_name}'.", "success")
+        self._show_notice(self.tr("network.room.forgot_remembered", room=display_name), "success")
 
     def _remember_successful_private_room(self) -> None:
         if self.connected_room_access != "private":

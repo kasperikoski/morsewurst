@@ -16,14 +16,14 @@ def build_control_panel(app: tk.Misc, parent: ttk.Frame) -> None:
 
     app.start_button = ttk.Button(
         buttons,
-        text="Aloita harjoitus",
+        text=app.i18n.t("control.start"),
         command=app.practice_controller.start_practice,
     )
     app.start_button.pack(side=tk.LEFT)
 
     app.stop_button = ttk.Button(
         buttons,
-        text="Lopeta harjoitus",
+        text=app.i18n.t("control.stop"),
         command=app.practice_controller.stop_practice,
         state=tk.DISABLED,
     )
@@ -31,37 +31,37 @@ def build_control_panel(app: tk.Misc, parent: ttk.Frame) -> None:
 
     ttk.Button(
         buttons,
-        text="Tyhjennä",
+        text=app.i18n.t("control.clear"),
         command=app.practice_controller.clear_round_input,
     ).pack(side=tk.LEFT, padx=(8, 0))
 
     ttk.Button(
         buttons,
-        text="Ohje",
+        text=app.i18n.t("control.help"),
         command=app.window_controller.open_help,
     ).pack(side=tk.LEFT, padx=(8, 0))
 
     ttk.Button(
         buttons,
-        text="Poista harjoituksia",
+        text=app.i18n.t("control.delete_sessions"),
         command=app.window_controller.open_delete_sessions_window,
     ).pack(side=tk.LEFT, padx=(8, 0))
 
     ttk.Button(
         buttons,
-        text="Asetukset",
+        text=app.i18n.t("control.settings"),
         command=app.window_controller.open_advanced_settings,
     ).pack(side=tk.LEFT, padx=(8, 0))
 
     ttk.Button(
         buttons,
-        text="Tilastot",
+        text=app.i18n.t("control.stats"),
         command=app.window_controller.open_stats_window,
     ).pack(side=tk.LEFT, padx=(8, 0))
 
     ttk.Button(
         buttons,
-        text="Network",
+        text=app.i18n.t("control.network"),
         command=app.window_controller.open_network_window,
     ).pack(side=tk.LEFT, padx=(8, 0))
 

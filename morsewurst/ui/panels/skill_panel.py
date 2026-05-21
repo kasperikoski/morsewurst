@@ -29,7 +29,7 @@ def _metric_cell(parent: ttk.Frame, column: int, label: str, variable: tk.String
 def build_skill_panel(app: tk.Misc, parent: ttk.Frame) -> None:
     """Build the skill rating panel."""
 
-    skill = ttk.LabelFrame(parent, text="Taitotaso")
+    skill = ttk.LabelFrame(parent, text=app.i18n.t("skill.title"))
     skill.pack(fill=tk.X, pady=(8, 0))
 
     ttk.Label(
@@ -49,19 +49,19 @@ def build_skill_panel(app: tk.Misc, parent: ttk.Frame) -> None:
     factors_grid = ttk.Frame(skill)
     factors_grid.pack(anchor=tk.W, padx=8, pady=(5, 0), fill=tk.X)
 
-    _metric_cell(factors_grid, 0, "Tarkkuus", app.skill_accuracy_value_var)
-    _metric_cell(factors_grid, 1, "Puhtaus", app.skill_cleanliness_value_var)
-    _metric_cell(factors_grid, 2, "Ajoitus", app.skill_timing_value_var)
-    _metric_cell(factors_grid, 3, "Korjaus", app.skill_adjustment_value_var)
+    _metric_cell(factors_grid, 0, app.i18n.t("skill.accuracy"), app.skill_accuracy_value_var)
+    _metric_cell(factors_grid, 1, app.i18n.t("skill.cleanliness"), app.skill_cleanliness_value_var)
+    _metric_cell(factors_grid, 2, app.i18n.t("skill.timing"), app.skill_timing_value_var)
+    _metric_cell(factors_grid, 3, app.i18n.t("skill.adjustment"), app.skill_adjustment_value_var)
 
     confidence_grid = ttk.Frame(skill)
     confidence_grid.pack(anchor=tk.W, padx=8, pady=(4, 0), fill=tk.X)
 
-    _metric_cell(confidence_grid, 0, "Luottamus", app.skill_confidence_value_var)
-    _metric_cell(confidence_grid, 1, "Merkit", app.skill_mastery_value_var)
-    _metric_cell(confidence_grid, 2, "Kattavuus", app.skill_coverage_value_var)
-    _metric_cell(confidence_grid, 3, "Min.kier.", app.skill_used_rounds_value_var)
-    _metric_cell(confidence_grid, 4, "Yht.kier.", app.skill_total_used_rounds_value_var)
+    _metric_cell(confidence_grid, 0, app.i18n.t("skill.confidence"), app.skill_confidence_value_var)
+    _metric_cell(confidence_grid, 1, app.i18n.t("skill.mastery"), app.skill_mastery_value_var)
+    _metric_cell(confidence_grid, 2, app.i18n.t("skill.coverage"), app.skill_coverage_value_var)
+    _metric_cell(confidence_grid, 3, app.i18n.t("skill.min_rounds"), app.skill_used_rounds_value_var)
+    _metric_cell(confidence_grid, 4, app.i18n.t("skill.total_rounds"), app.skill_total_used_rounds_value_var)
 
     ttk.Label(
         skill,

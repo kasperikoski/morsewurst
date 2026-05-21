@@ -20,21 +20,44 @@ class WxmorController:
 
     def profile_labels(self) -> dict[str, str]:
         return {
-            "auto": "Automaattinen",
-            "minimum": "Minimi",
-            "basic": "Perus",
-            "compact": "Kompakti",
-            "extended": "Laaja",
+            "auto": self.app.i18n.t("wxmor.profile.auto", "Automatic"),
+            "minimum": self.app.i18n.t("wxmor.profile.minimum", "Minimum"),
+            "basic": self.app.i18n.t("wxmor.profile.basic", "Basic"),
+            "compact": self.app.i18n.t("wxmor.profile.compact", "Compact"),
+            "extended": self.app.i18n.t("wxmor.profile.extended", "Extended"),
         }
 
     def profile_value_from_label(self, label: str) -> str:
         text = str(label or "").strip()
-        text_lower = text.lower()
+        text_lower = text.casefold()
 
         labels = self.profile_labels()
 
         if text_lower in labels:
             return text_lower
+
+        aliases = {
+            "auto": "auto",
+            "automatic": "auto",
+            "automaattinen": "auto",
+
+            "minimum": "minimum",
+            "minimal": "minimum",
+            "minimi": "minimum",
+
+            "basic": "basic",
+            "perus": "basic",
+
+            "compact": "compact",
+            "kompakti": "compact",
+
+            "extended": "extended",
+            "wide": "extended",
+            "laaja": "extended",
+        }
+
+        if text_lower in aliases:
+            return aliases[text_lower]
 
         for value, display_label in labels.items():
             if text.casefold() == display_label.casefold():

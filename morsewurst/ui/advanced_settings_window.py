@@ -16,11 +16,11 @@ class AdvancedSettingsWindow(tk.Toplevel):
 
         self.app = app
 
-        self.title("Asetukset")
+        self.title(self.app.i18n.t("settings.window.title"))
         self.transient(app)
         self.grab_set()
-        self.geometry("760x660")
-        self.minsize(700, 560)
+        self.geometry("780x680")
+        self.minsize(780, 680)
 
         outer = ttk.Frame(self, padding=12)
         outer.pack(fill=tk.BOTH, expand=True)
@@ -28,6 +28,7 @@ class AdvancedSettingsWindow(tk.Toplevel):
         notebook = ttk.Notebook(outer)
         notebook.pack(fill=tk.BOTH, expand=True)
 
+        self._build_language_tab(notebook)
         self._build_speed_tab(notebook)
         self._build_adaptive_tab(notebook)
         self._build_problem_chars_tab(notebook)
@@ -43,7 +44,7 @@ class AdvancedSettingsWindow(tk.Toplevel):
 
         ttk.Button(
             button_row,
-            text="Sulje",
+            text=self.app.i18n.t("settings.button.close"),
             command=self.close,
         ).pack(side=tk.RIGHT)
 
@@ -51,7 +52,7 @@ class AdvancedSettingsWindow(tk.Toplevel):
 
         self.update_idletasks()
         self._center_on_parent(app)
-    
+
     def _open_debug_window_from_settings(self) -> None:
         try:
             self.grab_release()
@@ -122,7 +123,6 @@ class AdvancedSettingsWindow(tk.Toplevel):
             canvas.itemconfigure(window_id, width=event.width)
 
         def on_mousewheel(event: tk.Event) -> None:
-            # Windows/macOS: event.delta. Linux handled separately below.
             if event.delta:
                 canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
 
@@ -150,22 +150,76 @@ class AdvancedSettingsWindow(tk.Toplevel):
 
         return content
 
-    def _build_problem_chars_tab(self, notebook: ttk.Notebook) -> None:
-        frame = ttk.Frame(notebook, padding=12)
-        notebook.add(frame, text="Vaikeimmat merkit")
+    def _build_language_tab(self, notebook: ttk.Notebook) -> None:
+        frame = self._make_scrollable_tab(
+            notebook,
+            self.app.i18n.t("settings.language.tab"),
+        )
 
         ttk.Label(
             frame,
-            text="Vaikeimmat merkit",
+            text=self.app.i18n.t("settings.language.title"),
             font=("Segoe UI", 11, "bold"),
         ).pack(anchor=tk.W)
 
         ttk.Label(
             frame,
-            text=(
-                "Vaikeimmat merkit eivät korvaa koko merkkivalikoimaa. "
-                "Ne painottavat niitä sallittuja merkkejä, joissa on ollut eniten virheitä."
-            ),
+            text=self.app.i18n.t("settings.language.description"),
+            wraplength=620,
+        ).pack(anchor=tk.W, pady=(4, 12))
+
+        language_options = self.app.i18n.language_options()
+        code_to_label = {
+            code: label
+            for code, label in language_options.items()
+        }
+        label_to_code = {
+            label: code
+            for code, label in language_options.items()
+        }
+
+        selected_label_var = tk.StringVar(
+            value=code_to_label.get(self.app.i18n.language, "English")
+        )
+
+        combo = ttk.Combobox(
+            frame,
+            textvariable=selected_label_var,
+            values=tuple(language_options.values()),
+            state="readonly",
+            width=28,
+        )
+        combo.pack(anchor=tk.W)
+
+        restart_label = ttk.Label(
+            frame,
+            text=self.app.i18n.t("settings.language.restart_required"),
+            wraplength=620,
+        )
+        restart_label.pack(anchor=tk.W, pady=(12, 0))
+
+        def on_language_selected(_event: tk.Event | None = None) -> None:
+            selected_label = selected_label_var.get()
+            language = label_to_code.get(selected_label, "en")
+
+            self.app.language_var.set(language)
+            self.app.i18n.set_language(language)
+
+        combo.bind("<<ComboboxSelected>>", on_language_selected)
+
+    def _build_problem_chars_tab(self, notebook: ttk.Notebook) -> None:
+        frame = ttk.Frame(notebook, padding=12)
+        notebook.add(frame, text=self.app.i18n.t("advanced.tab.problem_chars"))
+
+        ttk.Label(
+            frame,
+            text=self.app.i18n.t("advanced.problem_chars.title"),
+            font=("Segoe UI", 11, "bold"),
+        ).pack(anchor=tk.W)
+
+        ttk.Label(
+            frame,
+            text=self.app.i18n.t("advanced.problem_chars.description"),
             wraplength=590,
         ).pack(anchor=tk.W, pady=(4, 14))
 
@@ -174,7 +228,7 @@ class AdvancedSettingsWindow(tk.Toplevel):
 
         ttk.Label(
             row_1,
-            text="Vaikeimpien painotus %",
+            text=self.app.i18n.t("advanced.problem_chars.weight_percent"),
             width=28,
         ).pack(side=tk.LEFT)
 
@@ -191,7 +245,7 @@ class AdvancedSettingsWindow(tk.Toplevel):
 
         ttk.Label(
             row_2,
-            text="Vaikeimpien määrä",
+            text=self.app.i18n.t("advanced.problem_chars.limit"),
             width=28,
         ).pack(side=tk.LEFT)
 
@@ -208,7 +262,7 @@ class AdvancedSettingsWindow(tk.Toplevel):
 
         ttk.Label(
             row_3,
-            text="Viimeisiä kierroksia",
+            text=self.app.i18n.t("advanced.problem_chars.recent_rounds"),
             width=28,
         ).pack(side=tk.LEFT)
 
@@ -222,52 +276,43 @@ class AdvancedSettingsWindow(tk.Toplevel):
 
     def _build_input_tab(self, notebook: ttk.Notebook) -> None:
         frame = ttk.Frame(notebook, padding=12)
-        notebook.add(frame, text="Syöte ja yhteys")
+        notebook.add(frame, text=self.app.i18n.t("advanced.tab.input"))
 
         ttk.Label(
             frame,
-            text="Syöte ja yhteys",
+            text=self.app.i18n.t("advanced.input.title"),
             font=("Segoe UI", 11, "bold"),
         ).pack(anchor=tk.W)
 
         ttk.Label(
             frame,
-            text=(
-                "Näillä asetuksilla valitaan, mistä syöte luetaan, yrittääkö ohjelma "
-                "löytää Morsewurst-laitteen automaattisesti sarjaporteista ja "
-                "päätetäänkö keskeneräinen kierros pitkän tauon jälkeen."
-            ),
+            text=self.app.i18n.t("advanced.input.description"),
             wraplength=590,
         ).pack(anchor=tk.W, pady=(4, 14))
 
         ttk.Checkbutton(
             frame,
-            text="Käytä telemetriaa totuutena",
+            text=self.app.i18n.t("advanced.input.use_telemetry_as_truth"),
             variable=self.app.use_telemetry_as_truth_var,
             command=self.app.input_controller.on_use_telemetry_as_truth_changed,
         ).pack(anchor=tk.W, pady=(0, 2))
 
         ttk.Label(
             frame,
-            text=(
-                "Suositus: pidä päällä. Tällöin harjoitus arvioidaan raakatelemetriasta "
-                "eli painallusten todellisista ajoituksista. Jos asetus poistetaan käytöstä, "
-                "ohjelma käyttää laitteen USB HID -näppäimistösyötettä, joka ei ole riittävän "
-                "tarkka luotettavaan pisteytykseen."
-            ),
+            text=self.app.i18n.t("advanced.input.use_telemetry_as_truth_hint"),
             wraplength=420,
             foreground="#666666",
         ).pack(anchor=tk.W, pady=(0, 8))
 
         ttk.Checkbutton(
             frame,
-            text="Pidä syötekenttä aktiivisena",
+            text=self.app.i18n.t("advanced.input.keep_focus"),
             variable=self.app.keep_focus_var,
         ).pack(anchor=tk.W, pady=(0, 6))
 
         ttk.Checkbutton(
             frame,
-            text="Yritä yhdistää sarjaporttiin automaattisesti",
+            text=self.app.i18n.t("advanced.input.auto_connect_serial"),
             variable=self.app.auto_connect_serial_var,
             command=self.app.input_controller.on_auto_connect_serial_changed,
         ).pack(anchor=tk.W, pady=(0, 14))
@@ -276,22 +321,19 @@ class AdvancedSettingsWindow(tk.Toplevel):
 
         ttk.Label(
             frame,
-            text="Näppäimistön käyttö",
+            text=self.app.i18n.t("advanced.input.keyboard_title"),
             font=("Segoe UI", 10, "bold"),
         ).pack(anchor=tk.W)
 
         ttk.Label(
             frame,
-            text=(
-                "Tällä asetuksella tietokoneen näppäimistö toimii virtuaalisena straight keynä. "
-                "Painalluksista muodostetaan samaa raakatelemetriaa kuin fyysisestä Morsewurst-laitteesta."
-            ),
+            text=self.app.i18n.t("advanced.input.keyboard_description"),
             wraplength=590,
         ).pack(anchor=tk.W, pady=(4, 10))
 
         ttk.Checkbutton(
             frame,
-            text="Morseta tietokoneen näppäimistöllä",
+            text=self.app.i18n.t("advanced.input.keyboard_enabled"),
             variable=self.app.keyboard_morse_enabled_var,
             command=self.app.input_controller.on_keyboard_morse_enabled_changed,
         ).pack(anchor=tk.W, pady=(0, 8))
@@ -301,7 +343,7 @@ class AdvancedSettingsWindow(tk.Toplevel):
 
         ttk.Label(
             key_row,
-            text="Käytettävä näppäin:",
+            text=self.app.i18n.t("advanced.input.keyboard_key_label"),
         ).pack(side=tk.LEFT, padx=(0, 8))
 
         keyboard_key_combo = ttk.Combobox(
@@ -316,11 +358,7 @@ class AdvancedSettingsWindow(tk.Toplevel):
 
         ttk.Label(
             frame,
-            text=(
-                "Kun tämä on päällä, ohjelma käyttää valittua näppäintä virtuaalisena straight keynä, "
-                "pakottaa telemetrian totuudeksi ja poistaa sarjaportin automaattihaun käytöstä."
-                "Huomioi, että näppäimistö ei ole luotettava ja tarkka morse-avain."
-            ),
+            text=self.app.i18n.t("advanced.input.keyboard_note"),
             wraplength=420,
             foreground="#666666",
         ).pack(anchor=tk.W, pady=(0, 14))
@@ -329,22 +367,19 @@ class AdvancedSettingsWindow(tk.Toplevel):
 
         ttk.Label(
             frame,
-            text="Automaattinen lopetus pitkän tauon jälkeen",
+            text=self.app.i18n.t("advanced.input.auto_finish_title"),
             font=("Segoe UI", 10, "bold"),
         ).pack(anchor=tk.W)
 
         ttk.Label(
             frame,
-            text=(
-                "Tämä päättää kierroksen, jos telemetriaa on tullut mutta syöte jäi "
-                "liian lyhyeksi esimerkiksi puuttuvien merkkivälien takia."
-            ),
+            text=self.app.i18n.t("advanced.input.auto_finish_description"),
             wraplength=590,
         ).pack(anchor=tk.W, pady=(4, 10))
 
         ttk.Checkbutton(
             frame,
-            text="Päätä keskeneräinen kierros pitkän tauon jälkeen",
+            text=self.app.i18n.t("advanced.input.auto_finish_enabled"),
             variable=self.app.auto_finish_on_idle_var,
         ).pack(anchor=tk.W, pady=(0, 8))
 
@@ -353,7 +388,7 @@ class AdvancedSettingsWindow(tk.Toplevel):
 
         ttk.Label(
             row_1,
-            text="Tauko yksikköinä",
+            text=self.app.i18n.t("advanced.input.idle_units"),
             width=28,
         ).pack(side=tk.LEFT)
 
@@ -370,7 +405,7 @@ class AdvancedSettingsWindow(tk.Toplevel):
 
         ttk.Label(
             row_2,
-            text="Vähimmäistauko sekunteina",
+            text=self.app.i18n.t("advanced.input.min_seconds"),
             width=28,
         ).pack(side=tk.LEFT)
 
@@ -453,25 +488,21 @@ class AdvancedSettingsWindow(tk.Toplevel):
         ).pack(anchor=tk.W, pady=(0, 10))
 
     def _build_adaptive_tab(self, notebook: ttk.Notebook) -> None:
-        frame = self._make_scrollable_tab(notebook, "Tunnistus")
+        frame = self._make_scrollable_tab(notebook, self.app.i18n.t("advanced.tab.adaptive"))
 
         ttk.Label(
             frame,
-            text="Tunnistus ja ajoitusprofiili",
+            text=self.app.i18n.t("advanced.adaptive.title"),
             font=("Segoe UI", 11, "bold"),
         ).pack(anchor=tk.W)
 
         ttk.Label(
             frame,
-            text=(
-                "Morsewurst käyttää tavoite-WPM:ää vain aloitusarviona ja oppii "
-                "käyttäjän todellista rytmiä viimeisistä hyvistä kierroksista. "
-                "Pisteen, viivan ja välien sisäisiä raja-arvoja ei säädetä käsin."
-            ),
+            text=self.app.i18n.t("advanced.adaptive.description"),
             wraplength=660,
         ).pack(anchor=tk.W, pady=(4, 12))
 
-        profile_box = ttk.LabelFrame(frame, text="Opittu rytmiprofiili")
+        profile_box = ttk.LabelFrame(frame, text=self.app.i18n.t("advanced.adaptive.profile_box"))
         profile_box.pack(fill=tk.X, pady=(0, 12))
 
         self.profile_summary_vars: dict[str, dict[str, tk.StringVar]] = {}
@@ -479,11 +510,11 @@ class AdvancedSettingsWindow(tk.Toplevel):
 
         def add_profile_row(row: int, title: str, source: str) -> None:
             self.profile_summary_vars[source] = {
-                "element": tk.StringVar(value="Elementti -"),
-                "gap": tk.StringVar(value="Tauko -"),
-                "confidence": tk.StringVar(value="Luottamus matala"),
-                "rounds": tk.StringVar(value="Kierroksia 0"),
-                "progress": tk.StringVar(value="Kierroksia 0/100"),
+                "element": tk.StringVar(value=f"{self.app.i18n.t('advanced.adaptive.element_label')} -"),
+                "gap": tk.StringVar(value=f"{self.app.i18n.t('advanced.adaptive.gap_label')} -"),
+                "confidence": tk.StringVar(value=f"{self.app.i18n.t('advanced.adaptive.confidence_label')} {self.app.i18n.t('advanced.adaptive.confidence_low')}"),
+                "rounds": tk.StringVar(value=f"{self.app.i18n.t('advanced.adaptive.rounds_label')} 0"),
+                "progress": tk.StringVar(value=f"{self.app.i18n.t('advanced.adaptive.rounds_label')} 0/100"),
             }
 
             vars_for_source = self.profile_summary_vars[source]
@@ -551,15 +582,15 @@ class AdvancedSettingsWindow(tk.Toplevel):
         profile_box.columnconfigure(2, weight=1)
         profile_box.columnconfigure(3, weight=1)
 
-        add_profile_row(0, "Straight", "straight")
-        add_profile_row(1, "Iambic", "iambic")
+        add_profile_row(0, self.app.i18n.t("advanced.adaptive.straight"), "straight")
+        add_profile_row(1, self.app.i18n.t("advanced.adaptive.iambic"), "iambic")
 
-        profile_controls = ttk.LabelFrame(frame, text="Oppiminen")
+        profile_controls = ttk.LabelFrame(frame, text=self.app.i18n.t("advanced.adaptive.learning_title"))
         profile_controls.pack(fill=tk.X, pady=(0, 12))
 
         ttk.Checkbutton(
             profile_controls,
-            text="Käytä opittua ajoitusprofiilia",
+            text=self.app.i18n.t("advanced.adaptive.use_profile"),
             variable=self.app.use_timing_profile_var,
             command=self.app.decoder_controller.refresh_timing_profiles,
         ).pack(anchor=tk.W, padx=10, pady=(8, 6))
@@ -567,7 +598,7 @@ class AdvancedSettingsWindow(tk.Toplevel):
         grid = ttk.Frame(profile_controls)
         grid.pack(fill=tk.X, padx=10, pady=(0, 10))
 
-        ttk.Label(grid, text="Viimeisiä kierroksia").grid(row=0, column=0, sticky=tk.W, pady=4)
+        ttk.Label(grid, text=self.app.i18n.t("advanced.adaptive.recent_rounds")).grid(row=0, column=0, sticky=tk.W, pady=4)
         self.app.ui_helpers_controller.make_int_spinbox(
             grid,
             from_=10,
@@ -576,7 +607,7 @@ class AdvancedSettingsWindow(tk.Toplevel):
             width=8,
         ).grid(row=0, column=1, sticky=tk.W, padx=(8, 22), pady=4)
 
-        ttk.Label(grid, text="Minimitarkkuus %").grid(row=0, column=2, sticky=tk.W, pady=4)
+        ttk.Label(grid, text=self.app.i18n.t("advanced.adaptive.min_accuracy")).grid(row=0, column=2, sticky=tk.W, pady=4)
         self.app.ui_helpers_controller.make_int_spinbox(
             grid,
             from_=0,
@@ -585,7 +616,7 @@ class AdvancedSettingsWindow(tk.Toplevel):
             width=6,
         ).grid(row=0, column=3, sticky=tk.W, padx=(8, 22), pady=4)
 
-        ttk.Label(grid, text="Minimipuhtaus %").grid(row=1, column=0, sticky=tk.W, pady=4)
+        ttk.Label(grid, text=self.app.i18n.t("advanced.adaptive.min_cleanliness")).grid(row=1, column=0, sticky=tk.W, pady=4)
         self.app.ui_helpers_controller.make_int_spinbox(
             grid,
             from_=0,
@@ -596,23 +627,23 @@ class AdvancedSettingsWindow(tk.Toplevel):
 
         ttk.Button(
             grid,
-            text="Päivitä profiili",
+            text=self.app.i18n.t("advanced.adaptive.refresh_profile"),
             command=self._refresh_profile_summary,
         ).grid(row=1, column=2, columnspan=2, sticky=tk.W, pady=4)
 
-        finish_box = ttk.LabelFrame(frame, text="Automaattinen kierroksen päättäminen")
+        finish_box = ttk.LabelFrame(frame, text=self.app.i18n.t("advanced.adaptive.finish_box"))
         finish_box.pack(fill=tk.X, pady=(0, 12))
 
         ttk.Checkbutton(
             finish_box,
-            text="Päätä kierros automaattisesti hiljaisuuden jälkeen",
+            text=self.app.i18n.t("advanced.adaptive.auto_finish"),
             variable=self.app.auto_finish_on_idle_var,
         ).pack(anchor=tk.W, padx=10, pady=(8, 6))
 
         finish_grid = ttk.Frame(finish_box)
         finish_grid.pack(fill=tk.X, padx=10, pady=(0, 10))
 
-        ttk.Label(finish_grid, text="Hiljaisuusyksiköt").grid(row=0, column=0, sticky=tk.W, pady=4)
+        ttk.Label(finish_grid, text=self.app.i18n.t("advanced.adaptive.idle_units")).grid(row=0, column=0, sticky=tk.W, pady=4)
         self.app.ui_helpers_controller.make_int_spinbox(
             finish_grid,
             from_=3,
@@ -621,7 +652,7 @@ class AdvancedSettingsWindow(tk.Toplevel):
             width=8,
         ).grid(row=0, column=1, sticky=tk.W, padx=(8, 22), pady=4)
 
-        ttk.Label(finish_grid, text="Minimiodotus s").grid(row=0, column=2, sticky=tk.W, pady=4)
+        ttk.Label(finish_grid, text=self.app.i18n.t("advanced.adaptive.min_wait")).grid(row=0, column=2, sticky=tk.W, pady=4)
         self.app.ui_helpers_controller.make_int_spinbox(
             finish_grid,
             from_=1,
@@ -630,12 +661,12 @@ class AdvancedSettingsWindow(tk.Toplevel):
             width=8,
         ).grid(row=0, column=3, sticky=tk.W, padx=(8, 22), pady=4)
 
-        telemetry_box = ttk.LabelFrame(frame, text="Raakatelemetrian näyttö")
+        telemetry_box = ttk.LabelFrame(frame, text=self.app.i18n.t("advanced.adaptive.telemetry_box"))
         telemetry_box.pack(fill=tk.X, pady=(0, 12))
 
         row = ttk.Frame(telemetry_box)
         row.pack(fill=tk.X, padx=10, pady=8)
-        ttk.Label(row, text="Pikseleitä / ajoitusyksikkö").pack(side=tk.LEFT)
+        ttk.Label(row, text=self.app.i18n.t("advanced.adaptive.pixels_per_unit")).pack(side=tk.LEFT)
         self.app.ui_helpers_controller.make_float_spinbox(
             row,
             from_=2.0,
@@ -646,7 +677,6 @@ class AdvancedSettingsWindow(tk.Toplevel):
         ).pack(side=tk.LEFT, padx=(8, 0))
 
         self._refresh_profile_summary()
-
 
     def _redraw_profile_progress_bar(self, canvas: tk.Canvas) -> None:
         state = getattr(canvas, "_profile_bar_state", None)
@@ -661,7 +691,6 @@ class AdvancedSettingsWindow(tk.Toplevel):
             state_text=state_text,
             fill_color=fill_color,
         )
-
 
     def _draw_profile_progress_bar(
         self,
@@ -710,7 +739,6 @@ class AdvancedSettingsWindow(tk.Toplevel):
             font=("Segoe UI", 9, "bold"),
         )
 
-
     def _refresh_profile_summary(self) -> None:
         self.app.decoder_controller.refresh_timing_profiles()
 
@@ -741,9 +769,13 @@ class AdvancedSettingsWindow(tk.Toplevel):
 
         def ms(value: object) -> str:
             try:
-                return "-" if value is None else f"{float(value) / 1000.0:.0f} ms"
+                if value is None:
+                    return "-"
+                return f"{float(value) / 1000.0:.0f}"
             except Exception:
                 return "-"
+
+        ms_unit = self.app.i18n.t("advanced.adaptive.ms_unit")
 
         for source in ("straight", "iambic"):
             profile = self.app.decoder_controller.timing_profile_for_source(source)
@@ -805,13 +837,13 @@ class AdvancedSettingsWindow(tk.Toplevel):
             bar_percent = 100.0 if profile_ready else min(round_gate, confidence_gate) * 100.0
 
             if profile_ready:
-                bar_state_text = "Käytössä"
+                bar_state_text = self.app.i18n.t("advanced.adaptive.status_active")
                 bar_color = "#42b883"
             elif rounds_ready or confidence_ready:
-                bar_state_text = "Melkein valmis"
+                bar_state_text = self.app.i18n.t("advanced.adaptive.status_almost")
                 bar_color = "#f2c94c"
             else:
-                bar_state_text = "Kerätään dataa"
+                bar_state_text = self.app.i18n.t("advanced.adaptive.status_gathering")
                 bar_color = "#eb5757"
 
             confidence_text = self.app.history_controller.confidence_label(
@@ -823,35 +855,43 @@ class AdvancedSettingsWindow(tk.Toplevel):
             if vars_for_source is None:
                 continue
 
+            element_val = ms(getattr(profile, "element_unit_us", None))
             vars_for_source["element"].set(
-                f"Elementti {ms(getattr(profile, 'element_unit_us', None))}"
+                f"{self.app.i18n.t('advanced.adaptive.element_label')} {element_val}{ms_unit if element_val != '-' else ''}"
             )
 
             if source == "iambic":
+                lg_val = ms(getattr(profile, "letter_gap_us", None))
+                wg_val = ms(getattr(profile, "word_gap_us", None))
                 vars_for_source["gap"].set(
-                    "LG "
-                    f"{ms(getattr(profile, 'letter_gap_us', None))} / "
-                    "WG "
-                    f"{ms(getattr(profile, 'word_gap_us', None))}"
+                    f"{self.app.i18n.t('advanced.adaptive.letter_gap_abbr')} {lg_val}{ms_unit if lg_val != '-' else ''} / "
+                    f"{self.app.i18n.t('advanced.adaptive.word_gap_abbr')} {wg_val}{ms_unit if wg_val != '-' else ''}"
                 )
             else:
+                gap_val = ms(getattr(profile, "gap_unit_us", None))
                 vars_for_source["gap"].set(
-                    f"Tauko {ms(getattr(profile, 'gap_unit_us', None))}"
+                    f"{self.app.i18n.t('advanced.adaptive.gap_label')} {gap_val}{ms_unit if gap_val != '-' else ''}"
                 )
+
             vars_for_source["confidence"].set(
-                f"Luottamus {confidence_text}"
+                f"{self.app.i18n.t('advanced.adaptive.confidence_label')} {confidence_text}"
             )
             vars_for_source["rounds"].set(
-                f"Kierroksia {good_rounds}"
+                f"{self.app.i18n.t('advanced.adaptive.rounds_label')} {good_rounds}"
             )
+
             if profile_ready:
-                progress_text = "Käytössä"
+                progress_text = self.app.i18n.t("advanced.adaptive.status_active")
             elif not rounds_ready:
-                progress_text = f"Kierroksia {good_rounds}/{required_rounds}"
+                progress_text = self.app.i18n.t(
+                    "advanced.adaptive.rounds_progress",
+                    current=good_rounds,
+                    required=required_rounds,
+                )
             else:
-                progress_text = (
-                    f"Luottamus {confidence_value * 100:.0f}/"
-                    f"{min_seed_confidence * 100:.0f} %"
+                progress_text = self.app.i18n.t(
+                    "advanced.adaptive.confidence_progress",
+                    confidence=int(confidence_value * 100),
                 )
 
             vars_for_source["progress"].set(progress_text)
@@ -867,35 +907,31 @@ class AdvancedSettingsWindow(tk.Toplevel):
 
     def _build_sound_tab(self, notebook: ttk.Notebook) -> None:
         frame = ttk.Frame(notebook, padding=12)
-        notebook.add(frame, text="Äänet")
+        notebook.add(frame, text=self.app.i18n.t("advanced.tab.sound"))
 
         ttk.Label(
             frame,
-            text="Äänet",
+            text=self.app.i18n.t("advanced.sound.title"),
             font=("Segoe UI", 11, "bold"),
         ).pack(anchor=tk.W)
 
         ttk.Label(
             frame,
-            text=(
-                "Näillä asetuksilla hallitaan Morsewurstin ääniä. Yleinen äänikytkin "
-                "toimii pääkytkimenä. Lisäksi yksittäisiä tapahtumaääniä voi ottaa "
-                "käyttöön tai poistaa käytöstä erikseen."
-            ),
+            text=self.app.i18n.t("advanced.sound.description"),
             wraplength=590,
         ).pack(anchor=tk.W, pady=(4, 14))
 
         ttk.Checkbutton(
             frame,
-            text="Äänet käytössä",
+            text=self.app.i18n.t("advanced.sound.enabled"),
             variable=self.app.sound_enabled_var,
         ).pack(anchor=tk.W, pady=(0, 10))
 
         sound_events = [
-            ("practice_complete", "Soita ääni, kun harjoitussarja valmistuu"),
-            ("serial_connected", "Soita ääni, kun sarjalaite yhdistetään"),
-            ("serial_disconnected", "Soita ääni, kun sarjalaite irrotetaan"),
-            ("level_up", "Soita ääni, kun level nousee"),
+            ("practice_complete", self.app.i18n.t("advanced.sound.practice_complete")),
+            ("serial_connected", self.app.i18n.t("advanced.sound.serial_connected")),
+            ("serial_disconnected", self.app.i18n.t("advanced.sound.serial_disconnected")),
+            ("level_up", self.app.i18n.t("advanced.sound.level_up")),
         ]
 
         for event_name, label in sound_events:
@@ -912,20 +948,17 @@ class AdvancedSettingsWindow(tk.Toplevel):
 
     def _build_speed_tab(self, notebook: ttk.Notebook) -> None:
         frame = ttk.Frame(notebook, padding=12)
-        notebook.add(frame, text="Nopeus")
+        notebook.add(frame, text=self.app.i18n.t("advanced.tab.speed"))
 
         ttk.Label(
             frame,
-            text="Harjoitusnopeus",
+            text=self.app.i18n.t("advanced.speed.title"),
             font=("Segoe UI", 11, "bold"),
         ).pack(anchor=tk.W)
 
         ttk.Label(
             frame,
-            text=(
-                "Tavoite-WPM määrittää standardiajan, johon suorituksen "
-                "nopeuspisteitä verrataan."
-            ),
+            text=self.app.i18n.t("advanced.speed.description"),
             wraplength=590,
         ).pack(anchor=tk.W, pady=(4, 14))
 
@@ -934,7 +967,7 @@ class AdvancedSettingsWindow(tk.Toplevel):
 
         ttk.Label(
             row_1,
-            text="Tavoite WPM",
+            text=self.app.i18n.t("advanced.speed.target_wpm"),
             width=28,
         ).pack(side=tk.LEFT)
 
@@ -954,28 +987,24 @@ class AdvancedSettingsWindow(tk.Toplevel):
 
         ttk.Button(
             frame,
-            text="Ehdota harjoitusnopeutta",
+            text=self.app.i18n.t("settings_panel.suggest_speed"),
             command=self.app.effective_wpm_controller.optimize_timing_from_history,
         ).pack(anchor=tk.W, pady=(4, 0))
 
     def _build_skill_tab(self, notebook: ttk.Notebook) -> None:
         frame = ttk.Frame(notebook, padding=12)
-        notebook.add(frame, text="Taitotaso")
+        notebook.add(frame, text=self.app.i18n.t("advanced.tab.skill"))
 
         ttk.Label(
             frame,
-            text="Taitotason laskenta",
+            text=self.app.i18n.t("advanced.skill.title"),
             font=("Segoe UI", 11, "bold"),
         ).pack(anchor=tk.W)
 
         ttk.Label(
             frame,
-            text=(
-                "Taitotaso lasketaan viimeisistä riittävän pitkistä kierroksista. "
-                f"Riittävän pitkä tarkoittaa vähintään "
-                f"{getattr(config, 'SKILL_RATING_MIN_TARGET_CHARS', 12)} tavoitemerkkiä "
-                "ilman välilyöntejä. Malli huomioi tehokkaan WPM:n, tarkkuuden, "
-                "puhtauden, merkkien hallinnan, merkkien kattavuuden ja ajoituksen."
+            text=self.app.i18n.t("advanced.skill.description").format(
+                min_chars=getattr(config, "SKILL_RATING_MIN_TARGET_CHARS", 12)
             ),
             wraplength=590,
         ).pack(anchor=tk.W, pady=(4, 14))
@@ -985,7 +1014,7 @@ class AdvancedSettingsWindow(tk.Toplevel):
 
         ttk.Label(
             row_1,
-            text="Viimeisiä kierroksia",
+            text=self.app.i18n.t("advanced.skill.recent_rounds"),
             width=28,
         ).pack(side=tk.LEFT)
 
@@ -999,21 +1028,17 @@ class AdvancedSettingsWindow(tk.Toplevel):
 
     def _build_effective_wpm_tab(self, notebook: ttk.Notebook) -> None:
         frame = ttk.Frame(notebook, padding=12)
-        notebook.add(frame, text="Tehokas WPM")
+        notebook.add(frame, text=self.app.i18n.t("advanced.tab.effective_wpm"))
 
         ttk.Label(
             frame,
-            text="Tehokkaan WPM:n laskenta",
+            text=self.app.i18n.t("advanced.effective_wpm.title"),
             font=("Segoe UI", 11, "bold"),
         ).pack(anchor=tk.W)
 
         ttk.Label(
             frame,
-            text=(
-                "Tehokas WPM lasketaan viimeisistä kierroksista, jotka ylittävät "
-                "valitut tarkkuus- ja puhtausrajat. Varsinainen WPM lasketaan "
-                "tavoitetekstin Morse-yksiköistä PARIS-standardin mukaan ja kierroksen kestosta."
-            ),
+            text=self.app.i18n.t("advanced.effective_wpm.description"),
             wraplength=590,
         ).pack(anchor=tk.W, pady=(4, 14))
 
@@ -1022,7 +1047,7 @@ class AdvancedSettingsWindow(tk.Toplevel):
 
         ttk.Label(
             row_1,
-            text="Viimeisiä kierroksia",
+            text=self.app.i18n.t("advanced.effective_wpm.recent_rounds"),
             width=28,
         ).pack(side=tk.LEFT)
 
@@ -1039,7 +1064,7 @@ class AdvancedSettingsWindow(tk.Toplevel):
 
         ttk.Label(
             row_2,
-            text="Minimitarkkuus %",
+            text=self.app.i18n.t("advanced.effective_wpm.min_accuracy"),
             width=28,
         ).pack(side=tk.LEFT)
 
@@ -1056,7 +1081,7 @@ class AdvancedSettingsWindow(tk.Toplevel):
 
         ttk.Label(
             row_3,
-            text="Minimipuhtaus %",
+            text=self.app.i18n.t("advanced.effective_wpm.min_cleanliness"),
             width=28,
         ).pack(side=tk.LEFT)
 
@@ -1070,17 +1095,17 @@ class AdvancedSettingsWindow(tk.Toplevel):
 
     def _build_stats_tab(self, notebook: ttk.Notebook) -> None:
         frame = ttk.Frame(notebook, padding=12)
-        notebook.add(frame, text="Tilastot")
+        notebook.add(frame, text=self.app.i18n.t("advanced.tab.stats"))
 
         ttk.Label(
             frame,
-            text="Yhteenvetotilastot",
+            text=self.app.i18n.t("advanced.stats.title"),
             font=("Segoe UI", 11, "bold"),
         ).pack(anchor=tk.W)
 
         ttk.Label(
             frame,
-            text="Kuinka monesta viimeisimmästä kierroksesta etusivun keskiarvot lasketaan.",
+            text=self.app.i18n.t("advanced.stats.description"),
             wraplength=590,
         ).pack(anchor=tk.W, pady=(4, 14))
 
@@ -1089,7 +1114,7 @@ class AdvancedSettingsWindow(tk.Toplevel):
 
         ttk.Label(
             row_1,
-            text="Viimeisiä kierroksia",
+            text=self.app.i18n.t("advanced.stats.recent_rounds"),
             width=28,
         ).pack(side=tk.LEFT)
 
@@ -1103,55 +1128,44 @@ class AdvancedSettingsWindow(tk.Toplevel):
 
     def _build_debug_tab(self, notebook: ttk.Notebook) -> None:
         frame = ttk.Frame(notebook, padding=12)
-        notebook.add(frame, text="Debug")
+        notebook.add(frame, text=self.app.i18n.t("advanced.tab.debug"))
 
         ttk.Label(
             frame,
-            text="Debug-data",
+            text=self.app.i18n.t("advanced.debug.title"),
             font=("Segoe UI", 11, "bold"),
         ).pack(anchor=tk.W)
 
         ttk.Label(
             frame,
-            text=(
-                "Debug-snapshot tallennetaan vasta kierroksen päätyttyä. "
-                "Se ei kirjoita tiedostoon live-morsetuksen aikana, joten se ei "
-                "käytännössä häiritse ajoituksen mittausta."
-            ),
+            text=self.app.i18n.t("advanced.debug.description"),
             wraplength=590,
         ).pack(anchor=tk.W, pady=(4, 14))
 
         ttk.Checkbutton(
             frame,
-            text="Tallenna debug-snapshot kierroksen jälkeen",
+            text=self.app.i18n.t("advanced.debug.save_snapshot"),
             variable=self.app.debug_snapshot_enabled_var,
             command=self.app.settings_controller.save_ui_settings,
         ).pack(anchor=tk.W, pady=(0, 8))
 
         ttk.Label(
             frame,
-            text=(
-                "Kun tämä on käytössä, viimeisin kierros tallennetaan aina tiedostoon "
-                "latest_round_debug.json. Tiedosto korvataan jokaisen uuden debug-kierroksen jälkeen."
-            ),
+            text=self.app.i18n.t("advanced.debug.save_snapshot_hint"),
             wraplength=590,
             foreground="#666666",
         ).pack(anchor=tk.W, pady=(0, 12))
 
         ttk.Checkbutton(
             frame,
-            text="Tallenna myös koko debug-historia",
+            text=self.app.i18n.t("advanced.debug.save_history"),
             variable=self.app.debug_snapshot_save_history_var,
             command=self.app.settings_controller.save_ui_settings,
         ).pack(anchor=tk.W, pady=(0, 8))
 
         ttk.Label(
             frame,
-            text=(
-                "Kun historia on käytössä, jokainen debug-snapshot lisätään "
-                "debug_history.jsonl-tiedostoon. Näin yksittäisiä kierroksia voidaan "
-                "verrata myöhemmin."
-            ),
+            text=self.app.i18n.t("advanced.debug.save_history_hint"),
             wraplength=590,
             foreground="#666666",
         ).pack(anchor=tk.W, pady=(0, 14))
@@ -1160,7 +1174,7 @@ class AdvancedSettingsWindow(tk.Toplevel):
 
         ttk.Label(
             frame,
-            text="Debug-työkalut",
+            text=self.app.i18n.t("advanced.debug.tools_title"),
             font=("Segoe UI", 10, "bold"),
         ).pack(anchor=tk.W, pady=(0, 8))
 
@@ -1169,28 +1183,25 @@ class AdvancedSettingsWindow(tk.Toplevel):
 
         ttk.Button(
             button_row_1,
-            text="Avaa debug-ikkuna",
+            text=self.app.i18n.t("advanced.debug.open_window"),
             command=self._open_debug_window_from_settings,
         ).pack(side=tk.LEFT)
 
         ttk.Button(
             button_row_1,
-            text="Kopioi viimeisin kierros",
+            text=self.app.i18n.t("advanced.debug.copy_latest"),
             command=self.app.debug_controller.copy_latest_snapshot,
         ).pack(side=tk.LEFT, padx=(8, 0))
 
         ttk.Button(
             button_row_1,
-            text="Tyhjennä debug-data",
+            text=self.app.i18n.t("advanced.debug.clear_data"),
             command=self.app.debug_controller.clear_snapshots,
         ).pack(side=tk.LEFT, padx=(8, 0))
 
         ttk.Label(
             frame,
-            text=(
-                "Debug-ikkunassa voit näyttää viimeisimmän kierroksen, koko historian "
-                "siistissä muodossa tai raakana JSONL-datana."
-            ),
+            text=self.app.i18n.t("advanced.debug.window_hint"),
             wraplength=590,
             foreground="#666666",
         ).pack(anchor=tk.W, pady=(6, 0))

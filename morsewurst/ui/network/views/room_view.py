@@ -27,7 +27,7 @@ class RoomViewMixin:
 
         make_label(
             panel,
-            "CONNECTED",
+            self.tr("network.room.view.connected"),
             font=MatrixTheme.heading_font,
             foreground=MatrixTheme.accent,
         ).grid(row=0, column=0, sticky="w")
@@ -48,7 +48,7 @@ class RoomViewMixin:
             details,
             0,
             0,
-            "Room",
+            self.tr("network.room.view.room"),
             self.connected_room_title or self.connected_room_id or "-",
             self.connected_room_description,
         )
@@ -57,8 +57,10 @@ class RoomViewMixin:
             details,
             0,
             1,
-            "Access",
-            "Private" if self.connected_room_access == "private" else "Public",
+            self.tr("network.room.view.access"),
+            self.tr("network.room.view.access_private")
+            if self.connected_room_access == "private"
+            else self.tr("network.room.view.access_public"),
         )
 
         if self.connected_room_access == "private":
@@ -66,20 +68,20 @@ class RoomViewMixin:
                 details,
                 1,
                 0,
-                "Room ID",
+                self.tr("network.room.view.room_id"),
                 self.connected_room_id or "-",
             )
             self._detail_field(
                 details,
                 1,
                 1,
-                "Room password",
+                self.tr("network.room.view.room_password"),
                 self.connected_room_password,
             )
         else:
             make_label(
                 details,
-                "Public rooms do not require password.",
+                self.tr("network.room.view.public_no_password"),
                 font=MatrixTheme.mono_font,
                 foreground=MatrixTheme.text,
                 background=MatrixTheme.panel,
@@ -89,10 +91,29 @@ class RoomViewMixin:
         controls = tk.Frame(panel, background=MatrixTheme.panel)
         controls.grid(row=3, column=0, sticky="ew", pady=(18, 12))
 
-        make_button(controls, "LEAVE ROOM", self.disconnect).pack(side=tk.LEFT)
-        make_button(controls, "SERVER INFO", self.show_server_info_window).pack(side=tk.LEFT, padx=(10, 0))
-        make_button(controls, "PING", self._request_server_ping).pack(side=tk.LEFT, padx=(10, 0))
-        make_button(controls, "SETTINGS", self.show_settings_view).pack(side=tk.LEFT, padx=(10, 0))
+        make_button(
+            controls,
+            self.tr("network.button.leave_room"),
+            self.disconnect,
+        ).pack(side=tk.LEFT)
+
+        make_button(
+            controls,
+            self.tr("network.button.server_info"),
+            self.show_server_info_window,
+        ).pack(side=tk.LEFT, padx=(10, 0))
+
+        make_button(
+            controls,
+            self.tr("network.button.ping"),
+            self._request_server_ping,
+        ).pack(side=tk.LEFT, padx=(10, 0))
+
+        make_button(
+            controls,
+            self.tr("network.button.settings"),
+            self.show_settings_view,
+        ).pack(side=tk.LEFT, padx=(10, 0))
 
         server_status_panel = make_panel(panel, padx=10, pady=8)
         server_status_panel.grid(row=5, column=0, sticky="ew", pady=(0, 12))
@@ -113,7 +134,7 @@ class RoomViewMixin:
 
         make_label(
             log_panel,
-            "STATUS LOG",
+            self.tr("network.room.view.status_log"),
             font=MatrixTheme.heading_font,
             foreground=MatrixTheme.accent,
         ).grid(row=0, column=0, sticky="w", pady=(0, 8))

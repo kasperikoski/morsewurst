@@ -10,8 +10,10 @@ from typing import TYPE_CHECKING, Any, Optional
 import tkinter as tk
 
 import morsewurst.config as config
+from morsewurst.core.progression import title_key_for_level
 from morsewurst.core.skill_rating import calculate_skill_rating
 from morsewurst.models import ScoreSummary
+from morsewurst.ui.controllers.results_controller import SOURCE_ADAPTIVE_TELEMETRY
 
 if TYPE_CHECKING:
     from morsewurst.ui.app import MorsewurstApp
@@ -78,7 +80,10 @@ class HistoryController:
 
         if app.round.accepting_input and not app.round.finished:
             app.status_controller.set_main_status(
-                "Historiakierrosta ei avata kesken aktiivisen kierroksen.",
+                app.i18n.t(
+                    "history.status.active_round_blocked",
+                    "History round cannot be opened during an active round.",
+                ),
                 state="warning",
             )
             return
@@ -95,7 +100,11 @@ class HistoryController:
 
         if details is None:
             app.status_controller.set_main_status(
-                f"Kierrosta #{session_id} ei löytynyt.",
+                app.i18n.t(
+                    "history.status.round_not_found",
+                    "Round #{session_id} was not found.",
+                    session_id=session_id,
+                ),
                 state="error",
             )
             self.load_tables()
@@ -145,7 +154,7 @@ class HistoryController:
         app.input_var.set("")
         app.target_var.set(summary.target)
 
-        if events and summary.source == "adaptiivinen telemetria":
+        if events and summary.source == SOURCE_ADAPTIVE_TELEMETRY:
             try:
                 decoded = app.decoder_controller.decode_tone_events(
                     events,
@@ -165,18 +174,31 @@ class HistoryController:
 
         app.results_controller.update_latest_result_values(summary)
         app.result_latest_title_var.set(
-            f"Kierros #{session_id} ({app.results_controller.format_seconds_label(summary.elapsed_us)})"
+            app.i18n.t(
+                "history.latest_round_title",
+                "Round #{session_id} ({elapsed})",
+                session_id=session_id,
+                elapsed=app.results_controller.format_seconds_label(summary.elapsed_us),
+            )
         )
-
         self.update_practice_result_values_from_single_history_round(summary)
 
         app.timer_var.set(self.history_time_label(summary))
         app.round_state_var.set(
-            f"Historiakierros #{session_id}: valmis ({summary.finish_reason})"
+            app.i18n.t(
+                "history.round_state.ready",
+                "History round #{session_id}: complete ({reason})",
+                session_id=session_id,
+                reason=app.practice_controller.finish_reason_label(summary.finish_reason),
+            )
         )
 
         app.status_controller.set_main_status(
-            f"Näytetään historiakierros #{session_id}.",
+            app.i18n.t(
+                "history.status.showing_round",
+                "Showing history round #{session_id}.",
+                session_id=session_id,
+            ),
             state="normal",
         )
 
@@ -236,7 +258,7 @@ class HistoryController:
             timing_letter_gap_score=self.optional_float(details.get("timing_letter_gap_score")),
             timing_word_gap_score=self.optional_float(details.get("timing_word_gap_score")),
 
-            finish_reason=str(details.get("finish_reason") or "historia"),
+            finish_reason=str(details.get("finish_reason") or "in_progress"),
         )
 
     def update_practice_result_values_from_single_history_round(
@@ -285,11 +307,17 @@ class HistoryController:
         elapsed_text = app.results_controller.format_seconds_label(summary.elapsed_us)
 
         if summary.standard_time_us is None:
-            return f"Kokonaisaika: {elapsed_text}"
+            return app.i18n.t(
+                "history.time.total",
+                "Total time: {elapsed}",
+                elapsed=elapsed_text,
+            )
 
-        return (
-            f"Kokonaisaika: {elapsed_text} | "
-            f"Vertailuaika {app.results_controller.format_seconds_label(summary.standard_time_us)}"
+        return app.i18n.t(
+            "history.time.total_with_reference",
+            "Total time: {elapsed} | Reference time {reference}",
+            elapsed=elapsed_text,
+            reference=app.results_controller.format_seconds_label(summary.standard_time_us),
         )
 
     def optional_int(self, value: Any) -> Optional[int]:
@@ -454,7 +482,9 @@ class HistoryController:
         app = self.app
 
         app.skill_title_var.set("-")
-        app.skill_rating_var.set("Laskenta epäonnistui")
+        app.skill_rating_var.set(
+            app.i18n.t("skill.status.calculation_failed", "Calculation failed")
+        )
         app.skill_key_wpm_var.set("-")
         self.reset_skill_metric_values()
         app.skill_warning_var.set(message)
@@ -462,12 +492,30 @@ class HistoryController:
     def set_empty_skill_rating(self, rating: Any, recent_rounds: int) -> None:
         app = self.app
 
-        app.skill_title_var.set("Ei vielä laskettavissa")
-        rounds_text = f"{getattr(rating, 'total_rounds', 0)}/{recent_rounds}" if rating is not None else f"0/{recent_rounds}"
+        app.skill_title_var.set(
+            app.i18n.t("skill.status.not_enough_data", "Not enough data yet")
+        )
+
+        rounds_text = (
+            f"{getattr(rating, 'total_rounds', 0)}/{recent_rounds}"
+            if rating is not None
+            else f"0/{recent_rounds}"
+        )
+
         app.skill_rating_var.set(
             "\n".join([
-                self.skill_two_col("Kierroksia", rounds_text, "Straight WPM", "-"),
-                self.skill_two_col("Onnistunut WPM", "-", "Iambic WPM", "-"),
+                self.skill_two_col(
+                    app.i18n.t("skill.rounds", "Rounds"),
+                    rounds_text,
+                    app.i18n.t("skill.straight_wpm", "Straight WPM"),
+                    "-",
+                ),
+                self.skill_two_col(
+                    app.i18n.t("skill.effective_wpm", "Effective WPM"),
+                    "-",
+                    app.i18n.t("skill.iambic_wpm", "Iambic WPM"),
+                    "-",
+                ),
             ])
         )
         app.skill_key_wpm_var.set("")
@@ -489,15 +537,43 @@ class HistoryController:
         iambic_text = "-" if iambic_wpm is None else f"{float(iambic_wpm):.1f} ({iambic_rounds})"
         straight_text = "-" if straight_wpm is None else f"{float(straight_wpm):.1f} ({straight_rounds})"
 
-        title_suffix = " (alustava)" if not getattr(rating, "ok", True) else ""
+        title_suffix = (
+            app.i18n.t("skill.title_suffix.preliminary", " (preliminary)")
+            if not getattr(rating, "ok", True)
+            else ""
+        )
+
+        level = int(rating.level)
+        title_key = getattr(rating, "title_key", title_key_for_level(level))
+        title_text = app.i18n.t(title_key, str(rating.title))
+
         app.skill_title_var.set(
-            f"Level {int(rating.level)} - {rating.title}{title_suffix}"
+            app.i18n.t(
+                "skill.level_title",
+                "Level {level} - {title}{suffix}",
+                level=level,
+                title=title_text,
+                suffix=title_suffix,
+            )
         )
 
         app.skill_rating_var.set("\n".join([
-            self.skill_two_col("Yleistaito WPM", f"{rating.raw_skill:.2f}", "Straight WPM", straight_text),
-            self.skill_two_col("Molemmilla WPM", "-" if rating.effective_wpm is None else f"{rating.effective_wpm:.1f}", "Iambic WPM", iambic_text),
-            self.skill_two_col("Seuraava taso", f"{progress_percent:.0f} %"),
+            self.skill_two_col(
+                app.i18n.t("skill.overall_wpm", "Overall skill WPM"),
+                f"{rating.raw_skill:.2f}",
+                app.i18n.t("skill.straight_wpm", "Straight WPM"),
+                straight_text,
+            ),
+            self.skill_two_col(
+                app.i18n.t("skill.both_wpm", "Both keys WPM"),
+                "-" if rating.effective_wpm is None else f"{rating.effective_wpm:.1f}",
+                app.i18n.t("skill.iambic_wpm", "Iambic WPM"),
+                iambic_text,
+            ),
+            self.skill_two_col(
+                app.i18n.t("skill.next_level", "Next level"),
+                f"{progress_percent:.0f} %",
+            ),
         ]))
 
         app.skill_key_wpm_var.set("")
@@ -639,18 +715,19 @@ class HistoryController:
             return iso_value
 
     def confidence_word(self, value: float) -> str:
+        app = self.app
         value = max(0.0, min(1.0, float(value)))
 
         if value < 0.20:
-            return "matala"
+            return app.i18n.t("skill.confidence.low", "low")
         if value < 0.45:
-            return "alustava"
+            return app.i18n.t("skill.confidence.preliminary", "preliminary")
         if value < 0.70:
-            return "kohtalainen"
+            return app.i18n.t("skill.confidence.moderate", "moderate")
         if value < 0.90:
-            return "hyvä"
+            return app.i18n.t("skill.confidence.good", "good")
 
-        return "erinomainen"
+        return app.i18n.t("skill.confidence.excellent", "excellent")
 
     def confidence_label(self, value: float, accepted_count: int | None = None) -> str:
         value = max(0.0, min(1.0, float(value)))
@@ -663,6 +740,16 @@ class HistoryController:
             required_rounds = 100
 
         if accepted_count is not None and accepted_count < required_rounds:
-            return f"{label} ({percent} %) - oppimisvaihe käynnissä"
+            return self.app.i18n.t(
+                "skill.confidence.learning",
+                "{label} ({percent} %) - learning in progress",
+                label=label,
+                percent=percent,
+            )
 
-        return f"{label} ({percent} %)"
+        return self.app.i18n.t(
+            "skill.confidence.label",
+            "{label} ({percent} %)",
+            label=label,
+            percent=percent,
+        )

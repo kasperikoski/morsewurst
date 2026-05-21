@@ -12,6 +12,23 @@ import tkinter as tk
 
 import morsewurst.config as config
 
+KEYBOARD_MORSE_KEY_LABEL_KEYS = {
+    "space": ("input.keyboard_key.space", "Space"),
+    "Return": ("input.keyboard_key.enter", "Enter"),
+
+    "Up": ("input.keyboard_key.up", "Arrow Up"),
+    "Down": ("input.keyboard_key.down", "Arrow Down"),
+    "Left": ("input.keyboard_key.left", "Arrow Left"),
+    "Right": ("input.keyboard_key.right", "Arrow Right"),
+
+    "Control_L": ("input.keyboard_key.left_ctrl", "Left Ctrl"),
+    "Control_R": ("input.keyboard_key.right_ctrl", "Right Ctrl"),
+    "Shift_L": ("input.keyboard_key.left_shift", "Left Shift"),
+    "Shift_R": ("input.keyboard_key.right_shift", "Right Shift"),
+    "Alt_L": ("input.keyboard_key.left_alt", "Left Alt"),
+    "Alt_R": ("input.keyboard_key.right_alt", "Right Alt"),
+}
+
 if TYPE_CHECKING:
     from morsewurst.ui.app import MorsewurstApp
 
@@ -22,12 +39,25 @@ class InputController:
     def __init__(self, app: "MorsewurstApp") -> None:
         self.app = app
 
+    def keyboard_morse_key_label(self, key: str, fallback: str = "") -> str:
+        key = str(key or "").strip()
+        fallback = str(fallback or "").strip()
+
+        label_data = KEYBOARD_MORSE_KEY_LABEL_KEYS.get(key)
+
+        if label_data is None:
+            return fallback or key
+
+        label_key, default = label_data
+
+        return self.app.i18n.t(label_key, default)
+
     def keyboard_morse_key_options(self) -> tuple[tuple[str, str], ...]:
         """Return user-facing keyboard Morse key options as label and Tkinter keysym pairs."""
         options = getattr(config, "KEYBOARD_MORSE_KEY_OPTIONS", ())
 
         if not options:
-            return (("Välilyönti", "space"),)
+            return ((self.keyboard_morse_key_label("space", "Space"), "space"),)
 
         cleaned: list[tuple[str, str]] = []
 
@@ -41,9 +71,9 @@ class InputController:
             key = str(key).strip()
 
             if label and key:
-                cleaned.append((label, key))
+                cleaned.append((self.keyboard_morse_key_label(key, label), key))
 
-        return tuple(cleaned) or (("Välilyönti", "space"),)
+        return tuple(cleaned) or ((self.keyboard_morse_key_label("space", "Space"), "space"),)
 
     def keyboard_morse_key_labels(self) -> list[str]:
         """Return the visible names shown in the keyboard Morse dropdown."""
@@ -81,7 +111,11 @@ class InputController:
 
         if self.keyboard_morse_enabled():
             app.status_controller.set_main_status(
-                f"Näppäimistömorsen näppäin vaihdettu: {selected_label}.",
+                app.i18n.t(
+                    "input.keyboard_morse.key_changed",
+                    "Keyboard Morse key changed: {keyboard_key}.",
+                    keyboard_key=selected_label,
+                ),
                 state="normal",
             )
             app.app_lifecycle_controller.focus_input(force=True)
@@ -263,7 +297,10 @@ class InputController:
 
         if show_status and changed:
             app.status_controller.set_main_status(
-                "Näppäimistömorse käyttää raakatelemetriaa. Telemetria asetettiin totuudeksi ja sarjaportin automaattihaku poistettiin käytöstä.",
+                app.i18n.t(
+                    "input.keyboard_morse.constraints_applied",
+                    "Keyboard Morse uses raw telemetry. Telemetry was set as truth and serial auto-connect was disabled.",
+                ),
                 state="normal",
             )
 
@@ -279,12 +316,19 @@ class InputController:
                 self.keyboard_morse_expected_key()
             )
             app.status_controller.set_main_status(
-                f"Näppäimistömorse käytössä. Paina näppäintä {selected_label} kuten straight keytä.",
+                app.i18n.t(
+                    "input.keyboard_morse.enabled",
+                    "Keyboard Morse enabled. Press {keyboard_key} like a straight key.",
+                    keyboard_key=selected_label,
+                ),
                 state="normal",
             )
         else:
             app.status_controller.set_main_status(
-                "Näppäimistömorse poistettu käytöstä.",
+                app.i18n.t(
+                    "input.keyboard_morse.disabled",
+                    "Keyboard Morse disabled.",
+                ),
                 state="normal",
             )
 
@@ -298,7 +342,10 @@ class InputController:
         if self.keyboard_morse_enabled() and not app.use_telemetry_as_truth_var.get():
             app.use_telemetry_as_truth_var.set(True)
             app.status_controller.set_main_status(
-                "Näppäimistömorse tarvitsee telemetrian totuudeksi, joten asetusta ei poistettu käytöstä.",
+                app.i18n.t(
+                    "input.keyboard_morse.telemetry_required",
+                    "Keyboard Morse requires telemetry as truth, so the setting was not disabled.",
+                ),
                 state="warning",
             )
 
@@ -312,7 +359,10 @@ class InputController:
         if self.keyboard_morse_enabled() and app.auto_connect_serial_var.get():
             app.auto_connect_serial_var.set(False)
             app.status_controller.set_main_status(
-                "Näppäimistömorse on käytössä, joten sarjaportin automaattihaku pidetään pois päältä.",
+                app.i18n.t(
+                    "input.keyboard_morse.serial_auto_connect_blocked",
+                    "Keyboard Morse is enabled, so serial auto-connect is kept disabled.",
+                ),
                 state="warning",
             )
 
@@ -366,9 +416,20 @@ class InputController:
     def handle_serial_event(self, event: Dict[str, Any]) -> None:
         """Handle one incoming serial, virtual keyboard or local tone event."""
         app = self.app
-        event_type = str(event.get("type", "tuntematon"))
+        event_type = str(
+            event.get(
+                "type",
+                app.i18n.t("input.event.unknown", "unknown"),
+            )
+        )
 
-        app.last_event_var.set(f"Tapahtuma: {event_type}")
+        app.last_event_var.set(
+            app.i18n.t(
+                "input.event.label",
+                "Event: {event_type}",
+                event_type=event_type,
+            )
+        )
 
         if self.handle_non_tone_serial_event(event, event_type):
             return
@@ -425,11 +486,26 @@ class InputController:
             return True
 
         if event_type in {"serial_non_json", "serial_non_object"}:
-            app.status_controller.set_main_status("Sarjaportista tuli virheellinen viesti.", state="warning")
+            app.status_controller.set_main_status(
+                app.i18n.t(
+                    "input.serial.invalid_message",
+                    "Invalid message received from serial port.",
+                ),
+                state="warning",
+            )
             return True
 
         if event_type == "hello":
-            app.status_var.set(f"Laite tunnistettu: {event.get('device', 'tuntematon')}")
+            app.status_var.set(
+                app.i18n.t(
+                    "input.serial.device_detected",
+                    "Device detected: {device}",
+                    device=event.get(
+                        "device",
+                        app.i18n.t("input.event.unknown", "unknown"),
+                    ),
+                )
+            )
             return True
 
         return False

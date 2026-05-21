@@ -20,7 +20,7 @@ class NetworkServerQueriesMixin:
     def _refresh_public_rooms_async(self, *, force: bool = False, silent: bool = False) -> None:
         if self._public_rooms_loading:
             if force and not silent:
-                self.public_rooms_status_var.set("Refresh already in progress.")
+                self.public_rooms_status_var.set(self.tr("network.public_rooms.refresh_already_running"))
             return
 
         self._public_rooms_loading = True
@@ -28,7 +28,7 @@ class NetworkServerQueriesMixin:
         request_id = self._public_rooms_request_seq
 
         if not silent:
-            self.public_rooms_status_var.set("Refreshing public rooms...")
+            self.public_rooms_status_var.set(self.tr("network.public_rooms.refreshing"))
             if not self.public_rooms:
                 self._render_public_rooms()
 
@@ -98,8 +98,9 @@ class NetworkServerQueriesMixin:
         if old_signature != new_signature:
             self._render_public_rooms()
         else:
+            count = len(self.public_rooms)
             self.public_rooms_status_var.set(
-                f"{len(self.public_rooms)} room{'s' if len(self.public_rooms) != 1 else ''}."
+                self.tr(self._count_key("network.public_rooms.count", count), count=count)
             )
 
         if self._public_room_refresh_after_id is not None:
@@ -118,11 +119,15 @@ class NetworkServerQueriesMixin:
         self._public_rooms_failed_attempts += 1
 
         if self.public_rooms:
+            count = len(self.public_rooms)
             self.public_rooms_status_var.set(
-                f"{len(self.public_rooms)} room{'s' if len(self.public_rooms) != 1 else ''}. Retrying refresh..."
+                self.tr(
+                    self._count_key("network.public_rooms.retrying_with_existing", count),
+                    count=count,
+                )
             )
         else:
-            self.public_rooms_status_var.set("No public rooms loaded. Retrying...")
+            self.public_rooms_status_var.set(self.tr("network.public_rooms.retrying"))
 
         if not self.public_rooms:
             self._render_public_rooms()
@@ -130,9 +135,10 @@ class NetworkServerQueriesMixin:
         if self._public_rooms_failed_attempts >= self._public_rooms_error_threshold:
             self._public_rooms_error_visible = True
             self._show_notice(
-                (
-                    "Public rooms could not be loaded. "
-                    f"Retrying... ({self._public_rooms_failed_attempts} consecutive failures: {message})"
+                self.tr(
+                    "network.public_rooms.load_failed",
+                    count=self._public_rooms_failed_attempts,
+                    message=message,
                 ),
                 "error",
             )
@@ -159,16 +165,28 @@ class NetworkServerQueriesMixin:
             try:
                 manager.request_server_info()
                 if not silent:
-                    self._show_notice("Server info requested.", "info")
+                    self._show_notice(
+                        self.tr("network.server_query.info_requested"),
+                        "info",
+                    )
                 return
             except Exception as exc:
                 if not silent:
-                    self._show_notice(f"Server info request failed: {exc}", "warning")
+                    self._show_notice(
+                        self.tr(
+                            "network.server_query.info_request_failed",
+                            error=str(exc),
+                        ),
+                        "warning",
+                    )
                 return
 
         if self._server_info_query_running:
             if not silent:
-                self._show_notice("Server info request already in progress.", "info")
+                self._show_notice(
+                    self.tr("network.server_query.info_already_running"),
+                    "info",
+                )
             return
 
         self._server_info_query_running = True
@@ -178,7 +196,10 @@ class NetworkServerQueriesMixin:
             self._update_server_info_views()
 
         if not silent:
-            self._show_notice("Requesting server info...", "info")
+            self._show_notice(
+                self.tr("network.server_query.requesting_info"),
+                "info",
+            )
 
         thread = threading.Thread(
             target=self._server_info_query_worker,
@@ -196,22 +217,37 @@ class NetworkServerQueriesMixin:
             try:
                 manager.request_server_ping()
                 if not silent:
-                    self._show_notice("Server ping requested.", "info")
+                    self._show_notice(
+                        self.tr("network.server_query.ping_requested"),
+                        "info",
+                    )
                 return
             except Exception as exc:
                 if not silent:
-                    self._show_notice(f"Server ping failed: {exc}", "warning")
+                    self._show_notice(
+                        self.tr(
+                            "network.server_query.ping_failed",
+                            error=str(exc),
+                        ),
+                        "warning",
+                    )
                 return
 
         if self._server_ping_query_running:
             if not silent:
-                self._show_notice("Server ping already in progress.", "info")
+                self._show_notice(
+                    self.tr("network.server_query.ping_already_running"),
+                    "info",
+                )
             return
 
         self._server_ping_query_running = True
 
         if not silent:
-            self._show_notice("Testing server ping...", "info")
+            self._show_notice(
+                self.tr("network.server_query.testing_ping"),
+                "info",
+            )
 
         thread = threading.Thread(
             target=self._server_ping_query_worker,
@@ -296,23 +332,31 @@ class NetworkServerQueriesMixin:
                 if kind == "server_info":
                     self.server_info_error_text = message
                     self._update_server_info_views()
+                    failure_text = self.tr(
+                        "network.server_query.query_failed",
+                        message=message,
+                    )
                     self._set_network_quality(
                         "server_not_responding",
-                        f"Server query failed: {message}",
+                        failure_text,
                         force=True,
                     )
 
+                    if not silent:
+                        self._show_notice(failure_text, "warning")
+
                 if kind == "server_pong":
+                    failure_text = self.tr(
+                        "network.server_query.ping_failed",
+                        error=message,
+                    )
                     self._set_network_quality(
                         "server_not_responding",
-                        f"Server ping failed: {message}",
+                        failure_text,
                         force=True,
                     )
                     if not silent:
-                        self._show_notice(f"Server ping failed: {message}", "warning")
-
-                if kind == "server_info" and not silent:
-                    self._show_notice(f"Server query failed: {message}", "warning")
+                        self._show_notice(failure_text, "warning")
 
                 continue
 
@@ -324,7 +368,10 @@ class NetworkServerQueriesMixin:
                 self._update_server_info_views()
 
                 if not silent:
-                    self._show_notice("Server info updated.", "success")
+                    self._show_notice(
+                        self.tr("network.server_query.info_updated"),
+                        "success",
+                    )
                 continue
 
             if kind == "server_pong" and isinstance(payload, dict):
@@ -337,9 +384,18 @@ class NetworkServerQueriesMixin:
                 if not silent:
                     ping_ms = self._latest_server_ping_ms()
                     if ping_ms is not None:
-                        self._append_log("success", f"Server ping: {ping_ms} ms.")
+                        self._append_log(
+                            "success",
+                            self.tr(
+                                "network.server_query.ping_result",
+                                ping_ms=ping_ms,
+                            ),
+                        )
                     else:
-                        self._append_log("success", "Server ping received.")
+                        self._append_log(
+                            "success",
+                            self.tr("network.server_query.ping_received"),
+                        )
                 continue
 
         if (

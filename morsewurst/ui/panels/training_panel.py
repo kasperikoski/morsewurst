@@ -17,7 +17,7 @@ def build_training_panel(app: tk.Misc, parent: ttk.Frame) -> None:
     hidden HID fallback input and decoded telemetry text.
     """
 
-    target_frame = ttk.LabelFrame(parent, text="Tavoite")
+    target_frame = ttk.LabelFrame(parent, text=app.i18n.t("training.target_title"))
     target_frame.pack(fill=tk.X)
 
     ttk.Label(
@@ -27,7 +27,7 @@ def build_training_panel(app: tk.Misc, parent: ttk.Frame) -> None:
         wraplength=getattr(config, "UI_TARGET_WRAP_LENGTH", 820),
     ).pack(anchor=tk.W, padx=12, pady=12)
 
-    raw_frame = ttk.LabelFrame(parent, text="Raakatelemetria")
+    raw_frame = ttk.LabelFrame(parent, text=app.i18n.t("training.raw_telemetry_title"))
     raw_frame.pack(fill=tk.X, pady=(10, 0))
 
     raw_canvas_frame = ttk.Frame(raw_frame)
@@ -100,7 +100,7 @@ def build_training_panel(app: tk.Misc, parent: ttk.Frame) -> None:
     app.input_entry.bind("<KeyPress>", app.input_controller.on_input_key_press)
     app.input_entry.bind("<KeyRelease>", app.input_controller.on_input_key_release)
 
-    telemetry_frame = ttk.LabelFrame(parent, text="Telemetriasta dekoodattu syöte")
+    telemetry_frame = ttk.LabelFrame(parent, text=app.i18n.t("training.decoded_title"))
     telemetry_frame.pack(fill=tk.X, pady=(10, 0))
 
     app.telemetry_text_widget = tk.Text(

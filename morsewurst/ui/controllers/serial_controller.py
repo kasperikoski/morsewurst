@@ -40,7 +40,10 @@ class SerialController:
             app.port_var.set("")
 
         if not SerialReader.serial_available():
-            app.status_controller.set_serial_status("pyserial puuttuu", state="disconnected")
+            app.status_controller.set_serial_status(
+                app.i18n.t("serial.status.pyserial_missing", "pyserial missing"),
+                state="disconnected",
+            )
 
         self.update_serial_buttons()
 
@@ -60,28 +63,40 @@ class SerialController:
 
     def serial_port_busy_message(self, port: str) -> str:
         """Build a user-facing message for a temporarily busy serial port."""
-        port_text = str(port or "valittu portti").strip() or "valittu portti"
+        app = self.app
 
-        return (
-            f"{port_text} on hetkellisesti varattu. "
-            "Automaattinen laitehaku tai toinen ohjelma voi käyttää porttia. "
-            "Odota hetki ja yritä uudelleen."
+        fallback_port = app.i18n.t("serial.port.selected_fallback", "selected port")
+        port_text = str(port or fallback_port).strip() or fallback_port
+
+        return app.i18n.t(
+            "serial.message.port_busy",
+            "{port} is temporarily busy. Automatic device discovery or another program may be using the port. Wait a moment and try again.",
+            port=port_text,
         )
 
     def connect_serial_port(self, port: str, automatic: bool = False) -> None:
         """Connect to a specific serial port manually or from auto-connect."""
         app = self.app
-        port = port.strip()
+        port = str(port or "").strip()
 
         if not port:
             if not automatic:
-                messagebox.showwarning(config.APP_NAME, "Valitse COM-portti ensin.")
+                messagebox.showwarning(
+                    config.APP_NAME,
+                    app.i18n.t("serial.message.select_port_first", "Select a COM port first."),
+                )
             return
 
         if not automatic and bool(getattr(app, "auto_connect_running", False)):
-            app.status_controller.set_serial_status("Etsitään laitetta...", state="busy")
+            app.status_controller.set_serial_status(
+                app.i18n.t("serial.status.searching_device", "Searching for device..."),
+                state="busy",
+            )
             app.status_controller.set_main_status(
-                "Automaattinen sarjaporttihaku on kesken. Odota hetki ja yritä uudelleen.",
+                app.i18n.t(
+                    "serial.message.auto_search_in_progress_retry",
+                    "Automatic serial port scan is in progress. Wait a moment and try again.",
+                ),
                 state="warning",
             )
             self.update_serial_buttons()
@@ -96,7 +111,10 @@ class SerialController:
 
             if self.is_serial_port_busy_error(exc):
                 message = self.serial_port_busy_message(port)
-                app.status_controller.set_serial_status("Portti on varattu", state="warning")
+                app.status_controller.set_serial_status(
+                    app.i18n.t("serial.status.port_busy", "Port is busy"),
+                    state="warning",
+                )
                 app.status_controller.set_main_status(message, state="warning")
 
                 if not automatic:
@@ -112,16 +130,30 @@ class SerialController:
             if not automatic:
                 messagebox.showerror(
                     config.APP_NAME,
-                    f"Sarjaportin avaaminen epäonnistui:\n{exc}",
+                    app.i18n.t(
+                        "serial.message.open_failed",
+                        "Opening the serial port failed:\n{error}",
+                        error=str(exc),
+                    ),
                 )
 
-            app.status_controller.set_serial_status("Yhteys epäonnistui", state="disconnected")
+            app.status_controller.set_serial_status(
+                app.i18n.t("serial.status.connection_failed", "Connection failed"),
+                state="disconnected",
+            )
             return
 
         app.serial_connected = True
         app.auto_connect_running = False
         app.port_var.set(port)
-        app.status_controller.set_serial_status(f"{port} @ {config.SERIAL_BAUDRATE}", state="connected")
+        app.status_controller.set_serial_status(
+            f"{port} @ {config.SERIAL_BAUDRATE}",
+            state="connected",
+        )
+        app.status_controller.set_main_status(
+            app.i18n.t("serial.message.device_connected", "Serial device connected."),
+            state="normal",
+        )
         app.audio_controller.play_sound("serial_connected")
         self.update_serial_buttons()
         app.app_lifecycle_controller.focus_input(force=True)
@@ -131,9 +163,15 @@ class SerialController:
         app = self.app
 
         if bool(getattr(app, "auto_connect_running", False)):
-            app.status_controller.set_serial_status("Etsitään laitetta...", state="busy")
+            app.status_controller.set_serial_status(
+                app.i18n.t("serial.status.searching_device", "Searching for device..."),
+                state="busy",
+            )
             app.status_controller.set_main_status(
-                "Automaattinen sarjaporttihaku on kesken. Odota hetki ja yritä uudelleen.",
+                app.i18n.t(
+                    "serial.message.auto_search_in_progress_retry",
+                    "Automatic serial port scan is in progress. Wait a moment and try again.",
+                ),
                 state="warning",
             )
             self.update_serial_buttons()
@@ -146,9 +184,15 @@ class SerialController:
         app = self.app
 
         if bool(getattr(app, "auto_connect_running", False)):
-            app.status_controller.set_serial_status("Etsitään laitetta...", state="busy")
+            app.status_controller.set_serial_status(
+                app.i18n.t("serial.status.searching_device", "Searching for device..."),
+                state="busy",
+            )
             app.status_controller.set_main_status(
-                "Automaattinen sarjaporttihaku on kesken. Katkaisu ei ole tarpeen.",
+                app.i18n.t(
+                    "serial.message.auto_search_in_progress_disconnect_not_needed",
+                    "Automatic serial port scan is in progress. Disconnecting is not necessary.",
+                ),
                 state="warning",
             )
             self.update_serial_buttons()
@@ -158,7 +202,10 @@ class SerialController:
 
         app.serial_reader.disconnect()
         app.serial_connected = False
-        app.status_controller.set_serial_status("Ei yhteyttä", state="disconnected")
+        app.status_controller.set_serial_status(
+            app.i18n.t("serial.status.disconnected", "No connection"),
+            state="disconnected",
+        )
         self.update_serial_buttons()
 
         if was_connected:
@@ -176,10 +223,22 @@ class SerialController:
         except Exception:
             pass
 
-        app.status_controller.set_serial_status("Ei yhteyttä", state="disconnected")
-        app.last_event_var.set("Tapahtuma: yhteys katkesi")
+        app.status_controller.set_serial_status(
+            app.i18n.t("serial.status.disconnected", "No connection"),
+            state="disconnected",
+        )
+        app.last_event_var.set(
+            app.i18n.t(
+                "input.event.label",
+                "Event: {event_type}",
+                event_type=app.i18n.t("serial.event.connection_lost", "connection lost"),
+            )
+        )
         app.audio_controller.play_sound("serial_disconnected")
-        app.status_controller.set_main_status("Sarjalaite irrotettu.", state="error")
+        app.status_controller.set_main_status(
+            app.i18n.t("serial.message.device_disconnected", "Serial device disconnected."),
+            state="error",
+        )
 
         self.refresh_ports()
         self.update_serial_buttons()
@@ -217,12 +276,18 @@ class SerialController:
         ports = SerialReader.available_ports()
 
         if not ports:
-            app.status_controller.set_serial_status("Ei yhteyttä", state="disconnected")
+            app.status_controller.set_serial_status(
+                app.i18n.t("serial.status.disconnected", "No connection"),
+                state="disconnected",
+            )
             self.update_serial_buttons()
             return
 
         app.auto_connect_running = True
-        app.status_controller.set_serial_status("Etsitään laitetta...", state="busy")
+        app.status_controller.set_serial_status(
+            app.i18n.t("serial.status.searching_device", "Searching for device..."),
+            state="busy",
+        )
         self.update_serial_buttons()
 
         app.auto_connect_thread = threading.Thread(
@@ -268,7 +333,10 @@ class SerialController:
             return
 
         if port is None:
-            app.status_controller.set_serial_status("Ei yhteyttä", state="disconnected")
+            app.status_controller.set_serial_status(
+                app.i18n.t("serial.status.disconnected", "No connection"),
+                state="disconnected",
+            )
             self.update_serial_buttons()
             return
 

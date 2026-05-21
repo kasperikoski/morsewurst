@@ -124,14 +124,14 @@ class RuntimeController:
         """Initialise all Tkinter variables used by the UI."""
         app = self.app
 
-        app.target_var = tk.StringVar(value="Paina Aloita harjoitus")
+        app.target_var = tk.StringVar(value=app.i18n.t("runtime.target_placeholder"))
         app.input_var = tk.StringVar(value="")
         app.telemetry_display_var = tk.StringVar(value="")
 
-        app.status_var = tk.StringVar(value="Valmis")
-        app.morse_preview_button_var = tk.StringVar(value="Äänitesti")
-        app.serial_status_var = tk.StringVar(value="Ei yhteyttä")
-        app.last_event_var = tk.StringVar(value="Tapahtuma: -")
+        app.status_var = tk.StringVar(value=app.i18n.t("runtime.status_ready"))
+        app.morse_preview_button_var = tk.StringVar(value=app.i18n.t("runtime.morse_preview_button"))
+        app.serial_status_var = tk.StringVar(value=app.i18n.t("runtime.serial_disconnected"))
+        app.last_event_var = tk.StringVar(value=app.i18n.t("runtime.last_event_placeholder"))
 
         self.init_result_vars()
         self.init_skill_vars()
@@ -154,7 +154,7 @@ class RuntimeController:
         app.result_practice_dash_variation_var = tk.StringVar(value="-")
         app.result_practice_element_variation_var = tk.StringVar(value="-")
 
-        app.result_latest_title_var = tk.StringVar(value="Viimeisin kierros")
+        app.result_latest_title_var = tk.StringVar(value=app.i18n.t("runtime.latest_round_title"))
         app.result_latest_accuracy_var = tk.StringVar(value="-")
         app.result_latest_cleanliness_var = tk.StringVar(value="-")
         app.result_latest_score_var = tk.StringVar(value="-")
@@ -180,8 +180,8 @@ class RuntimeController:
         app.result_history_dot_variation_var = tk.StringVar(value="-")
         app.result_history_dash_variation_var = tk.StringVar(value="-")
 
-        app.timer_var = tk.StringVar(value="Aika: -")
-        app.round_state_var = tk.StringVar(value="Harjoitus: ei käynnissä")
+        app.timer_var = tk.StringVar(value=app.i18n.t("runtime.timer_placeholder"))
+        app.round_state_var = tk.StringVar(value=app.i18n.t("runtime.round_state_inactive"))
 
     def init_skill_vars(self) -> None:
         """Initialise skill rating display variables."""
@@ -206,6 +206,7 @@ class RuntimeController:
         app = self.app
 
         app.port_var = tk.StringVar(value="")
+        app.language_var = tk.StringVar(value=app.i18n.language)
 
         app.use_letters_var = tk.BooleanVar(value=True)
         app.use_numbers_var = tk.BooleanVar(value=True)

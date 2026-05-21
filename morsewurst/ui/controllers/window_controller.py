@@ -157,6 +157,8 @@ class DeleteSessionsWindow(tk.Toplevel):
     def __init__(self, app: "MorsewurstApp") -> None:
         super().__init__(app)
 
+        self.withdraw()
+
         self.app = app
         self.status_var = tk.StringVar(value="")
         self.start_date_var: tk.StringVar
@@ -170,9 +172,21 @@ class DeleteSessionsWindow(tk.Toplevel):
         self.refresh_list()
         self._center_on_parent()
 
+        self.deiconify()
+        self.lift()
+        self.focus_force()
+
+        try:
+            self.grab_set()
+        except tk.TclError:
+            pass
+
+    def tr(self, translation_key: str, default: str | None = None, **values: Any) -> str:
+        return self.app.i18n.t(translation_key, default, **values)
+
     def _configure_window(self) -> None:
         """Configure the delete-sessions window shell."""
-        self.title("Poista harjoituksia")
+        self.title(self.tr("delete_sessions.window.title", "Delete practice sessions"))
 
         try:
             self.app.window_controller.apply_window_icon(self)
@@ -180,7 +194,6 @@ class DeleteSessionsWindow(tk.Toplevel):
             pass
 
         self.transient(self.app)
-        self.grab_set()
         self.geometry("900x620")
 
     def _build_ui(self) -> None:
@@ -190,16 +203,15 @@ class DeleteSessionsWindow(tk.Toplevel):
 
         ttk.Label(
             outer,
-            text="Poista harjoituksia",
+            text=self.tr("delete_sessions.window.title", "Delete practice sessions"),
             font=("Segoe UI", 14, "bold"),
         ).pack(anchor=tk.W)
 
         ttk.Label(
             outer,
-            text=(
-                "Voit poistaa kaikki tallennetut harjoitukset tai valita aikavälin. "
-                "Poisto vaikuttaa suoraan tietokantaan ja poistaa myös harjoituksiin liittyvät "
-                "telemetria- ja merkkitulokset."
+            text=self.tr(
+                "delete_sessions.description",
+                "You can delete all saved practice sessions or choose a time range. Deletion affects the database directly and also removes telemetry and character results related to the sessions.",
             ),
             wraplength=840,
         ).pack(anchor=tk.W, pady=(4, 12))
@@ -217,7 +229,10 @@ class DeleteSessionsWindow(tk.Toplevel):
 
     def _build_session_list(self, parent: tk.Misc) -> None:
         """Build the table containing recent saved practice sessions."""
-        list_frame = ttk.LabelFrame(parent, text="Tallennetut harjoitukset")
+        list_frame = ttk.LabelFrame(
+            parent,
+            text=self.tr("delete_sessions.saved_sessions", "Saved practice sessions"),
+        )
         list_frame.pack(fill=tk.BOTH, expand=True)
 
         inner = ttk.Frame(list_frame)
@@ -245,15 +260,15 @@ class DeleteSessionsWindow(tk.Toplevel):
         )
 
         for col, title, width in [
-            ("id", "ID", 55),
-            ("finished", "Aika", 150),
-            ("accuracy", "Tarkkuus", 85),
-            ("cleanliness", "Puhtaus", 85),
-            ("score", "Pisteet", 75),
-            ("errors", "Virheet", 70),
-            ("time", "Kesto", 75),
-            ("entered", "Syöte", 170),
-            ("target", "Tavoite", 170),
+            ("id", self.tr("delete_sessions.column.id", "ID"), 55),
+            ("finished", self.tr("delete_sessions.column.finished", "Time"), 150),
+            ("accuracy", self.tr("delete_sessions.column.accuracy", "Accuracy"), 85),
+            ("cleanliness", self.tr("delete_sessions.column.cleanliness", "Cleanliness"), 85),
+            ("score", self.tr("delete_sessions.column.score", "Score"), 75),
+            ("errors", self.tr("delete_sessions.column.errors", "Errors"), 70),
+            ("time", self.tr("delete_sessions.column.duration", "Duration"), 75),
+            ("entered", self.tr("delete_sessions.column.entered", "Input"), 170),
+            ("target", self.tr("delete_sessions.column.target", "Target"), 170),
         ]:
             self.tree.heading(col, text=title, anchor=tk.W)
             self.tree.column(col, width=width, anchor=tk.W, stretch=False)
@@ -274,7 +289,10 @@ class DeleteSessionsWindow(tk.Toplevel):
 
     def _build_range_controls(self, parent: tk.Misc) -> None:
         """Build date and time fields for range deletion."""
-        frame = ttk.LabelFrame(parent, text="Poista aikaväliltä")
+        frame = ttk.LabelFrame(
+            parent,
+            text=self.tr("delete_sessions.range.title", "Delete by time range"),
+        )
         frame.pack(fill=tk.X, pady=(12, 0))
 
         now = datetime.now()
@@ -289,10 +307,10 @@ class DeleteSessionsWindow(tk.Toplevel):
         grid.pack(fill=tk.X, padx=8, pady=8)
 
         fields = [
-            ("Alkupäivä", self.start_date_var, 12),
-            ("Klo", self.start_time_var, 8),
-            ("Loppupäivä", self.end_date_var, 12),
-            ("Klo", self.end_time_var, 8),
+            (self.tr("delete_sessions.range.start_date", "Start date"), self.start_date_var, 12),
+            (self.tr("delete_sessions.range.time", "Time"), self.start_time_var, 8),
+            (self.tr("delete_sessions.range.end_date", "End date"), self.end_date_var, 12),
+            (self.tr("delete_sessions.range.time", "Time"), self.end_time_var, 8),
         ]
 
         column = 0
@@ -310,12 +328,41 @@ class DeleteSessionsWindow(tk.Toplevel):
         row = ttk.Frame(parent)
         row.pack(fill=tk.X, pady=(12, 0))
 
-        ttk.Button(row, text="Päivitä lista", command=self.refresh_list).pack(side=tk.LEFT)
-        ttk.Button(row, text="Laske aikavälin määrä", command=self.update_range_count).pack(side=tk.LEFT, padx=(8, 0))
-        ttk.Button(row, text="Poista valittu", command=self.delete_selected).pack(side=tk.LEFT, padx=(8, 0))
-        ttk.Button(row, text="Poista aikaväli", command=self.delete_range).pack(side=tk.LEFT, padx=(8, 0))
-        ttk.Button(row, text="Poista kaikki", command=self.delete_all).pack(side=tk.LEFT, padx=(8, 0))
-        ttk.Button(row, text="Sulje", command=self.destroy).pack(side=tk.RIGHT)
+        ttk.Button(
+            row,
+            text=self.tr("delete_sessions.button.refresh", "Refresh list"),
+            command=self.refresh_list,
+        ).pack(side=tk.LEFT)
+
+        ttk.Button(
+            row,
+            text=self.tr("delete_sessions.button.count_range", "Count range"),
+            command=self.update_range_count,
+        ).pack(side=tk.LEFT, padx=(8, 0))
+
+        ttk.Button(
+            row,
+            text=self.tr("delete_sessions.button.delete_selected", "Delete selected"),
+            command=self.delete_selected,
+        ).pack(side=tk.LEFT, padx=(8, 0))
+
+        ttk.Button(
+            row,
+            text=self.tr("delete_sessions.button.delete_range", "Delete range"),
+            command=self.delete_range,
+        ).pack(side=tk.LEFT, padx=(8, 0))
+
+        ttk.Button(
+            row,
+            text=self.tr("delete_sessions.button.delete_all", "Delete all"),
+            command=self.delete_all,
+        ).pack(side=tk.LEFT, padx=(8, 0))
+
+        ttk.Button(
+            row,
+            text=self.tr("delete_sessions.button.close", "Close"),
+            command=self.destroy,
+        ).pack(side=tk.RIGHT)
 
     def refresh_list(self) -> None:
         """Reload the newest saved practice sessions into the table."""
@@ -325,7 +372,13 @@ class DeleteSessionsWindow(tk.Toplevel):
         try:
             rows = self.app.db.sessions_for_management(1000)
         except Exception as exc:
-            self.status_var.set(f"Listan lataus epäonnistui: {exc}")
+            self.status_var.set(
+                self.tr(
+                    "delete_sessions.status.load_failed",
+                    "Loading the list failed: {error}",
+                    error=str(exc),
+                )
+            )
             return
 
         for row in rows:
@@ -333,8 +386,11 @@ class DeleteSessionsWindow(tk.Toplevel):
 
         total = self.app.db.count_sessions_for_delete()
         self.status_var.set(
-            f"Tietokannassa on yhteensä {total} harjoitusta. "
-            "Listassa näytetään enintään 1000 uusinta."
+            self.tr(
+                "delete_sessions.status.total",
+                "The database contains {total} practice sessions. The list shows at most the 1000 newest sessions.",
+                total=total,
+            )
         )
 
     def _row_values(self, row: Any) -> tuple[Any, ...]:
@@ -382,18 +438,21 @@ class DeleteSessionsWindow(tk.Toplevel):
         if session_id is None:
             messagebox.showinfo(
                 config.APP_NAME,
-                "Valitse ensin poistettava harjoitus listasta.",
+                self.tr(
+                    "delete_sessions.message.select_session_first",
+                    "Select a practice session from the list first.",
+                ),
                 parent=self,
             )
             return
 
         ok = messagebox.askyesno(
             config.APP_NAME,
-            f"Haluatko varmasti poistaa valitun harjoituksen?\n\n"
-            f"Harjoituksen ID: {session_id}\n\n"
-            "Tämä poistaa myös harjoitukseen liittyvät telemetriatapahtumat, "
-            "merkkikohtaiset tulokset ja taitotason snapshotit.\n\n"
-            "Tätä toimintoa ei voi perua.",
+            self.tr(
+                "delete_sessions.message.confirm_delete_selected",
+                "Do you really want to delete the selected practice session?\n\nPractice session ID {session_id}\n\nThis also removes the related telemetry events, character-specific results and skill rating snapshots.\n\nThis action cannot be undone.",
+                session_id=session_id,
+            ),
             parent=self,
         )
 
@@ -405,7 +464,11 @@ class DeleteSessionsWindow(tk.Toplevel):
         except Exception as exc:
             messagebox.showerror(
                 config.APP_NAME,
-                f"Valitun harjoituksen poisto epäonnistui:\n{exc}",
+                self.tr(
+                    "delete_sessions.error.delete_selected_failed",
+                    "Deleting the selected practice session failed:\n{error}",
+                    error=str(exc),
+                ),
                 parent=self,
             )
             return
@@ -415,9 +478,17 @@ class DeleteSessionsWindow(tk.Toplevel):
         self.app.history_controller.load_tables()
 
         self.status_var.set(
-            f"Poistettu harjoitus ID {session_id}."
+            self.tr(
+                "delete_sessions.status.deleted_selected",
+                "Deleted practice session ID {session_id}.",
+                session_id=session_id,
+            )
             if deleted > 0
-            else f"Harjoitusta ID {session_id} ei löytynyt."
+            else self.tr(
+                "delete_sessions.status.selected_not_found",
+                "Practice session ID {session_id} was not found.",
+                session_id=session_id,
+            )
         )
 
     def parse_range(self) -> tuple[datetime, datetime] | None:
@@ -431,10 +502,10 @@ class DeleteSessionsWindow(tk.Toplevel):
         except ValueError:
             messagebox.showerror(
                 config.APP_NAME,
-                "Aikaväli ei ole kelvollinen.\n\n"
-                "Käytä muotoa:\n"
-                "päivä: pp.kk.vvvv\n"
-                "kello: HH:MM",
+                self.tr(
+                    "delete_sessions.error.invalid_range",
+                    "The time range is not valid.\n\nUse this format:\nDate: dd.mm.yyyy\nTime: HH:MM",
+                ),
                 parent=self,
             )
             return None
@@ -442,7 +513,10 @@ class DeleteSessionsWindow(tk.Toplevel):
         if end_dt < start_dt:
             messagebox.showerror(
                 config.APP_NAME,
-                "Loppuaika ei voi olla ennen alkuaikaa.",
+                self.tr(
+                    "delete_sessions.error.end_before_start",
+                    "The end time cannot be before the start time.",
+                ),
                 parent=self,
             )
             return None
@@ -456,7 +530,11 @@ class DeleteSessionsWindow(tk.Toplevel):
         except Exception as exc:
             messagebox.showerror(
                 config.APP_NAME,
-                f"Harjoitusten laskeminen epäonnistui:\n{exc}",
+                self.tr(
+                    "delete_sessions.error.count_failed",
+                    "Counting practice sessions failed:\n{error}",
+                    error=str(exc),
+                ),
                 parent=self,
             )
             return
@@ -464,17 +542,21 @@ class DeleteSessionsWindow(tk.Toplevel):
         if count <= 0:
             messagebox.showinfo(
                 config.APP_NAME,
-                "Tietokannassa ei ole poistettavia harjoituksia.",
+                self.tr(
+                    "delete_sessions.message.no_sessions_to_delete",
+                    "There are no practice sessions to delete in the database.",
+                ),
                 parent=self,
             )
             return
 
         ok = messagebox.askyesno(
             config.APP_NAME,
-            f"Haluatko varmasti poistaa kaikki harjoitukset?\n\n"
-            f"Tämä poistaa {count} harjoitusta sekä niihin liittyvät "
-            "telemetria- ja merkkitulokset.\n\n"
-            "Tätä toimintoa ei voi perua.",
+            self.tr(
+                "delete_sessions.message.confirm_delete_all",
+                "Do you really want to delete all practice sessions?\n\nThis removes {count} practice sessions and their related telemetry and character results.\n\nThis action cannot be undone.",
+                count=count,
+            ),
             parent=self,
         )
 
@@ -486,7 +568,11 @@ class DeleteSessionsWindow(tk.Toplevel):
         except Exception as exc:
             messagebox.showerror(
                 config.APP_NAME,
-                f"Poisto epäonnistui:\n{exc}",
+                self.tr(
+                    "delete_sessions.error.delete_failed",
+                    "Deletion failed:\n{error}",
+                    error=str(exc),
+                ),
                 parent=self,
             )
             return
@@ -494,7 +580,13 @@ class DeleteSessionsWindow(tk.Toplevel):
         self.refresh_list()
         self.app.decoder_controller.refresh_timing_profiles()
         self.app.history_controller.load_tables()
-        self.status_var.set(f"Poistettu {deleted} harjoitusta.")
+        self.status_var.set(
+            self.tr(
+                "delete_sessions.status.deleted_all",
+                "Deleted {count} practice sessions.",
+                count=deleted,
+            )
+        )
 
     def delete_range(self) -> None:
         """Delete saved practice sessions inside the selected date and time range."""
@@ -515,7 +607,11 @@ class DeleteSessionsWindow(tk.Toplevel):
         except Exception as exc:
             messagebox.showerror(
                 config.APP_NAME,
-                f"Harjoitusten laskeminen epäonnistui:\n{exc}",
+                self.tr(
+                    "delete_sessions.error.count_failed",
+                    "Counting practice sessions failed:\n{error}",
+                    error=str(exc),
+                ),
                 parent=self,
             )
             return
@@ -523,19 +619,26 @@ class DeleteSessionsWindow(tk.Toplevel):
         if count <= 0:
             messagebox.showinfo(
                 config.APP_NAME,
-                "Valitulta aikaväliltä ei löytynyt poistettavia harjoituksia.",
+                self.tr(
+                    "delete_sessions.message.no_sessions_in_range",
+                    "No practice sessions to delete were found in the selected time range.",
+                ),
                 parent=self,
             )
             return
 
+        start_label = start_dt.strftime("%d.%m.%Y %H:%M")
+        end_label = end_dt.strftime("%d.%m.%Y %H:%M")
+
         ok = messagebox.askyesno(
             config.APP_NAME,
-            "Haluatko varmasti poistaa valitun aikavälin harjoitukset?\n\n"
-            f"Alkaen: {start_dt.strftime('%d.%m.%Y %H:%M')}\n"
-            f"Päättyen: {end_dt.strftime('%d.%m.%Y %H:%M')}\n\n"
-            f"Tämä poistaa {count} harjoitusta sekä niihin liittyvät "
-            "telemetria- ja merkkitulokset.\n\n"
-            "Tätä toimintoa ei voi perua.",
+            self.tr(
+                "delete_sessions.message.confirm_delete_range",
+                "Do you really want to delete the practice sessions in the selected time range?\n\nFrom {start}\nTo {end}\n\nThis removes {count} practice sessions and their related telemetry and character results.\n\nThis action cannot be undone.",
+                start=start_label,
+                end=end_label,
+                count=count,
+            ),
             parent=self,
         )
 
@@ -550,7 +653,11 @@ class DeleteSessionsWindow(tk.Toplevel):
         except Exception as exc:
             messagebox.showerror(
                 config.APP_NAME,
-                f"Poisto epäonnistui:\n{exc}",
+                self.tr(
+                    "delete_sessions.error.delete_failed",
+                    "Deletion failed:\n{error}",
+                    error=str(exc),
+                ),
                 parent=self,
             )
             return
@@ -558,7 +665,13 @@ class DeleteSessionsWindow(tk.Toplevel):
         self.refresh_list()
         self.app.decoder_controller.refresh_timing_profiles()
         self.app.history_controller.load_tables()
-        self.status_var.set(f"Poistettu {deleted} harjoitusta aikaväliltä.")
+        self.status_var.set(
+            self.tr(
+                "delete_sessions.status.deleted_range",
+                "Deleted {count} practice sessions from the selected time range.",
+                count=deleted,
+            )
+        )
 
     def update_range_count(self) -> None:
         """Show how many sessions match the selected date and time range."""
@@ -577,18 +690,32 @@ class DeleteSessionsWindow(tk.Toplevel):
         except Exception as exc:
             messagebox.showerror(
                 config.APP_NAME,
-                f"Harjoitusten laskeminen epäonnistui:\n{exc}",
+                self.tr(
+                    "delete_sessions.error.count_failed",
+                    "Counting practice sessions failed:\n{error}",
+                    error=str(exc),
+                ),
                 parent=self,
             )
             return
 
         self.status_var.set(
-            f"Aikavälillä {start_dt.strftime('%d.%m.%Y %H:%M')} - "
-            f"{end_dt.strftime('%d.%m.%Y %H:%M')} on {count} harjoitusta."
+            self.tr(
+                "delete_sessions.status.range_count",
+                "The time range {start} - {end} contains {count} practice sessions.",
+                start=start_dt.strftime("%d.%m.%Y %H:%M"),
+                end=end_dt.strftime("%d.%m.%Y %H:%M"),
+                count=count,
+            )
         )
 
     def _center_on_parent(self) -> None:
         """Center the window over the main application window."""
+        try:
+            self.app.update_idletasks()
+        except Exception:
+            pass
+
         self.update_idletasks()
 
         x = self.app.winfo_rootx() + max(

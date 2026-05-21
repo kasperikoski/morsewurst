@@ -8,20 +8,20 @@ import tkinter as tk
 from tkinter import ttk
 
 import morsewurst.config as config
+
 try:
     from morsewurst.ui.help_content import HELP_DOCUMENT
 except ModuleNotFoundError:
-    HELP_DOCUMENT = [
-        {"type": "title", "text": "Morsewurst ohje"},
-        {"type": "paragraph", "text": "Ohjesisältöä ei löytynyt tästä paketista."},
-    ]
+    HELP_DOCUMENT = None
 
 
 class HelpWindow(tk.Toplevel):
     def __init__(self, parent: tk.Misc) -> None:
         super().__init__(parent)
 
-        self.title(f"{config.APP_NAME} ohje")
+        self.app = parent
+
+        self.title(self.app.i18n.t("help_window.title", app_name=config.APP_NAME))
         self.transient(parent)
         self.geometry("920x720")
         self.minsize(760, 520)
@@ -41,13 +41,13 @@ class HelpWindow(tk.Toplevel):
 
         ttk.Label(
             header,
-            text="Ohje",
+            text=self.app.i18n.t("help_window.header"),
             font=("Segoe UI", 16, "bold"),
         ).pack(side=tk.LEFT)
 
         ttk.Button(
             header,
-            text="Sulje",
+            text=self.app.i18n.t("help_window.close_button"),
             command=self.destroy,
         ).pack(side=tk.RIGHT)
 
@@ -145,7 +145,15 @@ class HelpWindow(tk.Toplevel):
         self.text.configure(state=tk.NORMAL)
         self.text.delete("1.0", tk.END)
 
-        for block in HELP_DOCUMENT:
+        if HELP_DOCUMENT is not None:
+            blocks = HELP_DOCUMENT
+        else:
+            blocks = [
+                {"type": "title", "text": self.app.i18n.t("help_window.fallback_title")},
+                {"type": "paragraph", "text": self.app.i18n.t("help_window.fallback_paragraph")},
+            ]
+
+        for block in blocks:
             block_type = str(block.get("type", "paragraph"))
             text = str(block.get("text", ""))
 
@@ -154,22 +162,16 @@ class HelpWindow(tk.Toplevel):
 
             if block_type == "title":
                 self.text.insert(tk.END, text + "\n", "title")
-
             elif block_type == "heading":
                 self.text.insert(tk.END, text + "\n", "heading")
-
             elif block_type == "subheading":
                 self.text.insert(tk.END, text + "\n", "subheading")
-
             elif block_type == "bullet":
                 self.text.insert(tk.END, f"• {text}\n", "bullet")
-
             elif block_type == "note":
                 self.text.insert(tk.END, text + "\n", "note")
-
             elif block_type == "code":
                 self.text.insert(tk.END, text + "\n", "code")
-
             else:
                 self.text.insert(tk.END, text + "\n", "paragraph")
 

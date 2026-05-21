@@ -29,14 +29,14 @@ class StatsWindow(tk.Toplevel):
         self.app = app
         self.db = app.db
 
-        self.title("Tilastot")
+        self.title(self.app.i18n.t("stats_window.title"))
         self.transient(app)
-        self.geometry("1180x760")
-        self.minsize(980, 640)
+        self.geometry("1180x830")
+        self.minsize(980, 710)
 
         self.start_date_var = tk.StringVar()
         self.end_date_var = tk.StringVar()
-        self.bucket_var = tk.StringVar(value="Automaattinen")
+        self.bucket_var = tk.StringVar(value=self.app.i18n.t("stats_window.bucket_auto"))
         self.status_var = tk.StringVar(value="")
 
         self.current_start_dt: datetime | None = None
@@ -75,7 +75,7 @@ class StatsWindow(tk.Toplevel):
 
         ttk.Label(
             header,
-            text="Tilastot",
+            text=self.app.i18n.t("stats_window.header"),
             font=("Segoe UI", 16, "bold"),
         ).pack(side=tk.LEFT)
 
@@ -85,19 +85,19 @@ class StatsWindow(tk.Toplevel):
             foreground="#666666",
         ).pack(side=tk.RIGHT)
 
-        controls = ttk.LabelFrame(outer, text="Aikaväli")
+        controls = ttk.LabelFrame(outer, text=self.app.i18n.t("stats_window.period_frame"))
         controls.pack(fill=tk.X, pady=(10, 0))
 
         row = ttk.Frame(controls)
         row.pack(fill=tk.X, padx=10, pady=8)
 
-        ttk.Label(row, text="Alkupäivä").pack(side=tk.LEFT)
+        ttk.Label(row, text=self.app.i18n.t("stats_window.start_date")).pack(side=tk.LEFT)
         ttk.Entry(row, textvariable=self.start_date_var, width=12).pack(side=tk.LEFT, padx=(6, 14))
 
-        ttk.Label(row, text="Loppupäivä").pack(side=tk.LEFT)
+        ttk.Label(row, text=self.app.i18n.t("stats_window.end_date")).pack(side=tk.LEFT)
         ttk.Entry(row, textvariable=self.end_date_var, width=12).pack(side=tk.LEFT, padx=(6, 18))
 
-        ttk.Label(row, text="Keskiarvo").pack(side=tk.LEFT, padx=(4, 6))
+        ttk.Label(row, text=self.app.i18n.t("stats_window.bucket_label")).pack(side=tk.LEFT, padx=(4, 6))
 
         self.bucket_combo = ttk.Combobox(
             row,
@@ -105,69 +105,69 @@ class StatsWindow(tk.Toplevel):
             state="readonly",
             width=14,
             values=[
-                "Automaattinen",
-                "Raaka data",
-                "15 minuuttia",
-                "1 tunti",
-                "Päivä",
-                "Viikko",
-                "Kuukausi",
+                self.app.i18n.t("stats_window.bucket_auto"),
+                self.app.i18n.t("stats_window.bucket_raw"),
+                self.app.i18n.t("stats_window.bucket_15min"),
+                self.app.i18n.t("stats_window.bucket_1hour"),
+                self.app.i18n.t("stats_window.bucket_day"),
+                self.app.i18n.t("stats_window.bucket_week"),
+                self.app.i18n.t("stats_window.bucket_month"),
             ],
         )
         self.bucket_combo.pack(side=tk.LEFT, padx=(0, 12))
         self.bucket_combo.bind("<<ComboboxSelected>>", lambda _event: self.refresh())
 
-        ttk.Button(row, text="Päivitä", command=self.refresh).pack(side=tk.LEFT)
+        ttk.Button(row, text=self.app.i18n.t("stats_window.refresh_button"), command=self.refresh).pack(side=tk.LEFT)
 
         ttk.Button(
             row,
-            text="30 päivää",
+            text=self.app.i18n.t("stats_window.quick_30d"),
             command=lambda: self._set_quick_range_and_refresh(30),
         ).pack(side=tk.LEFT, padx=(12, 0))
 
         ttk.Button(
             row,
-            text="90 päivää",
+            text=self.app.i18n.t("stats_window.quick_90d"),
             command=lambda: self._set_quick_range_and_refresh(90),
         ).pack(side=tk.LEFT, padx=(6, 0))
 
         ttk.Button(
             row,
-            text="Vuosi",
+            text=self.app.i18n.t("stats_window.quick_1y"),
             command=lambda: self._set_quick_range_and_refresh(365),
         ).pack(side=tk.LEFT, padx=(6, 0))
 
         ttk.Button(
             row,
-            text="Kaikki",
+            text=self.app.i18n.t("stats_window.quick_all"),
             command=self._set_all_range_and_refresh,
         ).pack(side=tk.LEFT, padx=(6, 0))
 
         ttk.Label(
             controls,
-            text="Päivämäärä muodossa pp.kk.vvvv. Keskiarvo-valinta rauhoittaa kuvaajaa pidemmillä aikaväleillä. Kuvaajat päivittyvät automaattisesti muutaman sekunnin välein.",
+            text=self.app.i18n.t("stats_window.date_format_hint"),
             foreground="#666666",
         ).pack(anchor=tk.W, padx=10, pady=(0, 8))
 
-        summary = ttk.LabelFrame(outer, text="Yhteenveto")
+        summary = ttk.LabelFrame(outer, text=self.app.i18n.t("stats_window.summary_frame"))
         summary.pack(fill=tk.X, pady=(10, 0))
 
         grid = ttk.Frame(summary)
         grid.pack(fill=tk.X, padx=10, pady=8)
 
-        self._summary_cell(grid, 0, 0, "Kierroksia", self.summary_vars["rounds"])
-        self._summary_cell(grid, 0, 1, "Tarkkuus", self.summary_vars["accuracy"])
-        self._summary_cell(grid, 0, 2, "Puhtaus", self.summary_vars["cleanliness"])
-        self._summary_cell(grid, 0, 3, "Pisteet", self.summary_vars["score"])
+        self._summary_cell(grid, 0, 0, self.app.i18n.t("stats_window.summary_rounds"), self.summary_vars["rounds"])
+        self._summary_cell(grid, 0, 1, self.app.i18n.t("stats_window.summary_accuracy"), self.summary_vars["accuracy"])
+        self._summary_cell(grid, 0, 2, self.app.i18n.t("stats_window.summary_cleanliness"), self.summary_vars["cleanliness"])
+        self._summary_cell(grid, 0, 3, self.app.i18n.t("stats_window.summary_score"), self.summary_vars["score"])
 
-        self._summary_cell(grid, 1, 0, "Brutto-WPM", self.summary_vars["gross_wpm"])
-        self._summary_cell(grid, 1, 1, "Netto-WPM", self.summary_vars["net_wpm"])
-        self._summary_cell(grid, 1, 2, "Laite-WPM", self.summary_vars["device_wpm"])
-        self._summary_cell(grid, 1, 3, "Virheet", self.summary_vars["errors"])
+        self._summary_cell(grid, 1, 0, self.app.i18n.t("stats_window.summary_gross_wpm"), self.summary_vars["gross_wpm"])
+        self._summary_cell(grid, 1, 1, self.app.i18n.t("stats_window.summary_net_wpm"), self.summary_vars["net_wpm"])
+        self._summary_cell(grid, 1, 2, self.app.i18n.t("stats_window.summary_device_wpm"), self.summary_vars["device_wpm"])
+        self._summary_cell(grid, 1, 3, self.app.i18n.t("stats_window.summary_errors"), self.summary_vars["errors"])
 
-        self._summary_cell(grid, 2, 0, "Viivasuhde", self.summary_vars["straight_ratio"])
-        self._summary_cell(grid, 2, 1, "Dit-hajonta", self.summary_vars["dot_variation"])
-        self._summary_cell(grid, 2, 2, "Dah-hajonta", self.summary_vars["dash_variation"])
+        self._summary_cell(grid, 2, 0, self.app.i18n.t("stats_window.summary_straight_ratio"), self.summary_vars["straight_ratio"])
+        self._summary_cell(grid, 2, 1, self.app.i18n.t("stats_window.summary_dot_variation"), self.summary_vars["dot_variation"])
+        self._summary_cell(grid, 2, 2, self.app.i18n.t("stats_window.summary_dash_variation"), self.summary_vars["dash_variation"])
 
         self.notebook = ttk.Notebook(outer)
         self.notebook.pack(fill=tk.BOTH, expand=True, pady=(10, 0))
@@ -177,10 +177,10 @@ class StatsWindow(tk.Toplevel):
         self.skill_tab = ttk.Frame(self.notebook)
         self.problem_tab = ttk.Frame(self.notebook)
 
-        self.notebook.add(self.wpm_tab, text="WPM-kehitys")
-        self.notebook.add(self.quality_tab, text="Tarkkuus, puhtaus ja pisteet")
-        self.notebook.add(self.skill_tab, text="Taitotaso")
-        self.notebook.add(self.problem_tab, text="Vaikeimmat merkit")
+        self.notebook.add(self.wpm_tab, text=self.app.i18n.t("stats_window.tab_wpm"))
+        self.notebook.add(self.quality_tab, text=self.app.i18n.t("stats_window.tab_quality"))
+        self.notebook.add(self.skill_tab, text=self.app.i18n.t("stats_window.tab_skill"))
+        self.notebook.add(self.problem_tab, text=self.app.i18n.t("stats_window.tab_problems"))
 
         self.figures: dict[str, Any] = {}
         self.axes: dict[str, Any] = {}
@@ -219,11 +219,7 @@ class StatsWindow(tk.Toplevel):
         if Figure is None or FigureCanvasTkAgg is None:
             ttk.Label(
                 parent,
-                text=(
-                    "Matplotlib puuttuu.\n\n"
-                    "Asenna se komennolla:\n"
-                    "python -m pip install matplotlib"
-                ),
+                text=self.app.i18n.t("stats_window.matplotlib_missing"),
                 font=("Segoe UI", 12),
                 justify=tk.LEFT,
             ).pack(anchor=tk.W, padx=12, pady=12)
@@ -284,7 +280,7 @@ class StatsWindow(tk.Toplevel):
         except ValueError:
             messagebox.showerror(
                 config.APP_NAME,
-                "Aikaväli ei ole kelvollinen.\n\nKäytä muotoa pp.kk.vvvv.",
+                self.app.i18n.t("stats_window.error_invalid_date_range"),
                 parent=self,
             )
             return None
@@ -294,7 +290,7 @@ class StatsWindow(tk.Toplevel):
         if end < start:
             messagebox.showerror(
                 config.APP_NAME,
-                "Loppupäivä ei voi olla ennen alkupäivää.",
+                self.app.i18n.t("stats_window.error_end_before_start"),
                 parent=self,
             )
             return None
@@ -319,7 +315,7 @@ class StatsWindow(tk.Toplevel):
             skill_snapshots = self.db.stats_skill_snapshots_between(start_iso, end_iso)
             problems = self.db.stats_problem_characters_between(start_iso, end_iso, 100)
         except Exception as exc:
-            self.status_var.set(f"Tilastojen lataus epäonnistui: {exc}")
+            self.status_var.set(self.app.i18n.t("stats_window.error_loading", error=exc))
             return
 
         self._update_summary(summary)
@@ -329,7 +325,7 @@ class StatsWindow(tk.Toplevel):
         self._draw_problem_chart(problems)
 
         self.status_var.set(
-            f"Päivitetty {datetime.now().strftime('%H:%M:%S')} | Keskiarvo: {self._current_bucket_label()}"
+            self.app.i18n.t("stats_window.refreshed_status", time=datetime.now().strftime("%H:%M:%S"), bucket=self._current_bucket_label())
         )
 
     def _update_summary(self, summary: dict[str, Any]) -> None:
@@ -398,54 +394,41 @@ class StatsWindow(tk.Toplevel):
         points.sort(key=lambda item: item[0])
 
         return [item[0] for item in points], [item[1] for item in points]
-    
+
     def _selected_bucket(self) -> str:
         value = self.bucket_var.get().strip()
-
         if value:
             return value
-
-        return "Automaattinen"
-
+        return self.app.i18n.t("stats_window.bucket_auto")
 
     def _auto_bucket(self) -> str:
         if self.current_start_dt is None or self.current_end_dt is None:
-            return "Raaka data"
+            return self.app.i18n.t("stats_window.bucket_raw")
 
         days = max(0.0, (self.current_end_dt - self.current_start_dt).total_seconds() / 86400.0)
 
         if days <= 2:
-            return "Raaka data"
-
+            return self.app.i18n.t("stats_window.bucket_raw")
         if days <= 14:
-            return "1 tunti"
-
+            return self.app.i18n.t("stats_window.bucket_1hour")
         if days <= 120:
-            return "Päivä"
-
-        return "Viikko"
-
+            return self.app.i18n.t("stats_window.bucket_day")
+        return self.app.i18n.t("stats_window.bucket_week")
 
     def _bucket_start(self, dt: datetime, bucket: str) -> datetime:
-        if bucket == "15 minuuttia":
+        if bucket == self.app.i18n.t("stats_window.bucket_15min"):
             minute = (dt.minute // 15) * 15
             return dt.replace(minute=minute, second=0, microsecond=0)
-
-        if bucket == "1 tunti":
+        if bucket == self.app.i18n.t("stats_window.bucket_1hour"):
             return dt.replace(minute=0, second=0, microsecond=0)
-
-        if bucket == "Päivä":
+        if bucket == self.app.i18n.t("stats_window.bucket_day"):
             return dt.replace(hour=0, minute=0, second=0, microsecond=0)
-
-        if bucket == "Viikko":
+        if bucket == self.app.i18n.t("stats_window.bucket_week"):
             day_start = dt.replace(hour=0, minute=0, second=0, microsecond=0)
             return day_start - timedelta(days=day_start.weekday())
-
-        if bucket == "Kuukausi":
+        if bucket == self.app.i18n.t("stats_window.bucket_month"):
             return dt.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-
         return dt
-
 
     def _bucketed_series(
         self,
@@ -455,10 +438,10 @@ class StatsWindow(tk.Toplevel):
     ) -> tuple[list[datetime], list[float]]:
         bucket = self._selected_bucket()
 
-        if bucket == "Automaattinen":
+        if bucket == self.app.i18n.t("stats_window.bucket_auto"):
             bucket = self._auto_bucket()
 
-        if bucket == "Raaka data":
+        if bucket == self.app.i18n.t("stats_window.bucket_raw"):
             return self._series(rows, value_key, date_key)
 
         grouped: dict[datetime, list[float]] = defaultdict(list)
@@ -489,20 +472,58 @@ class StatsWindow(tk.Toplevel):
 
         return [item[0] for item in points], [item[1] for item in points]
 
-
     def _apply_x_limits(self, axis: Any) -> None:
         if self.current_start_dt is None or self.current_end_dt is None:
             return
-
         axis.set_xlim(self.current_start_dt, self.current_end_dt)
 
+    def _apply_dynamic_y_limits(
+        self,
+        axis: Any,
+        values: Iterable[float],
+        *,
+        lower_floor: float = 0.0,
+        upper_ceiling: float | None = None,
+        margin_ratio: float = 0.12,
+        min_margin: float = 1.0,
+    ) -> None:
+        numeric_values: list[float] = []
+
+        for value in values:
+            try:
+                numeric_values.append(float(value))
+            except Exception:
+                continue
+
+        if not numeric_values:
+            return
+
+        min_y = min(numeric_values)
+        max_y = max(numeric_values)
+
+        if min_y == max_y:
+            margin = max(min_margin, abs(min_y) * margin_ratio)
+        else:
+            margin = max(min_margin, (max_y - min_y) * margin_ratio)
+
+        lower = min_y - margin
+        upper = max_y + margin
+
+        if lower_floor is not None:
+            lower = max(lower_floor, lower)
+
+        if upper_ceiling is not None:
+            upper = min(upper_ceiling, upper)
+
+        if upper <= lower:
+            upper = lower + max(1.0, min_margin)
+
+        axis.set_ylim(lower, upper)
 
     def _current_bucket_label(self) -> str:
         bucket = self._selected_bucket()
-
-        if bucket == "Automaattinen":
-            return f"automaattinen, käytössä {self._auto_bucket()}"
-
+        if bucket == self.app.i18n.t("stats_window.bucket_auto"):
+            return self.app.i18n.t("stats_window.bucket_auto_active", active=self._auto_bucket())
         return bucket
 
     def _empty_axis(self, key: str, title: str, message: str) -> None:
@@ -530,7 +551,6 @@ class StatsWindow(tk.Toplevel):
     def _format_time_axis(self, axis: Any) -> None:
         if mdates is None:
             return
-
         axis.xaxis.set_major_formatter(mdates.DateFormatter("%d.%m.%Y"))
         axis.figure.autofmt_xdate()
 
@@ -542,34 +562,31 @@ class StatsWindow(tk.Toplevel):
             return
 
         axis.clear()
-        axis.set_title("WPM-kehitys suhteessa aikaan")
-        axis.set_xlabel("Aika")
+        axis.set_title(self.app.i18n.t("stats_window.chart_wpm_title"))
+        axis.set_xlabel(self.app.i18n.t("stats_window.chart_xlabel_time"))
         axis.set_ylabel("WPM")
 
         has_data = False
 
         for value_key, label in [
-            ("gross_wpm", "Brutto-WPM"),
-            ("net_wpm", "Netto-WPM"),
-            ("avg_wpm", "Laite-WPM"),
+            ("gross_wpm", self.app.i18n.t("stats_window.series_gross_wpm")),
+            ("net_wpm", self.app.i18n.t("stats_window.series_net_wpm")),
+            ("avg_wpm", self.app.i18n.t("stats_window.series_device_wpm")),
         ]:
             x, y = self._bucketed_series(sessions, value_key)
-
             if x and y:
                 axis.step(x, y, where="post", label=label)
                 has_data = True
 
         for source_name, label in [
-            ("straight", "Straight WPM"),
-            ("iambic", "Iambic WPM"),
+            ("straight", self.app.i18n.t("stats_window.series_straight_wpm")),
+            ("iambic", self.app.i18n.t("stats_window.series_iambic_wpm")),
         ]:
             source_rows = [
                 row for row in key_sources
                 if str(row.get("key_source", "")).lower() == source_name
             ]
-
             x, y = self._bucketed_series(source_rows, "wpm")
-
             if x and y:
                 axis.step(x, y, where="post", label=label)
                 has_data = True
@@ -577,8 +594,8 @@ class StatsWindow(tk.Toplevel):
         if not has_data:
             self._empty_axis(
                 "wpm",
-                "WPM-kehitys suhteessa aikaan",
-                "Valitulla aikavälillä ei ole WPM-dataa.",
+                self.app.i18n.t("stats_window.chart_wpm_title"),
+                self.app.i18n.t("stats_window.empty_wpm_data"),
             )
             return
 
@@ -596,39 +613,47 @@ class StatsWindow(tk.Toplevel):
             return
 
         axis.clear()
-        axis.set_title("Tarkkuus, puhtaus ja pisteet")
-        axis.set_xlabel("Aika")
-        axis.set_ylabel("% / pisteet")
+        axis.set_title(self.app.i18n.t("stats_window.chart_quality_title"))
+        axis.set_xlabel(self.app.i18n.t("stats_window.chart_xlabel_time"))
+        axis.set_ylabel(self.app.i18n.t("stats_window.chart_ylabel_percent"))
 
         has_data = False
+        all_values: list[float] = []
 
         for value_key, label in [
-            ("accuracy", "Tarkkuus"),
-            ("cleanliness", "Puhtaus"),
-            ("overall_score", "Pisteet"),
-            ("speed_score", "Nopeuspisteet"),
+            ("accuracy", self.app.i18n.t("stats_window.series_accuracy")),
+            ("cleanliness", self.app.i18n.t("stats_window.series_cleanliness")),
+            ("overall_score", self.app.i18n.t("stats_window.series_score")),
+            ("speed_score", self.app.i18n.t("stats_window.series_speed_score")),
         ]:
             x, y = self._bucketed_series(sessions, value_key)
-
             if x and y:
                 axis.step(x, y, where="post", label=label)
+                all_values.extend(y)
                 has_data = True
 
         if not has_data:
             self._empty_axis(
                 "quality",
-                "Tarkkuus, puhtaus ja pisteet",
-                "Valitulla aikavälillä ei ole laatudataa.",
+                self.app.i18n.t("stats_window.chart_quality_title"),
+                self.app.i18n.t("stats_window.empty_quality_data"),
             )
             return
 
-        axis.set_ylim(0, 105)
+        self._apply_dynamic_y_limits(
+            axis,
+            all_values,
+            lower_floor=0.0,
+            upper_ceiling=105.0,
+            margin_ratio=0.12,
+            min_margin=2.0,
+        )
+
         axis.grid(True, alpha=0.3)
         axis.legend(loc="best")
         self._format_time_axis(axis)
         self._apply_x_limits(axis)
         canvas.draw_idle()
-
     def _draw_skill_chart(self, snapshots: list[Any]) -> None:
         axis = self.axes.get("skill")
         canvas = self.canvases.get("skill")
@@ -637,12 +662,10 @@ class StatsWindow(tk.Toplevel):
             return
 
         axis.clear()
-        axis.set_title("Taitotason kehitys")
-        axis.set_xlabel("Aika")
-        axis.set_ylabel("Taso / WPM")
+        axis.set_title(self.app.i18n.t("stats_window.chart_skill_title"))
+        axis.set_xlabel(self.app.i18n.t("stats_window.chart_xlabel_time"))
+        axis.set_ylabel(self.app.i18n.t("stats_window.chart_ylabel_skill"))
 
-        # Only draw snapshots where the skill model actually produced a rating.
-        # Early placeholder snapshots may have level=0 while raw_skill is still None.
         rated_snapshots = [
             row for row in snapshots
             if self._row_get(row, "raw_skill") is not None
@@ -652,12 +675,11 @@ class StatsWindow(tk.Toplevel):
         all_values: list[float] = []
 
         for value_key, label, date_key in [
-            ("raw_skill", "Skill WPM", "created_at"),
-            ("effective_wpm", "Onnistunut WPM", "created_at"),
-            ("level", "Level", "created_at"),
+            ("raw_skill", self.app.i18n.t("stats_window.series_raw_skill"), "created_at"),
+            ("effective_wpm", self.app.i18n.t("stats_window.series_effective_wpm"), "created_at"),
+            ("level", self.app.i18n.t("stats_window.series_level"), "created_at"),
         ]:
             x, y = self._bucketed_series(rated_snapshots, value_key, date_key)
-
             if x and y:
                 axis.step(x, y, where="post", label=label)
                 all_values.extend(y)
@@ -666,20 +688,18 @@ class StatsWindow(tk.Toplevel):
         if not has_data:
             self._empty_axis(
                 "skill",
-                "Taitotason kehitys",
-                "Valitulla aikavälillä ei ole laskettua taitotasodataa.",
+                self.app.i18n.t("stats_window.chart_skill_title"),
+                self.app.i18n.t("stats_window.empty_skill_data"),
             )
             return
 
         if all_values:
             min_y = min(all_values)
             max_y = max(all_values)
-
             if min_y == max_y:
                 margin = max(1.0, abs(min_y) * 0.10)
             else:
                 margin = max(1.0, (max_y - min_y) * 0.12)
-
             axis.set_ylim(
                 max(0.0, min_y - margin),
                 max_y + margin,
@@ -699,9 +719,9 @@ class StatsWindow(tk.Toplevel):
             return
 
         axis.clear()
-        axis.set_title("Vaikeimmat merkit valitulla aikavälillä")
-        axis.set_xlabel("Merkki")
-        axis.set_ylabel("Virhe %")
+        axis.set_title(self.app.i18n.t("stats_window.chart_problems_title"))
+        axis.set_xlabel(self.app.i18n.t("stats_window.chart_xlabel_char"))
+        axis.set_ylabel(self.app.i18n.t("stats_window.chart_ylabel_error_percent"))
 
         labels: list[str] = []
         values: list[float] = []
@@ -709,18 +729,16 @@ class StatsWindow(tk.Toplevel):
         for row in problems:
             char = str(self._row_get(row, "char", "") or "")
             rate = self._row_get(row, "error_rate")
-
             if not char or rate is None:
                 continue
-
             labels.append(char)
             values.append(float(rate))
 
         if not labels:
             self._empty_axis(
                 "problems",
-                "Vaikeimmat merkit valitulla aikavälillä",
-                "Valitulla aikavälillä ei ole merkkikohtaista dataa.",
+                self.app.i18n.t("stats_window.chart_problems_title"),
+                self.app.i18n.t("stats_window.empty_problems_data"),
             )
             return
 
@@ -732,20 +750,16 @@ class StatsWindow(tk.Toplevel):
     def _auto_refresh(self) -> None:
         if not self.winfo_exists():
             return
-
         try:
             self.refresh()
         except Exception:
             pass
-
         self.after(5000, self._auto_refresh)
 
     def _center_on_parent(self) -> None:
         parent = self.app
-
         x = parent.winfo_rootx() + max(0, (parent.winfo_width() - self.winfo_width()) // 2)
         y = parent.winfo_rooty() + max(0, (parent.winfo_height() - self.winfo_height()) // 2)
-
         self.geometry(f"+{x}+{y}")
 
     def _close(self) -> None:
@@ -754,5 +768,4 @@ class StatsWindow(tk.Toplevel):
                 self.app.stats_window = None
         except Exception:
             pass
-
         self.destroy()

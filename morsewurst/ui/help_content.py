@@ -19,10 +19,6 @@ HELP_DOCUMENT = [
         "text": "Ohjelman perusajatus on, että valitset harjoituksen asetukset, lähetät näytöllä näkyvän tavoitteen ja annat ohjelman tallentaa tuloksen. Historia, vaikeimmat merkit, WPM-arvot, ajoitusprofiilit ja taitotaso päivittyvät tallennettujen kierrosten perusteella."
     },
     {
-        "type": "note",
-        "text": "Ohje kuvaa tätä ohjelmaversiota. Jos olet juuri muuttanut koodia, poista __pycache__-kansiot tai käynnistä ohjelma uudelleen, jotta uusi ohjesisältö ja uudet asetukset tulevat varmasti käyttöön."
-    },
-    {
         "type": "heading",
         "text": "Peruskäyttö"
     },

@@ -19,6 +19,19 @@ from morsewurst.core.challenge import (
 from morsewurst.core.scoring import estimate_paris_time_us, score_round
 from morsewurst.core.skill_rating import calculate_skill_rating
 from morsewurst.models import RoundState
+from morsewurst.ui.controllers.results_controller import SOURCE_ADAPTIVE_TELEMETRY
+
+FINISH_REASON_USER_STOPPED = "user_stopped"
+FINISH_REASON_LONG_PAUSE = "long_pause"
+FINISH_REASON_COMPLETED = "completed"
+FINISH_REASON_IN_PROGRESS = "in_progress"
+
+FINISH_REASON_I18N_KEYS = {
+    FINISH_REASON_USER_STOPPED: "practice.finish_reason.user_stopped",
+    FINISH_REASON_LONG_PAUSE: "practice.finish_reason.long_pause",
+    FINISH_REASON_COMPLETED: "practice.finish_reason.completed",
+    FINISH_REASON_IN_PROGRESS: "practice.finish_reason.in_progress",
+}
 
 if TYPE_CHECKING:
     from morsewurst.ui.app import MorsewurstApp
@@ -29,6 +42,15 @@ class PracticeController:
 
     def __init__(self, app: "MorsewurstApp") -> None:
         self.app = app
+
+    def finish_reason_label(self, reason: object) -> str:
+        reason_code = str(reason or "").strip()
+        key = FINISH_REASON_I18N_KEYS.get(reason_code)
+
+        if key is None:
+            return reason_code
+
+        return self.app.i18n.t(key, reason_code)
 
     # ------------------------------------------------------------
     # Public controller API used by other controllers
@@ -84,7 +106,11 @@ class PracticeController:
         self._update_practice_buttons()
         app.results_controller.update_practice_series_summary()
         app.status_controller.set_main_status(
-            f"Harjoitus alkaa. Kierroksia yhteensä {app.total_rounds}.",
+            app.i18n.t(
+                "practice.status.starting",
+                "Practice starts. Total rounds: {total_rounds}.",
+                total_rounds=app.total_rounds,
+            ),
             state="normal",
         )
         self._start_next_round()
@@ -95,16 +121,26 @@ class PracticeController:
 
         if app.start_countdown_running:
             self._cancel_start_countdown(restore_state_text=True)
-            app.status_controller.set_main_status("Aloitus peruttu.", state="normal")
+            app.status_controller.set_main_status(
+                app.i18n.t("practice.status.start_cancelled", "Start cancelled."),
+                state="normal",
+            )
             return
 
         app.practice_running = False
 
         if app.round.active and not app.round.finished:
-            self._discard_current_round("käyttäjä lopetti")
+            self._discard_current_round(FINISH_REASON_USER_STOPPED)
 
-        app.round_state_var.set("Harjoitus: pysäytetty")
-        app.status_var.set("Harjoitus pysäytetty. Keskeneräistä kierrosta ei tallennettu.")
+        app.round_state_var.set(
+            app.i18n.t("practice.round_state.stopped", "Practice: stopped")
+        )
+        app.status_var.set(
+            app.i18n.t(
+                "practice.status.stopped_not_saved",
+                "Practice stopped. The unfinished round was not saved.",
+            )
+        )
         app.input_entry.configure(state=tk.NORMAL)
         app.app_lifecycle_controller.focus_input(force=True)
         self._update_practice_buttons()
@@ -144,9 +180,16 @@ class PracticeController:
         app.decoder_controller.clear_telemetry_display()
         app.timer_var.set(self._reference_time_label())
         app.round_state_var.set(
-            f"Kierros {app.current_round_number}/{app.total_rounds}: valmis aloitettavaksi"
+            app.i18n.t(
+                "practice.round_state.ready_to_start",
+                "Round {current}/{total}: ready to start",
+                current=app.current_round_number,
+                total=app.total_rounds,
+            )
         )
-        app.status_var.set("Aloita morsetus.")
+        app.status_var.set(
+            app.i18n.t("practice.status.start_morse", "Start sending Morse.")
+        )
 
         app.input_controller.drain_serial_queue()
         app.decoder_controller.clear_raw_telemetry()
@@ -179,8 +222,15 @@ class PracticeController:
         app = self.app
 
         app.practice_running = False
-        app.round_state_var.set("Harjoitus: valmis")
-        app.status_var.set("Koko harjoitussarja valmis.")
+        app.round_state_var.set(
+            app.i18n.t("practice.round_state.series_complete", "Practice: complete")
+        )
+        app.status_var.set(
+            app.i18n.t(
+                "practice.status.series_complete",
+                "The whole practice series is complete.",
+            )
+        )
         app.input_entry.configure(state=tk.NORMAL)
         app.app_lifecycle_controller.focus_input(force=True)
         self._update_practice_buttons()
@@ -198,7 +248,7 @@ class PracticeController:
 
         app.input_var.set("")
         app.decoder_controller.clear_telemetry_display()
-        app.timer_var.set("Aika: -")
+        app.timer_var.set(app.i18n.t("runtime.timer_placeholder", "Time: -"))
 
         if app.latest_result_reset_for_current_round:
             app.results_controller.reset_latest_result_values()
@@ -219,10 +269,23 @@ class PracticeController:
         if app.last_summary is not None:
             app.practice_summaries.append(app.last_summary)
             app.results_controller.update_practice_series_summary()
+            reason_label = self.finish_reason_label(reason)
+
             app.round_state_var.set(
-                f"Kierros {app.current_round_number}/{app.total_rounds}: valmis ({reason})"
+                app.i18n.t(
+                    "practice.round_state.complete_with_reason",
+                    "Round {current}/{total}: complete ({reason})",
+                    current=app.current_round_number,
+                    total=app.total_rounds,
+                    reason=reason_label,
+                )
             )
-            app.status_var.set("Kierros tallennetaan automaattisesti.")
+            app.status_var.set(
+                app.i18n.t(
+                    "practice.status.auto_saving_round",
+                    "Round is being saved automatically.",
+                )
+            )
             app.input_entry.configure(state=tk.DISABLED)
 
             app.after(
@@ -263,8 +326,16 @@ class PracticeController:
             return
 
         app.practice_running = False
-        app.status_controller.set_main_status("HARJOITUSSARJA VALMIS", state="success")
-        app.round_state_var.set("Harjoitus: valmis")
+        app.status_controller.set_main_status(
+            app.i18n.t(
+                "practice.status.series_complete_upper",
+                "PRACTICE SERIES COMPLETE",
+            ),
+            state="success",
+        )
+        app.round_state_var.set(
+            app.i18n.t("practice.round_state.series_complete", "Practice: complete")
+        )
         app.audio_controller.play_sound("practice_complete")
         app.results_controller.set_practice_total_time_label()
         app.input_entry.configure(state=tk.NORMAL)
@@ -292,7 +363,13 @@ class PracticeController:
         app.debug_controller.write_round_snapshot_if_enabled()
         app.decoder_controller.refresh_timing_profiles()
 
-        app.status_var.set(f"Tallennettu kierros #{session_id}")
+        app.status_var.set(
+            app.i18n.t(
+                "practice.status.saved_round",
+                "Saved round #{session_id}",
+                session_id=session_id,
+            )
+        )
 
         if auto_continue and app.practice_running:
             self._advance_after_finished_round()
@@ -325,7 +402,12 @@ class PracticeController:
 
         except Exception as exc:
             app.status_var.set(
-                f"Tallennettu kierros #{session_id}, mutta taitotason tallennus epäonnistui: {exc}"
+                app.i18n.t(
+                    "practice.status.saved_round_skill_failed",
+                    "Saved round #{session_id}, but saving the skill rating failed: {error}",
+                    session_id=session_id,
+                    error=exc,
+                )
             )
 
         try:
@@ -341,7 +423,12 @@ class PracticeController:
 
         except Exception as exc:
             app.status_var.set(
-                f"Tallennettu kierros #{session_id}, mutta yhteenvetojen päivitys epäonnistui: {exc}"
+                app.i18n.t(
+                    "practice.status.saved_round_summary_failed",
+                    "Saved round #{session_id}, but updating summaries failed: {error}",
+                    session_id=session_id,
+                    error=exc,
+                )
             )
 
     def clear_round_input(self) -> None:
@@ -365,7 +452,9 @@ class PracticeController:
         app.input_var.set("")
         app.decoder_controller.clear_telemetry_display()
         app.timer_var.set(self._reference_time_label())
-        app.status_var.set("Syöte tyhjennetty")
+        app.status_var.set(
+            app.i18n.t("practice.status.input_cleared", "Input cleared.")
+        )
         app.decoder_controller.clear_raw_telemetry()
 
         if app.round.host_start_time is not None:
@@ -410,7 +499,13 @@ class PracticeController:
         app.start_countdown_started_at = time.monotonic()
 
         self._clear_visible_training_texts()
-        app.status_controller.set_main_status("Harjoitus käynnistyy pian.", state="normal")
+        app.status_controller.set_main_status(
+            app.i18n.t(
+                "practice.status.countdown_starting",
+                "Practice starts soon.",
+            ),
+            state="normal",
+        )
         self._update_practice_buttons()
         self._show_start_countdown_bar()
         app.app_lifecycle_controller.focus_input(force=True)
@@ -554,7 +649,9 @@ class PracticeController:
         self._hide_start_countdown_bar()
 
         if restore_state_text and not app.practice_running:
-            app.round_state_var.set("Harjoitus: ei käynnissä")
+            app.round_state_var.set(
+                app.i18n.t("runtime.round_state_inactive", "Practice: not running")
+            )
 
         self._update_practice_buttons()
         app.app_lifecycle_controller.focus_input(force=True)
@@ -635,7 +732,7 @@ class PracticeController:
         actual_idle_us = max(0, int(current_time_us) - last_t1)
 
         if actual_idle_us >= self._auto_finish_idle_required_us(gap_unit_us):
-            self.finish_round("pitkä tauko", auto_continue=True)
+            self.finish_round(FINISH_REASON_LONG_PAUSE, auto_continue=True)
 
     def _start_round_clock_from_host_input(self) -> None:
         """Start the round clock when text input begins."""
@@ -647,8 +744,17 @@ class PracticeController:
         app.results_controller.reset_latest_result_values_when_round_starts()
         app.round.started_at = datetime.now()
         app.round.host_start_time = time.monotonic()
-        app.round_state_var.set(f"Kierros {app.current_round_number}/{app.total_rounds}: käynnissä")
-        app.status_var.set("Kello käynnissä.")
+        app.round_state_var.set(
+            app.i18n.t(
+                "practice.round_state.running",
+                "Round {current}/{total}: running",
+                current=app.current_round_number,
+                total=app.total_rounds,
+            )
+        )
+        app.status_var.set(
+            app.i18n.t("practice.status.clock_running", "Clock running.")
+        )
 
     def _start_round_clock_from_tone_event(self, event: Dict[str, Any]) -> None:
         """Start the round clock from the first accepted tone event."""
@@ -666,8 +772,17 @@ class PracticeController:
             else datetime.now()
         )
         app.round.host_start_time = time.monotonic()
-        app.round_state_var.set(f"Kierros {app.current_round_number}/{app.total_rounds}: käynnissä")
-        app.status_var.set("Kello käynnissä.")
+        app.round_state_var.set(
+            app.i18n.t(
+                "practice.round_state.running",
+                "Round {current}/{total}: running",
+                current=app.current_round_number,
+                total=app.total_rounds,
+            )
+        )
+        app.status_var.set(
+            app.i18n.t("practice.status.clock_running", "Clock running.")
+        )
 
     def _live_elapsed_us(self) -> Optional[int]:
         """Return the current round elapsed time in microseconds."""
@@ -684,7 +799,11 @@ class PracticeController:
 
         standard_time_us = estimate_paris_time_us(app.round.target, app.settings.target_wpm)
 
-        return f"Aika: - | Vertailuaika {app.results_controller.format_seconds_label(standard_time_us)}"
+        return app.i18n.t(
+            "practice.time.placeholder_with_reference",
+            "Time: - | Reference time {reference}",
+            reference=app.results_controller.format_seconds_label(standard_time_us),
+        )
 
     def _tick_timer(self) -> None:
         """Periodic timer tick for live round timing."""
@@ -721,9 +840,18 @@ class PracticeController:
         standard_us = estimate_paris_time_us(app.round.target, app.settings.target_wpm)
 
         if standard_us is None:
-            return f"Aika: {elapsed_text}"
+            return app.i18n.t(
+                "practice.time.elapsed",
+                "Time: {elapsed}",
+                elapsed=elapsed_text,
+            )
 
-        return f"Aika: {elapsed_text} | Vertailuaika {app.results_controller.format_seconds_label(standard_us)}"
+        return app.i18n.t(
+            "practice.time.elapsed_with_reference",
+            "Time: {elapsed} | Reference time {reference}",
+            elapsed=elapsed_text,
+            reference=app.results_controller.format_seconds_label(standard_us),
+        )
 
     def _maybe_finish_completed(self) -> None:
         """Finish the round when the entered or decoded text reaches target length."""
@@ -740,9 +868,9 @@ class PracticeController:
         entered, source = app.results_controller.selected_source_text()
         target_len = len(target_score_no_spaces)
 
-        if source != "adaptiivinen telemetria":
+        if source != SOURCE_ADAPTIVE_TELEMETRY:
             if len(score_text(entered, keep_spaces=False)) >= target_len:
-                self.finish_round("yritys valmis", auto_continue=True)
+                self.finish_round(FINISH_REASON_COMPLETED, auto_continue=True)
             return
 
         self._maybe_finish_completed_from_adaptive_telemetry(target_len)
@@ -795,7 +923,7 @@ class PracticeController:
         # will finish the round after the user stops sending.
         if candidate_plain == target_plain:
             app.decoder_controller.update_telemetry_display_from_decoded(decoded_final)
-            self.finish_round("yritys valmis", auto_continue=True)
+            self.finish_round(FINISH_REASON_COMPLETED, auto_continue=True)
 
     def _last_symbol_has_completion_idle(
         self,
@@ -846,7 +974,7 @@ class PracticeController:
             source,
             app.round.events,
             app.settings,
-            app.round.finish_reason or "kesken",
+            app.round.finish_reason or FINISH_REASON_IN_PROGRESS,
             count_missing=app.round.finished,
             decoder_settings=app.decoder_controller.decoder_settings_from_ui(),
             seed_unit_us=app.decoder_controller.adaptive_seed_unit_us(),

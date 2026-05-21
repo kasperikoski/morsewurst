@@ -44,6 +44,23 @@ class NetworkLobbyWindow(
 ):
     """Morsewurst Network lobby window."""
 
+    def tr(self, key: str, default: str | None = None, **values: object) -> str:
+        """Return a translated Network lobby UI string."""
+        i18n = getattr(self.app, "i18n", None)
+
+        if i18n is None:
+            text = default if default is not None else key
+
+            if values:
+                try:
+                    return text.format(**values)
+                except Exception:
+                    return text
+
+            return text
+
+        return i18n.t(key, default=default, **values)
+
     def __init__(self, app: tk.Misc) -> None:
         super().__init__(app)
         self.withdraw()
@@ -100,13 +117,13 @@ class NetworkLobbyWindow(
         self.last_server_info: dict[str, object] | None = None
         self.last_server_pong: dict[str, object] | None = None
 
-        self.server_summary_var = tk.StringVar(value="SERVER: updating...")
-        self.server_room_status_var = tk.StringVar(value="SERVER STATUS: updating...")
+        self.server_summary_var = tk.StringVar(value=self.tr("network.server.updating"))
+        self.server_room_status_var = tk.StringVar(value=self.tr("network.server_status.updating"))
 
         self.network_quality_state = "standby"
         self.network_quality_hold_until_monotonic = 0.0
-        self.network_quality_var = tk.StringVar(value="QUALITY: STANDBY")
-        self.network_quality_detail_var = tk.StringVar(value="Network idle.")
+        self.network_quality_var = tk.StringVar(value=self.tr("network.quality.label.standby"))
+        self.network_quality_detail_var = tk.StringVar(value=self.tr("network.quality.detail.idle"))
         self.network_quality_label: tk.Label | None = None
 
         self.server_info_window: tk.Toplevel | None = None
@@ -115,7 +132,7 @@ class NetworkLobbyWindow(
 
         self._init_network_startup_state()
 
-        self.title("Morsewurst Network")
+        self.title(self.tr("network.window.title"))
         self.transient(app)
         self.geometry("1280x740")
         self.minsize(1180, 720)
@@ -138,9 +155,9 @@ class NetworkLobbyWindow(
         self.private_room_var = tk.StringVar(value="")
         self.private_password_var = tk.StringVar(value="")
 
-        self.status_var = tk.StringVar(value="STANDBY")
-        self.room_status_var = tk.StringVar(value="Ready.")
-        self.public_rooms_status_var = tk.StringVar(value="Loading public rooms...")
+        self.status_var = tk.StringVar(value=self.tr("network.status.standby"))
+        self.room_status_var = tk.StringVar(value=self.tr("network.room.ready"))
+        self.public_rooms_status_var = tk.StringVar(value=self.tr("network.public_rooms.loading"))
         self.remembered_rooms_status_var = tk.StringVar(value="")
 
         self.playback_enabled_var = tk.BooleanVar(value=self.settings.playback_enabled)
@@ -212,7 +229,7 @@ class NetworkLobbyWindow(
 
         title = tk.Label(
             self.window_titlebar,
-            text="MORSEWURST NETWORK",
+            text=self.tr("network.header.title"),
             font=MatrixTheme.small_font,
             fg=MatrixTheme.accent,
             bg=MatrixTheme.input_bg,
@@ -253,7 +270,7 @@ class NetworkLobbyWindow(
 
         make_label(
             header,
-            "MORSEWURST NETWORK",
+            self.tr("network.header.title"),
             font=("Consolas", 28, "bold"),
             foreground=MatrixTheme.accent,
             background=MatrixTheme.background,
@@ -261,7 +278,7 @@ class NetworkLobbyWindow(
 
         make_label(
             header,
-            "Morsewurst Network is still an actively developed prototype, so occasional glitches and unexpected behaviour may occur.",
+            self.tr("network.header.prototype_notice"),
             font=MatrixTheme.small_font,
             foreground=MatrixTheme.text_dim,
             background=MatrixTheme.background,
@@ -317,7 +334,11 @@ class NetworkLobbyWindow(
         ).pack(side=tk.LEFT)
 
         if self.current_view == "lobby":
-            make_button(self.footer, "CLOSE", self.close).grid(row=0, column=1, sticky="e")
+            make_button(
+                self.footer,
+                self.tr("network.button.close"),
+                self.close,
+            ).grid(row=0, column=1, sticky="e")
 
     def _clear_content(self) -> None:
         self.log_text = None
@@ -332,6 +353,7 @@ class NetworkLobbyWindow(
 
     def _clear_notice(self) -> None:
         if self.connected_room_key or self.connected_room_id:
-            self.room_status_var.set(f"Connected to {self.connected_room_title or self.connected_room_id}.")
+            room = self.connected_room_title or self.connected_room_id
+            self.room_status_var.set(self.tr("network.room.connected", room=room))
         else:
-            self.room_status_var.set("Ready.")
+            self.room_status_var.set(self.tr("network.room.ready"))

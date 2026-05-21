@@ -9,7 +9,7 @@ from tkinter import ttk
 
 
 def build_settings_panel(app: tk.Misc, parent: ttk.Frame) -> None:
-    settings = ttk.LabelFrame(parent, text="Harjoituksen asetukset")
+    settings = ttk.LabelFrame(parent, text=app.i18n.t("settings_panel.title"))
     settings.pack(fill=tk.X)
 
     if not hasattr(app, "wxmor_disabled_widgets"):
@@ -21,28 +21,28 @@ def build_settings_panel(app: tk.Misc, parent: ttk.Frame) -> None:
 
     app.use_letters_check = ttk.Checkbutton(
         options,
-        text="Kirjaimet A-Z",
+        text=app.i18n.t("settings_panel.use_letters"),
         variable=app.use_letters_var,
     )
     app.use_letters_check.grid(row=0, column=0, sticky=tk.W)
 
     app.use_numbers_check = ttk.Checkbutton(
         options,
-        text="Numerot 0-9",
+        text=app.i18n.t("settings_panel.use_numbers"),
         variable=app.use_numbers_var,
     )
     app.use_numbers_check.grid(row=0, column=1, sticky=tk.W, padx=(18, 0))
 
     app.use_punctuation_check = ttk.Checkbutton(
         options,
-        text="Erikoismerkit",
+        text=app.i18n.t("settings_panel.use_punctuation"),
         variable=app.use_punctuation_var,
     )
     app.use_punctuation_check.grid(row=1, column=0, sticky=tk.W, pady=(4, 0))
 
     app.practice_wxmor_check = ttk.Checkbutton(
         options,
-        text="Harjoittele WX-MOR-sanomaa",
+        text=app.i18n.t("settings_panel.practice_wxmor"),
         variable=app.practice_wxmor_var,
         command=app.wxmor_controller.update_practice_state,
     )
@@ -56,7 +56,7 @@ def build_settings_panel(app: tk.Misc, parent: ttk.Frame) -> None:
 
     app.wxmor_profile_label = ttk.Label(
         options,
-        text="WX-MOR-profiili",
+        text=app.i18n.t("settings_panel.wxmor_profile"),
     )
     app.wxmor_profile_label.grid(
         row=3,
@@ -82,7 +82,7 @@ def build_settings_panel(app: tk.Misc, parent: ttk.Frame) -> None:
 
     app.practice_problem_chars_check = ttk.Checkbutton(
         options,
-        text="Harjoittele vaikeimpia merkkejä",
+        text=app.i18n.t("settings_panel.practice_problem_chars"),
         variable=app.practice_problem_chars_var,
     )
     app.practice_problem_chars_check.grid(
@@ -102,7 +102,7 @@ def build_settings_panel(app: tk.Misc, parent: ttk.Frame) -> None:
     counts.columnconfigure(2, minsize=35)
     counts.columnconfigure(3, minsize=55)
 
-    app.practice_rounds_label = ttk.Label(counts, text="Kierroksia")
+    app.practice_rounds_label = ttk.Label(counts, text=app.i18n.t("settings_panel.rounds"))
     app.practice_rounds_label.grid(row=0, column=0, sticky=tk.W)
 
     app.practice_rounds_spin = app.ui_helpers_controller.make_int_spinbox(
@@ -114,7 +114,7 @@ def build_settings_panel(app: tk.Misc, parent: ttk.Frame) -> None:
     )
     app.practice_rounds_spin.grid(row=0, column=1, sticky=tk.W)
 
-    app.min_groups_label = ttk.Label(counts, text="Ryhmiä min")
+    app.min_groups_label = ttk.Label(counts, text=app.i18n.t("settings_panel.groups_min"))
     app.min_groups_label.grid(row=1, column=0, sticky=tk.W, pady=(8, 0))
 
     app.min_groups_spin = app.ui_helpers_controller.make_int_spinbox(
@@ -126,7 +126,7 @@ def build_settings_panel(app: tk.Misc, parent: ttk.Frame) -> None:
     )
     app.min_groups_spin.grid(row=1, column=1, sticky=tk.W, pady=(8, 0))
 
-    app.max_groups_label = ttk.Label(counts, text="max")
+    app.max_groups_label = ttk.Label(counts, text=app.i18n.t("settings_panel.groups_max"))
     app.max_groups_label.grid(row=1, column=2, sticky=tk.W, pady=(8, 0))
 
     app.max_groups_spin = app.ui_helpers_controller.make_int_spinbox(
@@ -138,7 +138,7 @@ def build_settings_panel(app: tk.Misc, parent: ttk.Frame) -> None:
     )
     app.max_groups_spin.grid(row=1, column=3, sticky=tk.W, pady=(8, 0))
 
-    app.min_chars_label = ttk.Label(counts, text="Merkkejä min")
+    app.min_chars_label = ttk.Label(counts, text=app.i18n.t("settings_panel.chars_min"))
     app.min_chars_label.grid(row=2, column=0, sticky=tk.W, pady=(8, 0))
 
     app.min_chars_spin = app.ui_helpers_controller.make_int_spinbox(
@@ -150,7 +150,7 @@ def build_settings_panel(app: tk.Misc, parent: ttk.Frame) -> None:
     )
     app.min_chars_spin.grid(row=2, column=1, sticky=tk.W, pady=(8, 0))
 
-    app.max_chars_label = ttk.Label(counts, text="max")
+    app.max_chars_label = ttk.Label(counts, text=app.i18n.t("settings_panel.chars_max"))
     app.max_chars_label.grid(row=2, column=2, sticky=tk.W, pady=(8, 0))
 
     app.max_chars_spin = app.ui_helpers_controller.make_int_spinbox(
@@ -162,8 +162,6 @@ def build_settings_panel(app: tk.Misc, parent: ttk.Frame) -> None:
     )
     app.max_chars_spin.grid(row=2, column=3, sticky=tk.W, pady=(8, 0))
 
-    # WX-MOR-tilassa nämä normaalin satunnaisharjoituksen asetukset poistetaan käytöstä.
-    # Kierroksia-asetusta ei lisätä listaan, koska sen pitää jäädä käyttöön myös WX-MOR-harjoituksessa.
     wxmor_disabled_widgets = [
         app.use_letters_check,
         app.use_numbers_check,
@@ -183,8 +181,7 @@ def build_settings_panel(app: tk.Misc, parent: ttk.Frame) -> None:
         if widget not in app.wxmor_disabled_widgets:
             app.wxmor_disabled_widgets.append(widget)
 
-    # Harjoitusnopeus
-    speed = ttk.LabelFrame(parent, text="Harjoitusnopeus")
+    speed = ttk.LabelFrame(parent, text=app.i18n.t("settings_panel.speed_title"))
     speed.pack(fill=tk.X, pady=(8, 0))
 
     speed_row = ttk.Frame(speed)
@@ -192,13 +189,13 @@ def build_settings_panel(app: tk.Misc, parent: ttk.Frame) -> None:
 
     ttk.Button(
         speed_row,
-        text="Ehdota harjoitusnopeutta",
+        text=app.i18n.t("settings_panel.suggest_speed"),
         command=app.effective_wpm_controller.optimize_timing_from_history,
     ).pack(side=tk.LEFT)
 
     ttk.Label(
         speed_row,
-        text="Tavoite (WPM)",
+        text=app.i18n.t("settings_panel.target_wpm"),
     ).pack(side=tk.LEFT, padx=(22, 6))
 
     ttk.Label(

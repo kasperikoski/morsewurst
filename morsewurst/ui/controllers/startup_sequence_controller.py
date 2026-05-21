@@ -36,47 +36,48 @@ class StartupSequenceController:
 
         app.withdraw()
         self.init_startup_state()
+        self.preload_language_for_startup()
         startup.show_startup_screen()
 
         try:
             startup_started_at = time.perf_counter()
 
-            startup.startup_status("Valmistellaan ikkunaa...", 5)
+            startup.startup_status(app.i18n.t("app.startup.preparing_window"), 5)
             lifecycle.configure_window()
             startup.startup_delay(0.15)
 
-            startup.startup_status("Avataan tietokantaa...", 15)
+            startup.startup_status(app.i18n.t("app.startup.opening_database"), 15)
             lifecycle.init_services()
             startup.startup_delay(0.20)
 
-            startup.startup_status("Alustetaan sovellusta...", 28)
+            startup.startup_status(app.i18n.t("app.startup.initializing_app"), 28)
             runtime.init_runtime_state()
             runtime.init_variables()
             startup.startup_delay(0.20)
 
-            startup.startup_status("Ladataan asetuksia...", 40)
+            startup.startup_status(app.i18n.t("app.startup.loading_settings"), 40)
             settings.load_ui_settings()
             startup.startup_delay(0.20)
 
-            startup.startup_status("Ladataan ajoitusprofiileja...", 52)
+            startup.startup_status(app.i18n.t("app.startup.loading_timing_profiles"), 52)
             decoder.refresh_timing_profiles()
             startup.startup_delay(0.20)
 
-            startup.startup_status("Rakennetaan käyttöliittymää...", 66)
+            startup.startup_status(app.i18n.t("app.startup.building_ui"), 66)
             layout.build_ui()
             wxmor.update_practice_state()
             runtime.bind_static_events()
             startup.startup_delay(0.35)
 
-            startup.startup_status("Tarkistetaan sarjaportit...", 78)
+            startup.startup_status(app.i18n.t("app.startup.checking_serial_ports"), 78)
             serial.refresh_ports()
             startup.startup_delay(0.20)
 
-            startup.startup_status("Ladataan harjoitusdataa...", 90)
+            startup.startup_status(app.i18n.t("app.startup.loading_practice_data"), 90)
             history.load_tables()
             startup.startup_delay(0.25)
 
-            startup.startup_status("Viimeistellään...", 97)
+            startup.startup_status(app.i18n.t("app.startup.finishing"), 97)
             practice.update_practice_buttons()
             runtime.start_timers()
 
@@ -85,7 +86,7 @@ class StartupSequenceController:
                 minimum_seconds=3.0,
             )
 
-            startup.startup_status("Valmis", 100)
+            startup.startup_status(app.i18n.t("app.startup.ready"), 100)
             startup.startup_delay(1.0)
 
             startup.finish_startup_screen()
@@ -94,6 +95,18 @@ class StartupSequenceController:
         except Exception:
             self.recover_from_startup_error()
             raise
+
+    def preload_language_for_startup(self) -> None:
+        """Load the saved UI language before the first startup status is shown."""
+        app = self.app
+        settings = app.settings_controller
+
+        try:
+            data = settings.read_ui_settings_file()
+            language = settings.language_from_data(data)
+            app.i18n.set_language(language)
+        except Exception:
+            pass
 
     def init_startup_state(self) -> None:
         """Initialise splash screen state before the startup screen is shown."""

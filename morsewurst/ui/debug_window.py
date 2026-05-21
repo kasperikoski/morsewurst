@@ -27,7 +27,7 @@ class DebugWindow(tk.Toplevel):
         self.mode_var = tk.StringVar(value="latest")
         self.status_var = tk.StringVar(value="")
 
-        self.title("Debug-data")
+        self.title(self.app.i18n.t("debug_window.title"))
         self.transient(app)
         self.geometry("1100x760")
         self.minsize(850, 560)
@@ -44,18 +44,13 @@ class DebugWindow(tk.Toplevel):
 
         ttk.Label(
             outer,
-            text="Debug-data",
+            text=self.app.i18n.t("debug_window.header"),
             font=("Segoe UI", 14, "bold"),
         ).pack(anchor=tk.W)
 
         ttk.Label(
             outer,
-            text=(
-                "Tässä näkyy kierroksen jälkeen tallennettu debug-snapshot. "
-                "Se sisältää Python-ohjelman vastaanottamat tone-tapahtumat, "
-                "lasketut tauot, dekooderin timing-arvot, rescue-päätökset "
-                "ja lopullisen tulkinnan."
-            ),
+            text=self.app.i18n.t("debug_window.description"),
             wraplength=980,
         ).pack(anchor=tk.W, pady=(4, 10))
 
@@ -64,49 +59,49 @@ class DebugWindow(tk.Toplevel):
 
         ttk.Button(
             button_row,
-            text="Näytä viimeisin kierros",
+            text=self.app.i18n.t("debug_window.button.show_latest"),
             command=self.load_latest,
         ).pack(side=tk.LEFT)
 
         ttk.Button(
             button_row,
-            text="Näytä historia siistinä",
+            text=self.app.i18n.t("debug_window.button.show_history_pretty"),
             command=self.load_history_pretty,
         ).pack(side=tk.LEFT, padx=(8, 0))
 
         ttk.Button(
             button_row,
-            text="Näytä raaka JSONL",
+            text=self.app.i18n.t("debug_window.button.show_history_raw"),
             command=self.load_history_raw,
         ).pack(side=tk.LEFT, padx=(8, 0))
 
         ttk.Button(
             button_row,
-            text="Kopioi näkyvä teksti",
+            text=self.app.i18n.t("debug_window.button.copy_visible"),
             command=self.copy_visible_text,
         ).pack(side=tk.LEFT, padx=(18, 0))
 
         ttk.Button(
             button_row,
-            text="Kopioi viimeisin kierros",
+            text=self.app.i18n.t("debug_window.button.copy_latest"),
             command=self.copy_latest,
         ).pack(side=tk.LEFT, padx=(8, 0))
 
         ttk.Button(
             button_row,
-            text="Avaa kansio",
+            text=self.app.i18n.t("debug_window.button.open_folder"),
             command=self.open_debug_folder,
         ).pack(side=tk.LEFT, padx=(8, 0))
 
         ttk.Button(
             button_row,
-            text="Tyhjennä debug-data",
+            text=self.app.i18n.t("debug_window.button.clear_data"),
             command=self.clear_debug_data,
         ).pack(side=tk.LEFT, padx=(18, 0))
 
         ttk.Button(
             button_row,
-            text="Sulje",
+            text=self.app.i18n.t("debug_window.button.close"),
             command=self.close,
         ).pack(side=tk.RIGHT)
 
@@ -178,7 +173,7 @@ class DebugWindow(tk.Toplevel):
         if content:
             self.text.insert("1.0", content)
         else:
-            self.text.insert("1.0", "Debug-dataa ei ole vielä tallennettu.\n")
+            self.text.insert("1.0", self.app.i18n.t("debug_window.no_data"))
 
         self.text.configure(state=tk.NORMAL)
         self.text.mark_set(tk.INSERT, "1.0")
@@ -189,49 +184,48 @@ class DebugWindow(tk.Toplevel):
         content = read_latest_debug_text()
 
         self._set_text(content)
-        self.status_var.set("Näytetään viimeisin debug-snapshot.")
+        self.status_var.set(self.app.i18n.t("debug_window.status.showing_latest"))
 
     def load_history_pretty(self) -> None:
         self.mode_var.set("history_pretty")
         content = read_history_debug_text(pretty=True)
 
         self._set_text(content)
-        self.status_var.set("Näytetään koko debug-historia siistissä muodossa.")
+        self.status_var.set(self.app.i18n.t("debug_window.status.showing_history_pretty"))
 
     def load_history_raw(self) -> None:
         self.mode_var.set("history_raw")
         content = read_history_debug_text(pretty=False)
 
         self._set_text(content)
-        self.status_var.set("Näytetään raaka JSONL-historiatiedosto.")
+        self.status_var.set(self.app.i18n.t("debug_window.status.showing_history_raw"))
 
     def copy_visible_text(self) -> None:
         content = self.text.get("1.0", tk.END).rstrip()
 
         if not content:
-            self.status_var.set("Ei kopioitavaa.")
+            self.status_var.set(self.app.i18n.t("debug_window.status.nothing_to_copy"))
             return
 
         self.clipboard_clear()
         self.clipboard_append(content)
-        self.status_var.set("Näkyvä debug-data kopioitu leikepöydälle.")
+        self.status_var.set(self.app.i18n.t("debug_window.status.copied_visible"))
 
     def copy_latest(self) -> None:
         content = read_latest_debug_text().rstrip()
 
         if not content:
-            self.status_var.set("Viimeisintä debug-snapshotia ei löytynyt.")
+            self.status_var.set(self.app.i18n.t("debug_window.status.no_latest"))
             return
 
         self.clipboard_clear()
         self.clipboard_append(content)
-        self.status_var.set("Viimeisin debug-snapshot kopioitu leikepöydälle.")
+        self.status_var.set(self.app.i18n.t("debug_window.status.copied_latest"))
 
     def clear_debug_data(self) -> None:
         ok = messagebox.askyesno(
             config.APP_NAME,
-            "Haluatko varmasti tyhjentää debug-datan?\n\n"
-            "Tämä poistaa latest_round_debug.json- ja debug_history.jsonl-tiedostot.",
+            self.app.i18n.t("debug_window.confirm_clear"),
             parent=self,
         )
 
@@ -242,7 +236,7 @@ class DebugWindow(tk.Toplevel):
 
         self._set_text("")
         self.status_var.set(
-            f"Debug-data tyhjennetty. Poistettuja tiedostoja: {deleted}."
+            self.app.i18n.t("debug_window.status.cleared", deleted=deleted)
         )
 
     def open_debug_folder(self) -> None:
@@ -260,7 +254,7 @@ class DebugWindow(tk.Toplevel):
         except Exception as exc:
             messagebox.showerror(
                 config.APP_NAME,
-                f"Debug-kansion avaaminen epäonnistui:\n{exc}",
+                self.app.i18n.t("debug_window.error_open_folder", error=exc),
                 parent=self,
             )
 

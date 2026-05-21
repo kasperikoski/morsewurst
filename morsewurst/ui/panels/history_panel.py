@@ -17,7 +17,7 @@ def build_history_panel(app: tk.Misc, parent: ttk.Frame) -> None:
     target strings can become wider than the available screen area.
     """
 
-    history_frame = ttk.LabelFrame(parent, text="Viimeisimmät kierrokset")
+    history_frame = ttk.LabelFrame(parent, text=app.i18n.t("history.panel_title"))
     history_frame.pack(fill=tk.BOTH, expand=True, pady=(10, 0))
 
     columns = (
@@ -49,16 +49,16 @@ def build_history_panel(app: tk.Misc, parent: ttk.Frame) -> None:
     )
 
     definitions = [
-        ("id", "ID", 46),
-        ("finished", "Aika", 140),
-        ("accuracy", "Tarkkuus", 80),
-        ("cleanliness", "Puhtaus", 80),
-        ("score", "Pisteet", 75),
-        ("errors", "Virheet", 65),
-        ("wpm", "Brutto-WPM", 85),
-        ("time", "Kesto", 80),
-        ("entered", "Syöte", 190),
-        ("target", "Tavoite", 190),
+        ("id", app.i18n.t("history.column.id"), 46),
+        ("finished", app.i18n.t("history.column.time"), 140),
+        ("accuracy", app.i18n.t("history.column.accuracy"), 80),
+        ("cleanliness", app.i18n.t("history.column.cleanliness"), 80),
+        ("score", app.i18n.t("history.column.score"), 75),
+        ("errors", app.i18n.t("history.column.errors"), 65),
+        ("wpm", app.i18n.t("history.column.gross_wpm"), 85),
+        ("time", app.i18n.t("history.column.duration"), 80),
+        ("entered", app.i18n.t("history.column.input"), 190),
+        ("target", app.i18n.t("history.column.target"), 190),
     ]
 
     for col, title, width in definitions:

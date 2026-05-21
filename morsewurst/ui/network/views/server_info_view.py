@@ -114,29 +114,35 @@ class ServerInfoViewMixin:
 
         if not info:
             if self.server_info_error_text:
-                return "SERVER: unavailable"
-            return "SERVER: updating..."
+                return self.tr("network.server.unavailable")
+            return self.tr("network.server.updating")
 
         parts: list[str] = []
 
         server_time_ms = self._estimated_server_time_unix_ms()
         if server_time_ms is not None:
-            parts.append(f"SERVER {self._format_time_from_unix_ms(server_time_ms)}")
+            parts.append(
+                f"{self.tr('network.server.label')} "
+                f"{self._format_time_from_unix_ms(server_time_ms)}"
+            )
 
         uptime = self._estimated_uptime_seconds()
         if uptime is not None:
-            parts.append(f"UP {self._format_duration(uptime, compact=True)}")
+            parts.append(
+                f"{self.tr('network.server.up')} "
+                f"{self._format_duration(uptime, compact=True)}"
+            )
 
         clients_total = self._safe_payload_int(info, "clients_total")
         if clients_total is not None:
-            parts.append(f"ONLINE {clients_total}")
+            parts.append(f"{self.tr('network.server.online')} {clients_total}")
 
         ping_ms = self._latest_server_ping_ms()
         if ping_ms is not None:
-            parts.append(f"PING {ping_ms} ms")
+            parts.append(f"{self.tr('network.server.ping')} {ping_ms} ms")
 
         if not parts:
-            return "SERVER: waiting for data"
+            return self.tr("network.server.waiting_for_data")
 
         return " | ".join(parts)
 
@@ -145,35 +151,41 @@ class ServerInfoViewMixin:
 
         if not info:
             if self.server_info_error_text:
-                return f"SERVER STATUS: {self.server_info_error_text}"
-            return "SERVER STATUS: updating..."
+                return f"{self.tr('network.server_status.prefix')}: {self.server_info_error_text}"
+            return self.tr("network.server_status.updating")
 
         parts: list[str] = []
 
         server_time_ms = self._estimated_server_time_unix_ms()
         if server_time_ms is not None:
-            parts.append(f"Time {self._format_time_from_unix_ms(server_time_ms)}")
+            parts.append(
+                f"{self.tr('network.server_status.time')} "
+                f"{self._format_time_from_unix_ms(server_time_ms)}"
+            )
 
         uptime = self._estimated_uptime_seconds()
         if uptime is not None:
-            parts.append(f"Uptime {self._format_duration(uptime, compact=False)}")
+            parts.append(
+                f"{self.tr('network.server_status.uptime')} "
+                f"{self._format_duration(uptime, compact=False)}"
+            )
 
         clients_total = self._safe_payload_int(info, "clients_total")
         if clients_total is not None:
-            parts.append(f"Online {clients_total}")
+            parts.append(f"{self.tr('network.server_status.online')} {clients_total}")
 
         room_clients = self._safe_payload_int(info, "room_clients")
         if room_clients is not None:
-            parts.append(f"This room {room_clients}")
+            parts.append(f"{self.tr('network.server_status.this_room')} {room_clients}")
 
         ping_ms = self._latest_server_ping_ms()
         if ping_ms is not None:
-            parts.append(f"Ping {ping_ms} ms")
+            parts.append(f"{self.tr('network.server_status.ping')} {ping_ms} ms")
 
         if not parts:
-            return "SERVER STATUS: waiting for server info"
+            return self.tr("network.server_status.waiting_for_info")
 
-        return "SERVER STATUS  " + " | ".join(parts)
+        return f"{self.tr('network.server_status.prefix')}  " + " | ".join(parts)
 
     def _safe_payload_int(self, payload: dict[str, object], key: str) -> int | None:
         try:
@@ -234,7 +246,7 @@ class ServerInfoViewMixin:
         self.server_info_window = window
         self.server_info_value_vars = {}
 
-        window.title("Morsewurst Server Info")
+        window.title(self.tr("network.server_info.window_title"))
         window.transient(self)
         window.geometry("560x460")
         window.minsize(520, 420)
@@ -267,7 +279,7 @@ class ServerInfoViewMixin:
 
         make_label(
             header,
-            "SERVER INFO",
+            self.tr("network.server_info.title"),
             font=("Consolas", 22, "bold"),
             foreground=MatrixTheme.accent,
             background=MatrixTheme.background,
@@ -275,7 +287,7 @@ class ServerInfoViewMixin:
 
         make_label(
             header,
-            "Live relay information received from the Morsewurst server.",
+            self.tr("network.server_info.description"),
             font=MatrixTheme.small_font,
             foreground=MatrixTheme.text_dim,
             background=MatrixTheme.background,
@@ -286,18 +298,18 @@ class ServerInfoViewMixin:
         panel.columnconfigure(1, weight=1)
 
         rows = [
-            ("Server name", "server_name"),
-            ("Server time", "server_time"),
-            ("Uptime", "uptime"),
-            ("Online users", "clients_total"),
-            ("Rooms total", "rooms_total"),
-            ("Current room", "room"),
-            ("Users in room", "room_clients"),
-            ("Known installs", "known_installations"),
-            ("Seen in 24h", "seen_24h"),
-            ("Seen in 7d", "seen_7d"),
-            ("Last ping", "ping"),
-            ("Last update", "last_update"),
+            (self.tr("network.server_info.server_name"), "server_name"),
+            (self.tr("network.server_info.server_time"), "server_time"),
+            (self.tr("network.server_info.uptime"), "uptime"),
+            (self.tr("network.server_info.online_users"), "clients_total"),
+            (self.tr("network.server_info.rooms_total"), "rooms_total"),
+            (self.tr("network.server_info.current_room"), "room"),
+            (self.tr("network.server_info.users_in_room"), "room_clients"),
+            (self.tr("network.server_info.known_installs"), "known_installations"),
+            (self.tr("network.server_info.seen_24h"), "seen_24h"),
+            (self.tr("network.server_info.seen_7d"), "seen_7d"),
+            (self.tr("network.server_info.last_ping"), "ping"),
+            (self.tr("network.server_info.last_update"), "last_update"),
         ]
 
         for row_index, (label, key) in enumerate(rows):
@@ -307,9 +319,23 @@ class ServerInfoViewMixin:
         buttons.grid(row=2, column=0, sticky="ew", padx=18, pady=(0, 18))
         buttons.columnconfigure(0, weight=1)
 
-        make_button(buttons, "REFRESH INFO", self._request_server_info).grid(row=0, column=1, sticky="e")
-        make_button(buttons, "PING SERVER", self._request_server_ping).grid(row=0, column=2, sticky="e", padx=(10, 0))
-        make_button(buttons, "CLOSE", self._close_server_info_window).grid(row=0, column=3, sticky="e", padx=(10, 0))
+        make_button(
+            buttons,
+            self.tr("network.button.refresh_info"),
+            self._request_server_info,
+        ).grid(row=0, column=1, sticky="e")
+
+        make_button(
+            buttons,
+            self.tr("network.button.ping_server"),
+            self._request_server_ping,
+        ).grid(row=0, column=2, sticky="e", padx=(10, 0))
+
+        make_button(
+            buttons,
+            self.tr("network.button.close"),
+            self._close_server_info_window,
+        ).grid(row=0, column=3, sticky="e", padx=(10, 0))
 
         window.protocol("WM_DELETE_WINDOW", self._close_server_info_window)
 
@@ -360,12 +386,21 @@ class ServerInfoViewMixin:
                 set_value(key, "-")
 
             if self.server_info_error_text:
-                set_value("server_name", "Server info unavailable")
+                set_value(
+                    "server_name",
+                    self.tr("network.server_info.unavailable"),
+                )
                 set_value("last_update", self.server_info_error_text)
             elif self._server_is_connected():
-                set_value("server_name", "Waiting for server info")
+                set_value(
+                    "server_name",
+                    self.tr("network.server_info.waiting"),
+                )
             else:
-                set_value("server_name", "Updating...")
+                set_value(
+                    "server_name",
+                    self.tr("network.server_info.updating"),
+                )
 
             return
 

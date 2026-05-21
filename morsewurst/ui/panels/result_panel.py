@@ -59,7 +59,7 @@ def _section_title(
 def build_result_panel(app: tk.Misc, parent: ttk.Frame) -> None:
     """Build the compact result panel."""
 
-    result_frame = ttk.LabelFrame(parent, text="Tulos")
+    result_frame = ttk.LabelFrame(parent, text=app.i18n.t("result_panel.frame_title"))
     result_frame.pack(fill=tk.BOTH, expand=True, pady=(10, 0))
 
     # ============================================================
@@ -109,22 +109,22 @@ def build_result_panel(app: tk.Misc, parent: ttk.Frame) -> None:
     practice_box = ttk.Frame(content)
     practice_box.grid(row=0, column=0, sticky=tk.NW, padx=(0, 28))
 
-    _section_title(practice_box, "Harjoitus")
+    _section_title(practice_box, app.i18n.t("result_panel.practice_title"))
 
-    _metric_cell(practice_box, 1, 0, "Kierrokset", app.result_practice_rounds_var)
-    _metric_cell(practice_box, 1, 1, "Tarkkuus", app.result_practice_accuracy_var)
+    _metric_cell(practice_box, 1, 0, app.i18n.t("result_panel.practice_rounds"), app.result_practice_rounds_var)
+    _metric_cell(practice_box, 1, 1, app.i18n.t("result_panel.practice_accuracy"), app.result_practice_accuracy_var)
 
-    _metric_cell(practice_box, 2, 0, "Puhtaus", app.result_practice_cleanliness_var)
-    _metric_cell(practice_box, 2, 1, "Pisteet", app.result_practice_score_var)
+    _metric_cell(practice_box, 2, 0, app.i18n.t("result_panel.practice_cleanliness"), app.result_practice_cleanliness_var)
+    _metric_cell(practice_box, 2, 1, app.i18n.t("result_panel.practice_score"), app.result_practice_score_var)
 
-    _metric_cell(practice_box, 3, 0, "Ajoitus", app.result_practice_timing_var)
-    _metric_cell(practice_box, 3, 1, "Netto-WPM", app.result_practice_net_wpm_var)
+    _metric_cell(practice_box, 3, 0, app.i18n.t("result_panel.practice_timing"), app.result_practice_timing_var)
+    _metric_cell(practice_box, 3, 1, app.i18n.t("result_panel.practice_net_wpm"), app.result_practice_net_wpm_var)
 
-    _metric_cell(practice_box, 4, 0, "Brutto-WPM", app.result_practice_gross_wpm_var)
-    _metric_cell(practice_box, 4, 1, "Laite-WPM", app.result_practice_device_wpm_var)
+    _metric_cell(practice_box, 4, 0, app.i18n.t("result_panel.practice_gross_wpm"), app.result_practice_gross_wpm_var)
+    _metric_cell(practice_box, 4, 1, app.i18n.t("result_panel.practice_device_wpm"), app.result_practice_device_wpm_var)
 
-    _metric_cell(practice_box, 5, 0, "Viivasuhde", app.result_practice_straight_ratio_var)
-    _metric_cell(practice_box, 5, 1, "Dit/Dah", app.result_practice_element_variation_var)
+    _metric_cell(practice_box, 5, 0, app.i18n.t("result_panel.practice_straight_ratio"), app.result_practice_straight_ratio_var)
+    _metric_cell(practice_box, 5, 1, app.i18n.t("result_panel.practice_element_variation"), app.result_practice_element_variation_var)
 
     # ============================================================
     # Column 2: latest round
@@ -135,17 +135,17 @@ def build_result_panel(app: tk.Misc, parent: ttk.Frame) -> None:
 
     _section_title(latest_box, variable=app.result_latest_title_var)
 
-    _metric_cell(latest_box, 1, 0, "Tarkkuus", app.result_latest_accuracy_var)
-    _metric_cell(latest_box, 1, 1, "Puhtaus", app.result_latest_cleanliness_var)
+    _metric_cell(latest_box, 1, 0, app.i18n.t("result_panel.latest_accuracy"), app.result_latest_accuracy_var)
+    _metric_cell(latest_box, 1, 1, app.i18n.t("result_panel.latest_cleanliness"), app.result_latest_cleanliness_var)
 
-    _metric_cell(latest_box, 2, 0, "Pisteet", app.result_latest_score_var)
-    _metric_cell(latest_box, 2, 1, "Ajoitus", app.result_latest_timing_var)
+    _metric_cell(latest_box, 2, 0, app.i18n.t("result_panel.latest_score"), app.result_latest_score_var)
+    _metric_cell(latest_box, 2, 1, app.i18n.t("result_panel.latest_timing"), app.result_latest_timing_var)
 
-    _metric_cell(latest_box, 3, 0, "Virheet", app.result_latest_errors_var)
-    _metric_cell(latest_box, 3, 1, "Ylim/Puutt", app.result_latest_extra_missing_var)
+    _metric_cell(latest_box, 3, 0, app.i18n.t("result_panel.latest_errors"), app.result_latest_errors_var)
+    _metric_cell(latest_box, 3, 1, app.i18n.t("result_panel.latest_extra_missing"), app.result_latest_extra_missing_var)
 
-    _metric_cell(latest_box, 4, 0, "Väärät", app.result_latest_substitutions_var)
-    _metric_cell(latest_box, 4, 1, "Viivasuhde", app.result_latest_straight_ratio_var)
+    _metric_cell(latest_box, 4, 0, app.i18n.t("result_panel.latest_substitutions"), app.result_latest_substitutions_var)
+    _metric_cell(latest_box, 4, 1, app.i18n.t("result_panel.latest_straight_ratio"), app.result_latest_straight_ratio_var)
 
-    _metric_cell(latest_box, 5, 0, "Dit-hajonta", app.result_latest_dot_variation_var)
-    _metric_cell(latest_box, 5, 1, "Dah-hajonta", app.result_latest_dash_variation_var)
+    _metric_cell(latest_box, 5, 0, app.i18n.t("result_panel.latest_dot_variation"), app.result_latest_dot_variation_var)
+    _metric_cell(latest_box, 5, 1, app.i18n.t("result_panel.latest_dash_variation"), app.result_latest_dash_variation_var)

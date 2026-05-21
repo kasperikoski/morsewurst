@@ -49,12 +49,25 @@ class NetworkStartupSequenceMixin:
             self._network_startup_started_at + timeout_seconds
         )
 
-        self.status_var.set("STARTING")
-        self.room_status_var.set("Starting Morsewurst Network.")
+        self.status_var.set(
+            self.app.i18n.t("network.startup.state.starting", "STARTING")
+        )
+        self.room_status_var.set(
+            self.app.i18n.t(
+                "network.startup.message.starting",
+                "Starting Morsewurst Network.",
+            )
+        )
 
         self._network_startup_screen = NetworkStartupScreen(self.app)
         self._network_startup_screen.show()
-        self._network_startup_status("Starting network engine.", 8)
+        self._network_startup_status(
+            self.app.i18n.t(
+                "network.startup.status.engine",
+                "Starting network engine.",
+            ),
+            8,
+        )
 
         try:
             self._network_startup_after_id = self.after(
@@ -66,12 +79,25 @@ class NetworkStartupSequenceMixin:
 
     def _connect_network_lobby_presence(self) -> None:
         self._network_startup_after_id = None
-        self._network_startup_status("Connecting to relay.", 32)
+        self._network_startup_status(
+            self.app.i18n.t(
+                "network.startup.status.connecting_relay",
+                "Connecting to relay.",
+            ),
+            32,
+        )
 
         try:
             self._ensure_lobby_presence()
         except Exception as exc:
-            self._append_log("warning", f"Lobby presence startup failed: {exc}")
+            self._append_log(
+                "warning",
+                self.app.i18n.t(
+                    "network.startup.log.lobby_presence_failed",
+                    "Lobby presence startup failed: {error}",
+                    error=str(exc),
+                ),
+            )
 
         self._schedule_network_ready_poll(delay_ms=150)
 
@@ -103,21 +129,36 @@ class NetworkStartupSequenceMixin:
                 ready = False
 
         if ready:
-            self._network_startup_status("Loading public rooms.", 72)
+            self._network_startup_status(
+                self.app.i18n.t(
+                    "network.startup.status.loading_public_rooms",
+                    "Loading public rooms.",
+                ),
+                72,
+            )
             self._start_initial_network_queries()
             self._finish_network_startup(
-                final_status="STANDBY",
-                final_message="Ready.",
+                final_status=self.app.i18n.t("network.status.standby", "STANDBY"),
+                final_message=self.app.i18n.t("network.startup.message.ready", "Ready."),
             )
             return
 
         now = time.monotonic()
         if now >= self._network_startup_deadline_monotonic:
-            self._network_startup_status("Connection is retrying in background.", 88)
+            self._network_startup_status(
+                self.app.i18n.t(
+                    "network.startup.status.retrying_background",
+                    "Connection is retrying in background.",
+                ),
+                88,
+            )
             self._start_initial_network_queries()
             self._finish_network_startup(
-                final_status="RETRYING",
-                final_message="Network is still connecting. Retrying in background.",
+                final_status=self.app.i18n.t("network.status.retrying", "RETRYING"),
+                final_message=self.app.i18n.t(
+                    "network.startup.message.retrying_background",
+                    "Network is still connecting. Retrying in background.",
+                ),
             )
             return
 
@@ -128,7 +169,13 @@ class NetworkStartupSequenceMixin:
         elapsed = max(0.0, now - self._network_startup_started_at)
         progress = min(68.0, 32.0 + (elapsed / total) * 36.0)
 
-        self._network_startup_status("Connecting to relay.", progress)
+        self._network_startup_status(
+            self.app.i18n.t(
+                "network.startup.status.connecting_relay",
+                "Connecting to relay.",
+            ),
+            progress,
+        )
         self._schedule_network_ready_poll(delay_ms=150)
 
     def _start_initial_network_queries(self) -> None:
@@ -140,13 +187,27 @@ class NetworkStartupSequenceMixin:
         try:
             self._request_initial_server_snapshot()
         except Exception as exc:
-            self._append_log("warning", f"Initial server snapshot failed: {exc}")
+            self._append_log(
+                "warning",
+                self.app.i18n.t(
+                    "network.startup.log.initial_server_snapshot_failed",
+                    "Initial server snapshot failed: {error}",
+                    error=str(exc),
+                ),
+            )
 
         try:
             if not self.public_rooms:
                 self._refresh_public_rooms_async(silent=True)
         except Exception as exc:
-            self._append_log("warning", f"Initial public room refresh failed: {exc}")
+            self._append_log(
+                "warning",
+                self.app.i18n.t(
+                    "network.startup.log.initial_public_room_refresh_failed",
+                    "Initial public room refresh failed: {error}",
+                    error=str(exc),
+                ),
+            )
 
         try:
             self._schedule_server_info_auto_refresh(
@@ -164,7 +225,10 @@ class NetworkStartupSequenceMixin:
         self._network_startup_complete = True
         self.status_var.set(final_status)
         self.room_status_var.set(final_message)
-        self._network_startup_status("Ready.", 100)
+        self._network_startup_status(
+            self.app.i18n.t("network.startup.status.ready", "Ready."),
+            100,
+        )
 
         min_ms = int(getattr(config, "NETWORK_STARTUP_SCREEN_MIN_MS", 1800))
         elapsed_ms = int((time.monotonic() - self._network_startup_started_at) * 1000)

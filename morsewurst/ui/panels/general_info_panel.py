@@ -51,7 +51,7 @@ def build_general_info_panel(app: tk.Misc, parent: ttk.Frame) -> None:
     At the moment it contains history summary values.
     """
 
-    info_frame = ttk.LabelFrame(parent, text="Yleistä tietoa")
+    info_frame = ttk.LabelFrame(parent, text=app.i18n.t("general_info.title"))
     info_frame.pack(fill=tk.BOTH, expand=True, pady=(10, 0))
 
     content = ttk.Frame(info_frame)
@@ -64,22 +64,22 @@ def build_general_info_panel(app: tk.Misc, parent: ttk.Frame) -> None:
     history_box = ttk.Frame(content)
     history_box.pack(anchor=tk.NW, fill=tk.X)
 
-    _section_title(history_box, "Historia")
+    _section_title(history_box, app.i18n.t("general_info.history_title"))
 
-    _metric_cell(history_box, 1, 0, "Kierroksia", app.result_history_rounds_var)
-    _metric_cell(history_box, 1, 1, "Tarkkuus", app.result_history_accuracy_var)
+    _metric_cell(history_box, 1, 0, app.i18n.t("result_panel.history_rounds"), app.result_history_rounds_var)
+    _metric_cell(history_box, 1, 1, app.i18n.t("result_panel.history_accuracy"), app.result_history_accuracy_var)
 
-    _metric_cell(history_box, 2, 0, "Puhtaus", app.result_history_cleanliness_var)
-    _metric_cell(history_box, 2, 1, "Pisteet", app.result_history_score_var)
+    _metric_cell(history_box, 2, 0, app.i18n.t("result_panel.history_cleanliness"), app.result_history_cleanliness_var)
+    _metric_cell(history_box, 2, 1, app.i18n.t("result_panel.history_score"), app.result_history_score_var)
 
-    _metric_cell(history_box, 3, 0, "Brutto-WPM", app.result_history_gross_wpm_var)
-    _metric_cell(history_box, 3, 1, "Netto-WPM", app.result_history_net_wpm_var)
+    _metric_cell(history_box, 3, 0, app.i18n.t("result_panel.history_gross_wpm"), app.result_history_gross_wpm_var)
+    _metric_cell(history_box, 3, 1, app.i18n.t("result_panel.history_net_wpm"), app.result_history_net_wpm_var)
 
-    _metric_cell(history_box, 4, 0, "Laite-WPM", app.result_history_device_wpm_var)
-    _metric_cell(history_box, 4, 1, "Viivasuhde", app.result_history_straight_ratio_var)
+    _metric_cell(history_box, 4, 0, app.i18n.t("result_panel.history_device_wpm"), app.result_history_device_wpm_var)
+    _metric_cell(history_box, 4, 1, app.i18n.t("result_panel.history_straight_ratio"), app.result_history_straight_ratio_var)
 
-    _metric_cell(history_box, 5, 0, "Dit-hajonta", app.result_history_dot_variation_var)
-    _metric_cell(history_box, 5, 1, "Dah-hajonta", app.result_history_dash_variation_var)
+    _metric_cell(history_box, 5, 0, app.i18n.t("result_panel.history_dot_variation"), app.result_history_dot_variation_var)
+    _metric_cell(history_box, 5, 1, app.i18n.t("result_panel.history_dash_variation"), app.result_history_dash_variation_var)
 
     # Reserved space for future general information.
     placeholder = ttk.Frame(content)

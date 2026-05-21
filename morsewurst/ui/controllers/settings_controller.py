@@ -30,6 +30,8 @@ class SettingsController:
         """Load all saved UI settings into the current Tk variables."""
         data = self.read_ui_settings_file()
 
+        self.load_language_setting(data)
+
         if not data:
             return
 
@@ -37,6 +39,28 @@ class SettingsController:
         self.load_input_and_serial_settings(data)
         self.load_advanced_stat_settings(data)
         self.load_window_settings(data)
+
+    def load_language_setting(self, data: dict[str, Any]) -> None:
+        """Load the saved language setting and apply it to the i18n service."""
+        language = self.language_from_data(data)
+
+        self.app.i18n.set_language(language)
+
+        try:
+            self.app.language_var.set(self.app.i18n.language)
+        except Exception:
+            pass
+
+    def language_from_data(self, data: dict[str, Any]) -> str:
+        """Return a normalized language code from saved UI settings data."""
+        return self.app.i18n.normalize_language(data.get("language"))
+    
+    def current_language(self) -> str:
+        """Return the currently selected normalized UI language code."""
+        try:
+            return self.app.i18n.normalize_language(self.app.language_var.get())
+        except Exception:
+            return self.app.i18n.language
 
     def read_ui_settings_file(self) -> dict[str, Any]:
         """Read ui_settings.json and return a dictionary, or an empty dict on failure."""
@@ -365,6 +389,7 @@ class SettingsController:
         helpers = app.ui_helpers_controller
 
         return {
+            "language": self.current_language(),
             "target_wpm": helpers.safe_int_var(
                 app.target_wpm_var,
                 default=config.DEFAULT_TARGET_WPM,

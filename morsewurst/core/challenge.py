@@ -15,21 +15,22 @@ from morsewurst.models import ChallengeSettings
 
 WXMOR_PROFILE_ALIASES = {
     "auto": "auto",
+    "automatic": "auto",
     "automaattinen": "auto",
 
-    "minimi": "minimum",
     "minimum": "minimum",
     "minimal": "minimum",
+    "minimi": "minimum",
 
-    "perus": "basic",
     "basic": "basic",
+    "perus": "basic",
 
-    "kompakti": "compact",
     "compact": "compact",
+    "kompakti": "compact",
 
-    "laaja": "extended",
     "extended": "extended",
     "wide": "extended",
+    "laaja": "extended",
 }
 
 

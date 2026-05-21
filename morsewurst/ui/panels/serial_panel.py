@@ -11,7 +11,7 @@ from tkinter import ttk
 def build_serial_panel(app: tk.Misc, parent: ttk.Frame) -> None:
     """Build serial telemetry connection controls."""
 
-    serial_frame = ttk.LabelFrame(parent, text="Serial-telemetria")
+    serial_frame = ttk.LabelFrame(parent, text=app.i18n.t("serial_panel.title"))
     serial_frame.pack(fill=tk.X, pady=(10, 0))
 
     inner = ttk.Frame(serial_frame)
@@ -37,7 +37,7 @@ def build_serial_panel(app: tk.Misc, parent: ttk.Frame) -> None:
 
     ttk.Button(
         inner,
-        text="Päivitä",
+        text=app.i18n.t("serial_panel.refresh"),
         command=app.serial_controller.refresh_ports,
     ).grid(
         row=0,
@@ -56,14 +56,14 @@ def build_serial_panel(app: tk.Misc, parent: ttk.Frame) -> None:
 
     app.connect_serial_button = ttk.Button(
         button_row,
-        text="Yhdistä",
+        text=app.i18n.t("serial_panel.connect"),
         command=app.serial_controller.connect_serial,
     )
     app.connect_serial_button.pack(side=tk.LEFT)
 
     app.disconnect_serial_button = ttk.Button(
         button_row,
-        text="Katkaise",
+        text=app.i18n.t("serial_panel.disconnect"),
         command=app.serial_controller.disconnect_serial,
     )
     app.disconnect_serial_button.pack(side=tk.LEFT, padx=(6, 0))

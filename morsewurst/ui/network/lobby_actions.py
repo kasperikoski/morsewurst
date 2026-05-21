@@ -39,11 +39,11 @@ class LobbyActionsMixin:
         password = str(self.private_password_var.get() or "").replace("\r", "").replace("\n", "")[:256]
 
         if not room_key:
-            self._show_notice("Enter a private room name.", "warning")
+            self._show_notice(self.tr("network.private_room.enter_name"), "warning")
             return
 
         if not password:
-            self._show_notice("Enter a private room password.", "warning")
+            self._show_notice(self.tr("network.private_room.enter_password"), "warning")
             return
 
         self.private_room_var.set(display_name)
@@ -80,8 +80,8 @@ class LobbyActionsMixin:
         self.pending_room_access = access
         self.pending_room_description = description
 
-        self.status_var.set("CONNECTING")
-        self.room_status_var.set(f"Connecting to {title}...")
+        self.status_var.set(self.tr("network.status.connecting"))
+        self.room_status_var.set(self.tr("network.room.connecting", room=title))
 
         try:
             self.app.network_manager.connect_to_room(settings)
@@ -89,7 +89,7 @@ class LobbyActionsMixin:
             self._handle_connection_error(str(exc))
 
     def disconnect(self) -> None:
-        room_title = self.connected_room_title or self.connected_room_id or "room"
+        room_title = self.connected_room_title or self.connected_room_id or self.tr("network.remembered_rooms.default_title")
 
         try:
             self.app.network_manager.stop()
@@ -109,9 +109,9 @@ class LobbyActionsMixin:
         self.pending_room_access = ""
         self.pending_room_description = ""
 
-        self.status_var.set("STANDBY")
-        self.room_status_var.set(f"Left {room_title}.")
-        self._set_network_quality("standby", "Network idle.", force=True)
+        self.status_var.set(self.tr("network.status.standby"))
+        self.room_status_var.set(self.tr("network.room.left", room=room_title))
+        self._set_network_quality("standby", self.tr("network.quality.detail.idle"), force=True)
         self.show_lobby_view()
 
     def _network_settings(self, *, room_name: str, password: str) -> NetworkSettings:
@@ -138,9 +138,9 @@ class LobbyActionsMixin:
         applied = self._apply_live_settings()
 
         if applied:
-            self._show_notice("Settings saved and applied.", "success")
+            self._show_notice(self.tr("network.settings.saved_and_applied"), "success")
         else:
-            self._show_notice("Settings saved.", "success")
+            self._show_notice(self.tr("network.settings.saved"), "success")
 
     def _save_current_settings(self, *, last_room: str) -> None:
         remembered_private_rooms = list(getattr(self.settings, "remembered_private_rooms", []) or [])
@@ -191,10 +191,10 @@ class LobbyActionsMixin:
             )
             manager.update_playback_settings(playback)
             manager.set_transmit_enabled(bool(self.transmit_enabled_var.get()))
-            self._append_log("success", "Playback and transmit settings updated.")
+            self._append_log("success", self.tr("network.settings.live_updated"))
             return True
         except Exception as exc:
-            self._append_log("warning", f"Live settings update failed: {exc}")
+            self._append_log("warning", self.tr("network.settings.live_update_failed", error=exc))
             return False
         
     def _set_network_quality(
@@ -221,23 +221,23 @@ class LobbyActionsMixin:
             return
 
         labels = {
-            "standby": "QUALITY STANDBY",
-            "checking": "QUALITY CHECKING",
-            "good": "QUALITY GOOD",
-            "unstable": "QUALITY UNSTABLE",
-            "buffer_too_low": "QUALITY BUFFER TOO LOW",
-            "server_not_responding": "QUALITY SERVER NOT RESPONDING",
-            "reconnecting": "QUALITY RECONNECTING",
+            "standby": self.tr("network.quality.label.standby"),
+            "checking": self.tr("network.quality.label.checking"),
+            "good": self.tr("network.quality.label.good"),
+            "unstable": self.tr("network.quality.label.unstable"),
+            "buffer_too_low": self.tr("network.quality.label.buffer_too_low"),
+            "server_not_responding": self.tr("network.quality.label.server_not_responding"),
+            "reconnecting": self.tr("network.quality.label.reconnecting"),
         }
 
         default_details = {
-            "standby": "Network idle.",
-            "checking": "Waiting for server response.",
-            "good": "Connection looks stable.",
-            "unstable": "Connection is usable, but latency or timing looks unstable.",
-            "buffer_too_low": "Received tones are arriving late. Increase the jitter buffer if this continues.",
-            "server_not_responding": "The relay server is not responding to recent checks.",
-            "reconnecting": "Connection interrupted. Morsewurst is trying to reconnect.",
+            "standby": self.tr("network.quality.detail.idle"),
+            "checking": self.tr("network.quality.detail.waiting_server_response"),
+            "good": self.tr("network.quality.detail.good"),
+            "unstable": self.tr("network.quality.detail.unstable"),
+            "buffer_too_low": self.tr("network.quality.detail.buffer_too_low"),
+            "server_not_responding": self.tr("network.quality.detail.server_not_responding"),
+            "reconnecting": self.tr("network.quality.detail.reconnecting"),
         }
 
         warning_color = getattr(MatrixTheme, "warning", MatrixTheme.text_dim)
@@ -284,15 +284,15 @@ class LobbyActionsMixin:
 
     def _network_quality_from_ping(self, ping_ms: int | None) -> tuple[str, str]:
         if ping_ms is None:
-            return "checking", "Waiting for server ping."
+            return "checking", self.tr("network.quality.detail.waiting_server_ping")
 
         if ping_ms <= 250:
-            return "good", f"Connection looks stable. Ping {ping_ms} ms."
+            return "good", self.tr("network.quality.detail.good_with_ping", ping_ms=ping_ms)
 
         if ping_ms <= 700:
-            return "unstable", f"Connection is usable, but latency is elevated. Ping {ping_ms} ms."
+            return "unstable", self.tr("network.quality.detail.latency_elevated", ping_ms=ping_ms)
 
-        return "unstable", f"High latency detected. Ping {ping_ms} ms."
+        return "unstable", self.tr("network.quality.detail.high_latency", ping_ms=ping_ms)
 
     def _update_network_quality_from_server_pong(self) -> None:
         ping_ms = self._latest_server_ping_ms()
@@ -312,7 +312,11 @@ class LobbyActionsMixin:
         manager = getattr(self.app, "network_manager", None)
 
         if manager is None:
-            self._set_network_quality("standby", "Network manager is not available.", force=True)
+            self._set_network_quality(
+                "standby",
+                self.tr("network.quality.detail.manager_missing"),
+                force=True,
+            )
             return
 
         try:
@@ -321,7 +325,11 @@ class LobbyActionsMixin:
             is_running = False
 
         if not is_running:
-            self._set_network_quality("standby", "Network idle.", force=True)
+            self._set_network_quality(
+                "standby",
+                self.tr("network.quality.detail.idle"),
+                force=True,
+            )
             return
 
         try:
@@ -333,13 +341,13 @@ class LobbyActionsMixin:
             if self.connected_room_key or self.connected_room_id:
                 self._set_network_quality(
                     "reconnecting",
-                    "Control channel is not ready. Reconnecting...",
+                    self.tr("network.quality.detail.control_not_ready"),
                     force=True,
                 )
             else:
                 self._set_network_quality(
                     "checking",
-                    "Waiting for lobby control channel.",
+                    self.tr("network.quality.detail.waiting_lobby_control"),
                     force=True,
                 )
             return
@@ -347,14 +355,20 @@ class LobbyActionsMixin:
         if self.server_info_error_text:
             self._set_network_quality(
                 "server_not_responding",
-                f"Server query failed: {self.server_info_error_text}",
+                self.tr(
+                    "network.quality.detail.server_query_failed",
+                    message=self.server_info_error_text,
+                ),
                 force=True,
             )
             return
 
         pong = self._latest_server_pong()
         if not pong:
-            self._set_network_quality("checking", "Waiting for first server ping.")
+            self._set_network_quality(
+                "checking",
+                self.tr("network.quality.detail.waiting_first_server_ping"),
+            )
             return
 
         try:
@@ -368,7 +382,10 @@ class LobbyActionsMixin:
             if age_seconds > 120.0:
                 self._set_network_quality(
                     "server_not_responding",
-                    f"No recent server ping. Last response {age_seconds:.0f} s ago.",
+                    self.tr(
+                        "network.quality.detail.no_recent_ping",
+                        seconds=f"{age_seconds:.0f}",
+                    ),
                     force=True,
                 )
                 return
@@ -376,7 +393,10 @@ class LobbyActionsMixin:
             if age_seconds > 75.0:
                 self._set_network_quality(
                     "unstable",
-                    f"Server ping is getting old. Last response {age_seconds:.0f} s ago.",
+                    self.tr(
+                        "network.quality.detail.ping_getting_old",
+                        seconds=f"{age_seconds:.0f}",
+                    ),
                 )
                 return
 
@@ -410,10 +430,19 @@ class LobbyActionsMixin:
             manager.reset_receive_playback()
             self._append_log(
                 "warning",
-                f"Playback reset after {gap_seconds:.1f} s application pause.",
+                self.tr(
+                    "network.playback.reset_after_pause",
+                    seconds=f"{gap_seconds:.1f}",
+                ),
             )
         except Exception as exc:
-            self._append_log("warning", f"Playback reset failed: {exc}")
+            self._append_log(
+                "warning",
+                self.tr(
+                    "network.playback.reset_failed",
+                    error=str(exc),
+                ),
+            )
 
     def _poll_status(self) -> None:
         try:
@@ -478,16 +507,20 @@ class LobbyActionsMixin:
                 hold_seconds=20.0,
             )
 
-        if lowered.startswith("yhteys aulaan muodostettu"):
+        if lowered.startswith("yhteys aulaan muodostettu") or lowered.startswith("lobby connected"):
+            translated_text = self.tr("network.status.lobby_connected")
+
             if self.current_view == "lobby":
-                self.status_var.set("STANDBY")
+                self.status_var.set(self.tr("network.status.standby"))
+
             self._set_network_quality(
                 "checking",
-                "Lobby connected. Waiting for server ping.",
+                self.tr("network.quality.detail.lobby_connected"),
                 force=True,
             )
-            self.room_status_var.set(text)
-            self._append_log("info", text)
+
+            self.room_status_var.set(translated_text)
+            self._append_log("info", translated_text)
             return
 
         if self._is_transient_connection_status(level_key, lowered):
@@ -523,9 +556,9 @@ class LobbyActionsMixin:
 
     def _handle_transient_connection_status(self, text: str) -> None:
         if self.connected_room_key or self.connected_room_id:
-            self.status_var.set("RECONNECTING")
+            self.status_var.set(self.tr("network.status.reconnecting"))
         elif self.current_view == "lobby":
-            self.status_var.set("RETRYING")
+            self.status_var.set(self.tr("network.status.retrying"))
 
         self._set_network_quality("reconnecting", text, force=True)
 
@@ -567,18 +600,18 @@ class LobbyActionsMixin:
         self.pending_room_access = ""
         self.pending_room_description = ""
 
-        self.status_var.set("ONLINE")
-        self.room_status_var.set(f"Connected to {title}.")
+        self.status_var.set(self.tr("network.status.online"))
+        self.room_status_var.set(self.tr("network.room.connected", room=title))
         self._set_network_quality(
             "checking",
-            "Connected. Waiting for server ping.",
+            self.tr("network.quality.detail.connected_waiting_ping"),
             force=True,
         )
 
         self._remember_successful_private_room()
 
         self.show_room_view()
-        self._append_log("success", f"Connected to room {title}.")
+        self._append_log("success", self.tr("network.room.connected", room=title))
 
     def _handle_connection_error(self, text: str) -> None:
         message = self._friendly_error_message(text)
@@ -601,7 +634,7 @@ class LobbyActionsMixin:
         self.pending_room_access = ""
         self.pending_room_description = ""
 
-        self.status_var.set("ERROR")
+        self.status_var.set(self.tr("network.status.error"))
         self.room_status_var.set(message)
         self._set_network_quality(
             "server_not_responding",
@@ -616,25 +649,35 @@ class LobbyActionsMixin:
         self._append_log("error", message)
 
     def _friendly_error_message(self, text: str) -> str:
-        room_name = self.pending_room_title or self.private_room_var.get() or "the requested room"
+        room_name = (
+            self.pending_room_title
+            or self.private_room_var.get()
+            or self.tr("network.remembered_rooms.default_title")
+        )
         lowered = text.lower()
 
         if "salasana ei täsmää" in lowered or ("password" in lowered and "match" in lowered):
-            return f"Room '{room_name}' already exists, but the password you entered does not match. You can forget the remembered room and enter a new password."
-
-        if "winerror 1225" in lowered or "hylkäsi verkkoyhteyden" in lowered or "connection refused" in lowered:
-            return "Could not connect to the Morsewurst relay server. Make sure the relay is running and the port is open."
-
-        if "reserved" in lowered or "varattu" in lowered:
-            return f"Room name '{room_name}' is reserved and cannot be created as a private room."
-        
-        if "getaddrinfo failed" in lowered or "errno 11002" in lowered:
-            return (
-                "Server address could not be resolved. "
-                "Check the network connection or DNS, then try again."
+            return self.tr(
+                "network.connection.error.password_mismatch",
+                room=room_name,
             )
 
-        return text
+        if "winerror 1225" in lowered or "hylkäsi verkkoyhteyden" in lowered or "connection refused" in lowered:
+            return self.tr("network.connection.error.relay_unreachable")
+
+        if "reserved" in lowered or "varattu" in lowered:
+            return self.tr(
+                "network.connection.error.reserved_room",
+                room=room_name,
+            )
+
+        if "getaddrinfo failed" in lowered or "errno 11002" in lowered:
+            return self.tr("network.connection.error.dns_failed")
+
+        return self.tr(
+            "network.connection.error.generic",
+            message=text,
+        )
 
     def _should_hide_status(self, level: str, text: str) -> bool:
         lowered = text.lower()
@@ -660,7 +703,14 @@ class LobbyActionsMixin:
 
         timestamp = datetime.now().strftime("%d.%m.%Y %H:%M:%S")
 
-        level_label = level_key.upper().replace(" ", "_")
+        level_labels = {
+            "info": self.tr("network.log.level.info"),
+            "success": self.tr("network.log.level.success"),
+            "warning": self.tr("network.log.level.warning"),
+            "error": self.tr("network.log.level.error"),
+        }
+
+        level_label = level_labels.get(tag, level_key.upper().replace(" ", "_"))
         level_label = level_label[:11]
 
         line = f"{timestamp}  {level_label:<11}   {text}\n"
