@@ -527,8 +527,19 @@ class HistoryController:
         progress_percent = rating.level_progress * 100.0
         confidence_percent = rating.rating_confidence * 100.0
 
-        iambic_wpm = getattr(rating, "iambic_wpm", None)
-        straight_wpm = getattr(rating, "straight_wpm", None)
+        # Uncapped PARIS WPM values are shown to the user when available.
+        # The capped straight_wpm/iambic_wpm values remain available for the
+        # internal skill model.
+        iambic_wpm = getattr(
+            rating,
+            "iambic_paris_wpm",
+            getattr(rating, "iambic_wpm", None),
+        )
+        straight_wpm = getattr(
+            rating,
+            "straight_paris_wpm",
+            getattr(rating, "straight_wpm", None),
+        )
 
         iambic_rounds = int(getattr(rating, "iambic_used_rounds", 0) or 0)
         straight_rounds = int(getattr(rating, "straight_used_rounds", 0) or 0)
@@ -611,6 +622,13 @@ class HistoryController:
     def update_target_wpm_suggestion_indicator(self) -> None:
         app = self.app
         helpers = app.ui_helpers_controller
+
+        if (
+            bool(getattr(app, "practice_running", False))
+            or bool(getattr(app, "start_countdown_running", False))
+            or bool(getattr(getattr(app, "round", None), "accepting_input", False))
+        ):
+            return
 
         if not hasattr(app, "target_wpm_suggestion_delta_var") or not hasattr(app, "target_wpm_delta_label"):
             return

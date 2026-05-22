@@ -494,40 +494,6 @@ class Database:
         cur = self.conn.cursor()
         cur.execute(f"PRAGMA table_info({table})")
         return {row[1] for row in cur.fetchall()}
-    
-
-    def _clamp_wpm(self, value: float) -> float:
-        min_wpm = float(getattr(config, "EFFECTIVE_WPM_MIN_WPM", 5))
-        max_wpm = float(getattr(config, "EFFECTIVE_WPM_MAX_WPM", 80))
-        return max(min_wpm, min(max_wpm, float(value)))
-
-
-    def _target_wpm_from_settings_json(self, settings_json: str) -> float:
-        try:
-            settings = json.loads(settings_json)
-        except Exception:
-            settings = {}
-
-        if not isinstance(settings, dict):
-            settings = {}
-
-        try:
-            target_wpm = float(settings.get("target_wpm"))
-        except Exception:
-            target_wpm = float(getattr(config, "DEFAULT_TARGET_WPM", 12))
-
-        if target_wpm <= 0:
-            target_wpm = float(getattr(config, "DEFAULT_TARGET_WPM", 12))
-
-        return self._clamp_wpm(target_wpm)
-
-
-    def _demonstrated_wpm(self, actual_wpm: float, settings_json: str) -> float:
-        target_wpm = self._target_wpm_from_settings_json(settings_json)
-
-        # Skill evidence is capped by the chosen target WPM.
-        # A very low target WPM cannot prove a higher skill level.
-        return min(float(actual_wpm), target_wpm)
 
     def save_session(
         self,
@@ -1308,91 +1274,182 @@ class Database:
         recent_sessions: int = 1000,
         min_accuracy: float = 90.0,
         min_cleanliness: float = 85.0,
+        min_target_chars: int | None = None,
     ) -> Dict[str, Any]:
-        """Return a robust PARIS WPM estimate from recent successful rounds.
+        """Return a robust suggested practice WPM from recent successful rounds.
 
-        WPM is calculated from the target text's Morse timing units and elapsed time.
-        Accuracy and cleanliness are quality filters only.
+        The suggestion is based on the best uncapped PARIS median from the two
+        dominant key sources:
+
+            max(straight_paris_wpm, iambic_paris_wpm)
+
+        Up to recent_sessions qualified rounds are used per key source. This
+        means the function may use up to recent_sessions straight rounds and up
+        to recent_sessions iambic rounds.
+
+        WPM is calculated from the target text's Morse timing units and elapsed
+        time. Accuracy and cleanliness are quality filters only. Target WPM does
+        not cap this suggestion.
         """
+
+        per_source_limit = max(1, int(recent_sessions))
+
+        if min_target_chars is None:
+            min_target_chars = int(
+                getattr(config, "SKILL_RATING_MIN_TARGET_CHARS", 12)
+            )
+
+        min_target_chars = max(1, int(min_target_chars))
 
         cur = self.conn.cursor()
 
-        cur.execute(
+        rows = cur.execute(
             """
-            WITH recent AS (
-                SELECT
-                    id,
-                    target,
-                    accuracy,
-                    cleanliness,
-                    elapsed_us,
-                    settings_json
-                FROM sessions
-                ORDER BY id DESC
-                LIMIT ?
-            )
             SELECT
-                id,
-                target,
-                accuracy,
-                cleanliness,
-                elapsed_us,
-                settings_json
-            FROM recent
-            WHERE elapsed_us IS NOT NULL
-            AND elapsed_us > 0
-            AND accuracy >= ?
-            AND cleanliness >= ?
-            ORDER BY id DESC
+                s.id,
+                s.target,
+                s.accuracy,
+                s.cleanliness,
+                s.elapsed_us,
+                s.length_target,
+                s.settings_json,
+                LOWER(cr.source) AS key_source,
+                COUNT(*) AS source_count
+            FROM sessions s
+            JOIN char_results cr ON cr.session_id = s.id
+            WHERE COALESCE(
+                NULLIF(s.length_target, 0),
+                LENGTH(REPLACE(s.target, ' ', ''))
+            ) >= ?
+              AND s.elapsed_us IS NOT NULL
+              AND s.elapsed_us > 0
+              AND s.accuracy >= ?
+              AND s.cleanliness >= ?
+              AND cr.target_char IS NOT NULL
+              AND cr.target_char != ''
+              AND cr.target_char != ' '
+              AND cr.result IN ('correct', 'substitution', 'deletion')
+              AND LOWER(cr.source) IN ('straight', 'iambic')
+            GROUP BY
+                s.id,
+                LOWER(cr.source)
+            ORDER BY
+                s.id DESC,
+                source_count DESC,
+                CASE LOWER(cr.source)
+                    WHEN 'straight' THEN 0
+                    ELSE 1
+                END ASC
             """,
             (
-                int(recent_sessions),
+                int(min_target_chars),
                 float(min_accuracy),
                 float(min_cleanliness),
             ),
-        )
+        ).fetchall()
 
-        values: List[float] = []
-        used_rows = 0
+        dominant_by_session: dict[int, dict[str, Any]] = {}
 
-        for row in cur.fetchall():
-            target = str(row["target"] or "")
-            elapsed_us = row["elapsed_us"]
+        for row in rows:
+            session_id = int(row["id"])
+            source_count = int(row["source_count"] or 0)
 
-            real_wpm = paris_wpm_for_text(target, elapsed_us)
+            current = dominant_by_session.get(session_id)
 
-            if real_wpm is None:
+            if current is None or source_count > int(current["source_count"] or 0):
+                dominant_by_session[session_id] = dict(row)
+
+        values_by_source: dict[str, list[float]] = {
+            "straight": [],
+            "iambic": [],
+        }
+
+        for row in dominant_by_session.values():
+            key_source = str(row.get("key_source") or "").lower()
+
+            if key_source not in values_by_source:
                 continue
 
-            if 1 <= real_wpm <= 150:
-                values.append(float(real_wpm))
-                used_rows += 1
+            if len(values_by_source[key_source]) >= per_source_limit:
+                continue
 
-        if not values:
+            target = str(row.get("target") or "")
+            elapsed_us = row.get("elapsed_us")
+
+            actual_wpm = paris_wpm_for_text(target, elapsed_us)
+
+            if actual_wpm is None:
+                continue
+
+            if not (1 <= actual_wpm <= 150):
+                continue
+
+            values_by_source[key_source].append(float(actual_wpm))
+
+            if (
+                len(values_by_source["straight"]) >= per_source_limit
+                and len(values_by_source["iambic"]) >= per_source_limit
+            ):
+                break
+
+        straight_values = values_by_source["straight"]
+        iambic_values = values_by_source["iambic"]
+
+        straight_wpm = None if not straight_values else float(median(straight_values))
+        iambic_wpm = None if not iambic_values else float(median(iambic_values))
+
+        candidates: list[tuple[str, float, int]] = []
+
+        if straight_wpm is not None:
+            candidates.append(("straight", straight_wpm, len(straight_values)))
+
+        if iambic_wpm is not None:
+            candidates.append(("iambic", iambic_wpm, len(iambic_values)))
+
+        if not candidates:
             return {
                 "ok": False,
                 "reason": (
-                    "Kannasta ei löytynyt yhtään sopivaa kierrosta. "
-                    "Tarvitaan kierroksia, joissa tarkkuus ja puhtaus ylittävät raja-arvot."
+                    "Kannasta ei löytynyt yhtään sopivaa straight- tai iambic-kierrosta. "
+                    "Tarvitaan riittävän pitkiä kierroksia, joissa tarkkuus ja puhtaus "
+                    "ylittävät raja-arvot."
                 ),
                 "used_rounds": 0,
+                "total_used_rounds": 0,
                 "wpm": None,
+                "straight_wpm": None,
+                "iambic_wpm": None,
+                "best_source": None,
                 "min_accuracy": float(min_accuracy),
                 "min_cleanliness": float(min_cleanliness),
+                "min_target_chars": int(min_target_chars),
+                "per_source_limit": int(per_source_limit),
             }
 
-        values.sort()
-        robust_wpm = float(median(values))
+        best_source, best_wpm, best_used = max(
+            candidates,
+            key=lambda item: item[1],
+        )
+
+        all_values = straight_values + iambic_values
 
         return {
             "ok": True,
             "reason": "",
-            "used_rounds": used_rows,
-            "wpm": robust_wpm,
-            "min_wpm": min(values),
-            "max_wpm": max(values),
+            "used_rounds": best_used,
+            "total_used_rounds": len(all_values),
+            "wpm": best_wpm,
+            "straight_wpm": straight_wpm,
+            "iambic_wpm": iambic_wpm,
+            "best_source": best_source,
+            "straight_used_rounds": len(straight_values),
+            "iambic_used_rounds": len(iambic_values),
+            "min_wpm": min(all_values),
+            "max_wpm": max(all_values),
             "min_accuracy": float(min_accuracy),
             "min_cleanliness": float(min_cleanliness),
+            "min_target_chars": int(min_target_chars),
+            "per_source_limit": int(per_source_limit),
         }
 
     def skill_recent_sessions(
@@ -1659,128 +1716,6 @@ class Database:
         result["iambic"].reverse()
 
         return result
-    
-
-    def skill_key_source_wpm(
-        self,
-        recent_sessions: int = 1000,
-        min_target_chars: int = 12,
-        min_accuracy: float = 85.0,
-        min_cleanliness: float = 80.0,
-    ) -> Dict[str, Any]:
-        """Return median PARIS WPM separated by dominant key source.
-
-        The combined skill WPM is calculated from complete rounds. This method adds
-        a practical breakdown for iambic and straight key use.
-
-        A round is assigned to the key source that produced the most scored target
-        characters in that round. Mixed rounds are therefore possible, but they are
-        classified by the dominant source.
-        """
-
-        cur = self.conn.cursor()
-
-        cur.execute(
-            """
-            WITH recent AS (
-                SELECT
-                    id,
-                    target,
-                    accuracy,
-                    cleanliness,
-                    elapsed_us,
-                    length_target,
-                    settings_json
-                FROM sessions
-                WHERE COALESCE(
-                    NULLIF(length_target, 0),
-                    LENGTH(REPLACE(target, ' ', ''))
-                ) >= ?
-                ORDER BY id DESC
-                LIMIT ?
-            )
-            SELECT
-                recent.id,
-                recent.target,
-                recent.length_target,
-                recent.elapsed_us,
-                recent.settings_json,
-                LOWER(char_results.source) AS key_source,
-                COUNT(*) AS source_count
-            FROM recent
-            JOIN char_results ON char_results.session_id = recent.id
-            WHERE recent.elapsed_us IS NOT NULL
-            AND recent.elapsed_us > 0
-            AND recent.accuracy >= ?
-            AND recent.cleanliness >= ?
-            AND char_results.target_char IS NOT NULL
-            AND char_results.target_char != ''
-            AND char_results.target_char != ' '
-            AND char_results.result IN ('correct', 'substitution', 'deletion')
-            AND LOWER(char_results.source) IN ('iambic', 'straight')
-            GROUP BY
-                recent.id,
-                LOWER(char_results.source)
-            ORDER BY
-                recent.id DESC,
-                source_count DESC
-            """,
-            (
-                int(min_target_chars),
-                int(recent_sessions),
-                float(min_accuracy),
-                float(min_cleanliness),
-            ),
-        )
-
-        dominant_by_session: dict[int, dict[str, Any]] = {}
-
-        for row in cur.fetchall():
-            session_id = int(row["id"])
-            source_count = int(row["source_count"] or 0)
-
-            current = dominant_by_session.get(session_id)
-
-            if current is None or source_count > int(current["source_count"] or 0):
-                dominant_by_session[session_id] = dict(row)
-
-        values_by_source: dict[str, list[float]] = {
-            "iambic": [],
-            "straight": [],
-        }
-
-        for row in dominant_by_session.values():
-            key_source = str(row.get("key_source") or "").lower()
-
-            if key_source not in values_by_source:
-                continue
-
-            target = str(row.get("target") or "")
-            elapsed_us = row.get("elapsed_us")
-
-            actual_wpm = paris_wpm_for_text(target, elapsed_us)
-
-            if actual_wpm is None:
-                continue
-
-            if not (1 <= actual_wpm <= 150):
-                continue
-
-            settings_json = str(row.get("settings_json") or "")
-            demonstrated_wpm = self._demonstrated_wpm(actual_wpm, settings_json)
-
-            values_by_source[key_source].append(float(demonstrated_wpm))
-
-        iambic_values = values_by_source["iambic"]
-        straight_values = values_by_source["straight"]
-
-        return {
-            "iambic_wpm": float(median(iambic_values)) if iambic_values else None,
-            "straight_wpm": float(median(straight_values)) if straight_values else None,
-            "iambic_used_rounds": len(iambic_values),
-            "straight_used_rounds": len(straight_values),
-        }
-
 
     def skill_character_results(
         self,
@@ -3094,10 +3029,12 @@ class Database:
         start_at: str,
         end_at: str,
     ) -> List[Dict[str, Any]]:
-        """Return per-session WPM classified by dominant key source.
+        """Return uncapped per-session PARIS WPM classified by dominant key source.
 
         The source is decided from char_results.source. If a round contains both
         straight and iambic characters, the source with more scored characters wins.
+
+        This is display/statistics data, not capped skill evidence.
         """
 
         cur = self.conn.cursor()
@@ -3110,27 +3047,30 @@ class Database:
                 s.target,
                 s.length_target,
                 s.elapsed_us,
-                s.settings_json,
                 LOWER(cr.source) AS key_source,
                 COUNT(*) AS source_count
             FROM sessions s
             JOIN char_results cr ON cr.session_id = s.id
             WHERE s.finished_at >= ?
-              AND s.finished_at <= ?
-              AND s.elapsed_us IS NOT NULL
-              AND s.elapsed_us > 0
-              AND cr.target_char IS NOT NULL
-              AND cr.target_char != ''
-              AND cr.target_char != ' '
-              AND cr.result IN ('correct', 'substitution', 'deletion')
-              AND LOWER(cr.source) IN ('straight', 'iambic')
+            AND s.finished_at <= ?
+            AND s.elapsed_us IS NOT NULL
+            AND s.elapsed_us > 0
+            AND cr.target_char IS NOT NULL
+            AND cr.target_char != ''
+            AND cr.target_char != ' '
+            AND cr.result IN ('correct', 'substitution', 'deletion')
+            AND LOWER(cr.source) IN ('straight', 'iambic')
             GROUP BY
                 s.id,
                 LOWER(cr.source)
             ORDER BY
                 s.finished_at ASC,
                 s.id ASC,
-                source_count DESC
+                source_count DESC,
+                CASE LOWER(cr.source)
+                    WHEN 'straight' THEN 0
+                    ELSE 1
+                END ASC
             """,
             (start_at, end_at),
         ).fetchall()
@@ -3164,15 +3104,12 @@ class Database:
             if not (1 <= actual_wpm <= 150):
                 continue
 
-            settings_json = str(row.get("settings_json") or "")
-            demonstrated_wpm = self._demonstrated_wpm(actual_wpm, settings_json)
-
             result.append(
                 {
                     "session_id": int(row["session_id"]),
                     "finished_at": row["finished_at"],
                     "key_source": row["key_source"],
-                    "wpm": float(demonstrated_wpm),
+                    "wpm": float(actual_wpm),
                     "source_count": int(row["source_count"] or 0),
                 }
             )

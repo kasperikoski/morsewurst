@@ -9,7 +9,7 @@ import sys
 from pathlib import Path
 
 APP_NAME = "Morsewurst"
-APP_VERSION = "0.99.3"
+APP_VERSION = "0.99.4"
 
 # ============================================================
 # Update check
@@ -147,6 +147,9 @@ UI_TELEMETRY_WRAP_LENGTH = 740
 UI_RAW_TELEMETRY_HEIGHT = 72
 UI_SUMMARY_ROW_HEIGHT = 330
 UI_GENERAL_INFO_WIDTH = 360
+
+UI_MAX_SERIAL_EVENTS_PER_POLL = 8
+UI_SERIAL_POLL_BACKLOG_DELAY_MS = 1
 
 HISTORY_VISIBLE_ROWS = 10
 PROBLEM_VISIBLE_ROWS = 8

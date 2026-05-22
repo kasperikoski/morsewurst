@@ -39,10 +39,20 @@ class SkillRating:
     used_rounds: int
 
     effective_wpm: Optional[float]
+
+    # Capped skill-evidence WPM values. These are used internally by the
+    # skill model and may be capped by the target WPM.
     iambic_wpm: Optional[float]
     straight_wpm: Optional[float]
+
+    # Uncapped display-only PARIS WPM values. These show the user's actual
+    # demonstrated PARIS speed per key source and are not capped by target WPM.
+    iambic_paris_wpm: Optional[float]
+    straight_paris_wpm: Optional[float]
+
     iambic_used_rounds: int
     straight_used_rounds: int
+
     avg_accuracy: Optional[float]
     avg_cleanliness: Optional[float]
 
@@ -158,7 +168,14 @@ def _target_wpm_from_settings_json(settings_json: str) -> Optional[float]:
     return _clamp(target_wpm, min_wpm, max_wpm)
 
 
-def _round_real_wpm(row: Any) -> Optional[float]:
+def _round_actual_paris_wpm(row: Any) -> Optional[float]:
+    """Return uncapped PARIS WPM for one round.
+
+    This is the actual demonstrated speed based on target Morse units and
+    elapsed time. It is suitable for display metrics, not for capped skill
+    evidence.
+    """
+
     elapsed_us = _safe_float(_row_get(row, "elapsed_us"))
 
     if elapsed_us is None or elapsed_us <= 0:
@@ -172,6 +189,21 @@ def _round_real_wpm(row: Any) -> Optional[float]:
         return None
 
     if actual_wpm < 1 or actual_wpm > 150:
+        return None
+
+    return float(actual_wpm)
+
+
+def _round_real_wpm(row: Any) -> Optional[float]:
+    """Return capped skill-evidence WPM for one round.
+
+    Skill evidence may be capped by target WPM so that a very low configured
+    target speed cannot prove a higher skill level by itself.
+    """
+
+    actual_wpm = _round_actual_paris_wpm(row)
+
+    if actual_wpm is None:
         return None
 
     settings_json = str(_row_get(row, "settings_json", "") or "")
@@ -209,8 +241,47 @@ def _qualified_wpm_values(rows: Sequence[Any]) -> list[float]:
     return values
 
 
+def _qualified_paris_wpm_values(rows: Sequence[Any]) -> list[float]:
+    """Return uncapped PARIS WPM values from qualified rounds.
+
+    Uses the same accuracy and cleanliness filters as effective WPM, but does
+    not cap the result by target WPM.
+    """
+
+    values: list[float] = []
+
+    for row in rows:
+        accuracy = _safe_float(_row_get(row, "accuracy"))
+        cleanliness = _safe_float(_row_get(row, "cleanliness"))
+
+        if accuracy is None or cleanliness is None:
+            continue
+
+        if accuracy < QUALIFIED_MIN_ACCURACY:
+            continue
+
+        if cleanliness < QUALIFIED_MIN_CLEANLINESS:
+            continue
+
+        actual_wpm = _round_actual_paris_wpm(row)
+
+        if actual_wpm is not None:
+            values.append(actual_wpm)
+
+    return values
+
+
 def _effective_wpm(rows: Sequence[Any]) -> tuple[Optional[float], int]:
     values = _qualified_wpm_values(rows)
+
+    if not values:
+        return None, 0
+
+    return float(median(values)), len(values)
+
+
+def _display_paris_wpm(rows: Sequence[Any]) -> tuple[Optional[float], int]:
+    values = _qualified_paris_wpm_values(rows)
 
     if not values:
         return None, 0
@@ -291,6 +362,16 @@ def _source_rows_by_key(
     return rows
 
 
+def _average_pair(
+    left: Optional[float],
+    right: Optional[float],
+) -> Optional[float]:
+    if left is None or right is None:
+        return None
+
+    return (float(left) + float(right)) / 2.0
+
+
 def _key_source_wpm_from_rows(
     source_rows: dict[str, list[Any]],
 ) -> dict[str, Any]:
@@ -305,6 +386,20 @@ def _key_source_wpm_from_rows(
     }
 
 
+def _key_source_paris_wpm_from_rows(
+    source_rows: dict[str, list[Any]],
+) -> dict[str, Any]:
+    straight_wpm, straight_used = _display_paris_wpm(source_rows.get("straight", []))
+    iambic_wpm, iambic_used = _display_paris_wpm(source_rows.get("iambic", []))
+
+    return {
+        "straight_paris_wpm": straight_wpm,
+        "iambic_paris_wpm": iambic_wpm,
+        "straight_paris_used_rounds": straight_used,
+        "iambic_paris_used_rounds": iambic_used,
+    }
+
+
 def _balanced_effective_wpm_from_rows(
     source_rows: dict[str, list[Any]],
 ) -> tuple[Optional[float], int]:
@@ -316,12 +411,10 @@ def _balanced_effective_wpm_from_rows(
     straight_used = int(key_source_wpm.get("straight_used_rounds") or 0)
     iambic_used = int(key_source_wpm.get("iambic_used_rounds") or 0)
 
+    # Confidence is limited by the weaker sample size.
     used_rounds = min(straight_used, iambic_used)
 
-    if straight_wpm is None or iambic_wpm is None:
-        return None, used_rounds
-
-    return float(min(float(straight_wpm), float(iambic_wpm))), used_rounds
+    return _average_pair(straight_wpm, iambic_wpm), used_rounds
 
 
 def _balanced_raw_skill_wpm_from_rows(
@@ -330,10 +423,7 @@ def _balanced_raw_skill_wpm_from_rows(
     straight_raw = _raw_skill_wpm(source_rows.get("straight", []))
     iambic_raw = _raw_skill_wpm(source_rows.get("iambic", []))
 
-    if straight_raw is None or iambic_raw is None:
-        return None
-
-    return float(min(straight_raw, iambic_raw))
+    return _average_pair(straight_raw, iambic_raw)
 
 
 def _quality_factor(rows: Sequence[Any]) -> tuple[Optional[float], Optional[float], float]:
@@ -611,6 +701,8 @@ def empty_skill_rating(reason: str, recent_rounds: int) -> SkillRating:
         effective_wpm=None,
         iambic_wpm=None,
         straight_wpm=None,
+        iambic_paris_wpm=None,
+        straight_paris_wpm=None,
         iambic_used_rounds=0,
         straight_used_rounds=0,
         avg_accuracy=None,
@@ -661,6 +753,8 @@ def calculate_skill_rating(
     source_rows_by_key = _source_rows_by_key(db, recent_rounds)
 
     key_source_wpm = _key_source_wpm_from_rows(source_rows_by_key)
+    key_source_paris_wpm = _key_source_paris_wpm_from_rows(source_rows_by_key)
+
     effective_wpm, used_rounds = _balanced_effective_wpm_from_rows(source_rows_by_key)
     raw_skill_base_wpm = _balanced_raw_skill_wpm_from_rows(source_rows_by_key)
 
@@ -783,6 +877,16 @@ def calculate_skill_rating(
             None
             if key_source_wpm.get("straight_wpm") is None
             else round(float(key_source_wpm["straight_wpm"]), 2)
+        ),
+        iambic_paris_wpm=(
+            None
+            if key_source_paris_wpm.get("iambic_paris_wpm") is None
+            else round(float(key_source_paris_wpm["iambic_paris_wpm"]), 2)
+        ),
+        straight_paris_wpm=(
+            None
+            if key_source_paris_wpm.get("straight_paris_wpm") is None
+            else round(float(key_source_paris_wpm["straight_paris_wpm"]), 2)
         ),
         iambic_used_rounds=int(key_source_wpm.get("iambic_used_rounds") or 0),
         straight_used_rounds=int(key_source_wpm.get("straight_used_rounds") or 0),

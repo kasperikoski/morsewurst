@@ -390,18 +390,35 @@ class InputController:
         app.app_lifecycle_controller.focus_input()
 
     def poll_serial_events(self) -> None:
-        """Poll pending serial events from the event queue and dispatch them."""
+        """Poll pending serial events from the event queue and dispatch them.
+
+        Keep each UI poll short so Tkinter can repaint the raw telemetry canvas
+        between bursts of incoming tone events.
+        """
         app = self.app
 
-        while True:
+        max_events = int(getattr(config, "UI_MAX_SERIAL_EVENTS_PER_POLL", 8))
+        max_events = max(1, max_events)
+
+        processed = 0
+        queue_empty = False
+
+        while processed < max_events:
             try:
                 event = app.event_queue.get_nowait()
             except queue.Empty:
+                queue_empty = True
                 break
 
             self.handle_serial_event(event)
+            processed += 1
 
-        app.after(config.UI_POLL_INTERVAL_MS, self.poll_serial_events)
+        if queue_empty:
+            delay_ms = int(getattr(config, "UI_POLL_INTERVAL_MS", 40))
+        else:
+            delay_ms = int(getattr(config, "UI_SERIAL_POLL_BACKLOG_DELAY_MS", 1))
+
+        app.after(delay_ms, self.poll_serial_events)
 
     def drain_serial_queue(self) -> None:
         """Discard all currently queued serial events."""

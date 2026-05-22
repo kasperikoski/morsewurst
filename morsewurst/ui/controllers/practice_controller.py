@@ -418,7 +418,8 @@ class PracticeController:
             if rating is not None:
                 app.history_controller.update_skill_rating_summary(cached_rating=rating)
 
-            app.history_controller.update_target_wpm_suggestion_indicator()
+            if not bool(getattr(app, "practice_running", False)):
+                app.history_controller.update_target_wpm_suggestion_indicator()
             app.history_controller.refresh_stats_window_if_open()
 
         except Exception as exc:
