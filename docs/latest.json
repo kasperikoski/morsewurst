@@ -1,16 +1,16 @@
 {
   "app": "Morsewurst",
-  "latest_version": "0.99.5",
+  "latest_version": "0.99.6",
   "release_date": "2026-05-23",
-  "release_url": "https://github.com/kasperikoski/morsewurst/releases/tag/v0.99.5",
+  "release_url": "https://github.com/kasperikoski/morsewurst/releases/tag/v0.99.6",
   "download_url": "",
   "release_notes": [
-    "Fixed and refined skill rating WPM calculations.",
-    "Straight and iambic WPM display values now use uncapped PARIS WPM while skill evidence remains protected by the target WPM cap.",
-    "Both keys WPM and overall skill WPM now use balanced straight and iambic averages instead of being limited only by the slower key source.",
-    "Practice speed suggestions now use the best uncapped PARIS median from straight or iambic history, with per-key-source history limits.",
-    "Improved database statistics so straight and iambic WPM series use uncapped PARIS WPM values.",
-    "Added database regression tests for WPM source calculation, skill rating evidence, uncapped display values and practice speed suggestions.",
+    "Added local user profiles with separate profile-specific data folders.",
+    "Users can now create, select, rename and delete Morsewurst profiles.",
+    "Each profile can have its own database, UI settings, network settings and debug data.",
+    "Existing legacy data is migrated into the default profile on first startup.",
+    "Deleted profiles are moved to a timestamped backup folder instead of being permanently removed.",
+    "Added regression tests for profile creation, activation, renaming, deletion, backup handling and legacy data migration.",
     "Various bug fixes and UI responsiveness improvements."
   ]
 }

@@ -36,6 +36,7 @@ class StartupSequenceController:
 
         app.withdraw()
         self.init_startup_state()
+        app.profile_controller.prepare_active_profile()
         self.preload_language_for_startup()
         startup.show_startup_screen()
 

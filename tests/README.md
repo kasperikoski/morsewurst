@@ -2,7 +2,7 @@
 
 This folder contains a pytest-based regression suite for Morsewurst. It focuses on pure or lightweight code paths where possible, and also includes local WebSocket relay integration tests that start a temporary relay server during the test run.
 
-Covered areas include i18n service (language selection), challenge generation, text scoring normalization, adaptive decoding, adaptive timing, round scoring, timing profiles, WX-MOR generation and validation, database WPM source calculations, uncapped PARIS WPM display values, capped skill-rating evidence, per-key-source practice speed suggestions, statistics WPM source series, network protocol message sanitation, network settings persistence, jitter-buffer scheduling logic with a fake tone player, network UI package/import structure, and real local WebSocket relay behaviour including room joins, private rooms, ping/server-info handling, tone broadcast, slow-client protection and relay cleanup.
+Covered areas include i18n service (language selection), challenge generation, text scoring normalization, adaptive decoding, adaptive timing, round scoring, timing profiles, WX-MOR generation and validation, database WPM source calculations, uncapped PARIS WPM display values, capped skill-rating evidence, per-key-source practice speed suggestions, statistics WPM source series, network protocol message sanitation, network settings persistence, user profile storage, legacy data migration into the default profile, per-profile data directory selection, profile creation, activation, renaming, deletion, backup handling and profile registry recovery, jitter-buffer scheduling logic with a fake tone player, network UI package/import structure, and real local WebSocket relay behaviour including room joins, private rooms, ping/server-info handling, tone broadcast, slow-client protection and relay cleanup.
 
 ## Install test dependencies
 
@@ -44,6 +44,7 @@ tests/
   test_network_protocol.py
   test_network_relay_integration.py
   test_network_ui_imports.py
+  test_profile_store.py
   test_scoring.py
   test_settings_store.py
   test_timing_profile.py

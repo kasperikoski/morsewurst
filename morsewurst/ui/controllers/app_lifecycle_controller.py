@@ -28,7 +28,8 @@ class AppLifecycleController:
         """Configure the root Tk window."""
         app = self.app
 
-        app.title(f"{config.APP_NAME} {config.APP_VERSION}")
+        profile_name = app.profile_controller.active_profile_name()
+        app.title(f"{config.APP_NAME} {config.APP_VERSION} - {profile_name}")
         app.geometry(getattr(config, "UI_WINDOW_GEOMETRY", "1280x830"))
         app.minsize(
             getattr(config, "UI_MIN_WIDTH", 1280),

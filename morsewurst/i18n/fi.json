@@ -260,6 +260,44 @@
   "settings.language.description": "Valitse Morsewurstin käyttöliittymän kieli.",
   "settings.language.restart_required": "Kielenvaihto tulee voimaan, kun Morsewurst käynnistetään uudelleen.",
 
+  "control.switch_profile": "Vaihda käyttäjää",
+
+  "profiles.window.title": "Käyttäjäprofiilit",
+  "profiles.window.description": "Valitse, lisää, nimeä uudelleen tai poista paikallisia Morsewurst-käyttäjäprofiileja. Profiilin vaihtaminen tulee voimaan, kun Morsewurst käynnistetään uudelleen.",
+  "profiles.column.name": "Profiili",
+  "profiles.column.status": "Tila",
+
+  "profiles.button.use": "Käytä profiilia",
+  "profiles.button.add": "Lisää käyttäjä",
+  "profiles.button.rename": "Nimeä uudelleen",
+  "profiles.button.delete": "Poista profiili",
+  "profiles.button.close": "Sulje",
+
+  "profiles.status.active": "Käytössä",
+  "profiles.status.created": "Profiili {name} luotiin.",
+  "profiles.status.renamed": "Profiili nimettiin uudelleen: {name}.",
+  "profiles.status.deleted": "Profiili {name} poistettiin.",
+  "profiles.status.already_active": "Tämä profiili on jo käytössä.",
+  "profiles.status.selected_restart": "Profiili {name} otetaan käyttöön seuraavalla käynnistyksellä.",
+
+  "profiles.add.title": "Lisää käyttäjä",
+  "profiles.add.prompt": "Anna uuden käyttäjäprofiilin nimi:",
+
+  "profiles.rename.title": "Nimeä profiili uudelleen",
+  "profiles.rename.prompt": "Anna käyttäjäprofiilin uusi nimi:",
+
+  "profiles.delete.title": "Poista profiili",
+  "profiles.delete.confirm": "Haluatko varmasti poistaa profiilin {name}?\n\nProfiilin kansio siirretään varmuuskopioksi, mutta sitä ei käytetä enää aktiivisena profiilina.",
+  "profiles.delete.done": "Profiili {name} poistettiin.\n\nVarmuuskopio luotiin tähän kansioon:\n\n{path}\n\nPoista varmuuskopio myöhemmin käsin, jos sitä ei enää tarvita.",
+
+  "profiles.message.select_first": "Valitse ensin profiili.",
+  "profiles.message.restart_required": "Profiili {name} valittiin.\n\nMuutos tulee voimaan, kun Morsewurst käynnistetään uudelleen.",
+
+  "profiles.error.duplicate": "Samanniminen profiili on jo olemassa.",
+  "profiles.error.last_profile": "Viimeistä profiilia ei voi poistaa.",
+  "profiles.error.active_delete_blocked": "Käytössä olevaa profiilia ei voi poistaa kesken ajon.\n\nValitse ensin toinen profiili, käynnistä Morsewurst uudelleen ja poista tämä profiili sen jälkeen.",
+  "profiles.error.active_rename_blocked": "Käytössä olevaa profiilia ei voi nimetä uudelleen kesken ajon.\n\nValitse ensin toinen profiili, käynnistä Morsewurst uudelleen ja nimeä tämä profiili sen jälkeen.",
+
   "advanced.tab.speed": "Nopeus",
   "advanced.tab.adaptive": "Tunnistus",
   "advanced.tab.problem_chars": "Vaikeimmat merkit",

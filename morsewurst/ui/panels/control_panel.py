@@ -55,6 +55,12 @@ def build_control_panel(app: tk.Misc, parent: ttk.Frame) -> None:
 
     ttk.Button(
         buttons,
+        text=app.i18n.t("control.switch_profile"),
+        command=app.window_controller.open_profile_window,
+    ).pack(side=tk.LEFT, padx=(8, 0))
+
+    ttk.Button(
+        buttons,
         text=app.i18n.t("control.stats"),
         command=app.window_controller.open_stats_window,
     ).pack(side=tk.LEFT, padx=(8, 0))

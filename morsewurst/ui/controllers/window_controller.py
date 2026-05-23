@@ -104,6 +104,16 @@ class WindowController:
         window = AdvancedSettingsWindow(self.app)
         self.apply_window_icon(window)
 
+    def open_profile_window(self) -> None:
+        """Open the local user profile window, or focus it if it is already open."""
+        if self.raise_existing_window("profile_window"):
+            return
+
+        from morsewurst.ui.profile_window import ProfileWindow
+
+        self.app.profile_window = ProfileWindow(self.app)
+        self.apply_window_icon(self.app.profile_window)
+
     def open_help(self) -> None:
         """Open the help window."""
         from morsewurst.ui.help_window import HelpWindow
@@ -137,6 +147,7 @@ class WindowController:
             "debug_window",
             "stats_window",
             "network_window",
+            "profile_window",
         ):
             window = self.existing_window_or_none(attribute)
 

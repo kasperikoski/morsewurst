@@ -9,7 +9,7 @@ import sys
 from pathlib import Path
 
 APP_NAME = "Morsewurst"
-APP_VERSION = "0.99.5"
+APP_VERSION = "0.99.6"
 
 # ============================================================
 # Update check
@@ -38,18 +38,45 @@ SOUND_DIR = resource_path("Assets/sounds")
 STARTUP_SCREEN_IMAGE = resource_path("Assets/img/startup_screen.png")
 STARTUP_SCREEN_MIN_MS = 3000
 
-# Network splash screen shown while the lobby connection is being prepared.
 NETWORK_STARTUP_SCREEN_IMAGE = resource_path("Assets/img/network_startup_screen.png")
 NETWORK_STARTUP_SCREEN_MIN_MS = 3000
 NETWORK_STARTUP_READY_TIMEOUT_SECONDS = 12.0
 
 APP_DATA_DIR = Path(os.environ.get("APPDATA", str(Path.home()))) / "Morsewurst"
-DATA_DIR = APP_DATA_DIR / "data"
+
+# Global application data root. This remains stable even when the active
+# user profile changes.
+BASE_DATA_DIR = APP_DATA_DIR / "data"
+
+PROFILES_DIR = BASE_DATA_DIR / "profiles"
+PROFILE_REGISTRY_PATH = BASE_DATA_DIR / "profiles.json"
+BACKUP_DIR = BASE_DATA_DIR / "Backups"
+
+# Active profile data directory. This is changed during startup by the
+# profile system before the database, UI settings or network settings are read.
+DATA_DIR = BASE_DATA_DIR
 DB_PATH = DATA_DIR / "morsewurst.sqlite3"
 
 DEBUG_DIR = DATA_DIR / "debug"
 DEBUG_LATEST_SNAPSHOT_PATH = DEBUG_DIR / "latest_round_debug.json"
 DEBUG_HISTORY_PATH = DEBUG_DIR / "debug_history.jsonl"
+
+
+def set_active_data_dir(data_dir: Path) -> None:
+    """Set the active per-profile data directory for this process."""
+
+    global DATA_DIR
+    global DB_PATH
+    global DEBUG_DIR
+    global DEBUG_LATEST_SNAPSHOT_PATH
+    global DEBUG_HISTORY_PATH
+
+    DATA_DIR = Path(data_dir)
+    DB_PATH = DATA_DIR / "morsewurst.sqlite3"
+
+    DEBUG_DIR = DATA_DIR / "debug"
+    DEBUG_LATEST_SNAPSHOT_PATH = DEBUG_DIR / "latest_round_debug.json"
+    DEBUG_HISTORY_PATH = DEBUG_DIR / "debug_history.jsonl"
 
 
 # ============================================================

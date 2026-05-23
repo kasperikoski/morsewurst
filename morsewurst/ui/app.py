@@ -14,6 +14,7 @@ from morsewurst.ui.controllers import (
     InputController,
     LayoutController,
     PracticeController,
+    ProfileController,
     ResultsController,
     RuntimeController,
     SerialController,
@@ -39,6 +40,7 @@ class MorsewurstApp(tk.Tk):
         self.debug_controller = DebugController(self)
         self.decoder_controller = DecoderController(self)
         self.effective_wpm_controller = EffectiveWpmController(self)
+        self.profile_controller = ProfileController(self)
         self.settings_controller = SettingsController(self)
         self.challenge_settings_controller = ChallengeSettingsController(self)
         self.ui_helpers_controller = UiHelpersController(self)

@@ -260,6 +260,44 @@
   "settings.language.description": "Choose the language used by Morsewurst.",
   "settings.language.restart_required": "Language changes take effect after restarting Morsewurst.",
 
+  "control.switch_profile": "Switch user",
+
+  "profiles.window.title": "User profiles",
+  "profiles.window.description": "Select, add, rename or delete local Morsewurst user profiles. Switching profiles takes effect after restarting Morsewurst.",
+  "profiles.column.name": "Profile",
+  "profiles.column.status": "Status",
+
+  "profiles.button.use": "Use profile",
+  "profiles.button.add": "Add user",
+  "profiles.button.rename": "Rename",
+  "profiles.button.delete": "Delete profile",
+  "profiles.button.close": "Close",
+
+  "profiles.status.active": "Active",
+  "profiles.status.created": "Profile {name} was created.",
+  "profiles.status.renamed": "Profile renamed: {name}.",
+  "profiles.status.deleted": "Profile {name} was deleted.",
+  "profiles.status.already_active": "This profile is already active.",
+  "profiles.status.selected_restart": "Profile {name} will be used after the next restart.",
+
+  "profiles.add.title": "Add user",
+  "profiles.add.prompt": "Enter the new user profile name:",
+
+  "profiles.rename.title": "Rename profile",
+  "profiles.rename.prompt": "Enter the new user profile name:",
+
+  "profiles.delete.title": "Delete profile",
+  "profiles.delete.confirm": "Do you really want to delete profile {name}?\n\nThe profile folder will be moved to a backup location, but it will no longer be used as an active profile.",
+  "profiles.delete.done": "Profile {name} was deleted.\n\nA backup was created here:\n\n{path}\n\nDelete the backup manually later when it is no longer needed.",
+
+  "profiles.message.select_first": "Select a profile first.",
+  "profiles.message.restart_required": "Profile {name} was selected.\n\nThe change takes effect after restarting Morsewurst.",
+
+  "profiles.error.duplicate": "A profile with that name already exists.",
+  "profiles.error.last_profile": "The last profile cannot be deleted.",
+  "profiles.error.active_delete_blocked": "The active profile cannot be deleted while Morsewurst is running.\n\nSelect another profile first, restart Morsewurst and delete this profile after that.",
+  "profiles.error.active_rename_blocked": "The active profile cannot be renamed while Morsewurst is running.\n\nSelect another profile first, restart Morsewurst and rename this profile after that.",
+
   "advanced.tab.speed": "Speed",
   "advanced.tab.adaptive": "Decoder",
   "advanced.tab.problem_chars": "Problem characters",
