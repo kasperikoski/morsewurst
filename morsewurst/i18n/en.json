@@ -96,6 +96,7 @@
 
   "result_panel.history_title": "History",
   "result_panel.history_rounds": "Rounds",
+  "result_panel.history_rounds_limited": "Latest {count}",
   "result_panel.history_accuracy": "Accuracy",
   "result_panel.history_cleanliness": "Cleanliness",
   "result_panel.history_score": "Score",
@@ -266,7 +267,7 @@
   "advanced.tab.input": "Input & connection",
   "advanced.tab.effective_wpm": "Effective WPM",
   "advanced.tab.skill": "Skill level",
-  "advanced.tab.stats": "Statistics",
+  "advanced.tab.stats": "General information",
   "advanced.tab.debug": "Debug",
 
   "advanced.problem_chars.title": "Problem characters",
@@ -345,8 +346,8 @@
   "advanced.effective_wpm.min_accuracy": "Minimum accuracy %",
   "advanced.effective_wpm.min_cleanliness": "Minimum cleanliness %",
 
-  "advanced.stats.title": "Summary statistics",
-  "advanced.stats.description": "How many of the most recent rounds are used to calculate the averages on the main page.",
+  "advanced.stats.title": "General information history",
+  "advanced.stats.description": "How many of the most recent rounds are used to calculate the historical averages in the General information panel on the main page. The calculation always uses the latest saved rounds up to this amount, regardless of round quality.",
   "advanced.stats.recent_rounds": "Recent rounds",
 
   "advanced.debug.title": "Debug data",

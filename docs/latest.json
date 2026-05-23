@@ -1,8 +1,8 @@
 {
   "app": "Morsewurst",
-  "latest_version": "0.99.4",
-  "release_date": "2026-05-22",
-  "release_url": "https://github.com/kasperikoski/morsewurst/releases/tag/v0.99.4",
+  "latest_version": "0.99.5",
+  "release_date": "2026-05-23",
+  "release_url": "https://github.com/kasperikoski/morsewurst/releases/tag/v0.99.5",
   "download_url": "",
   "release_notes": [
     "Fixed and refined skill rating WPM calculations.",

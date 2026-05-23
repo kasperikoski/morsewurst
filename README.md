@@ -1,3 +1,23 @@
+<!-- TOC tocDepth:2..3 chapterDepth:2..6 -->
+
+- [Morsewurst](#morsewurst)
+  - [Current status](#current-status)
+  - [Main features](#main-features)
+  - [Network features](#network-features)
+  - [Requirements](#requirements)
+  - [Running the application](#running-the-application)
+  - [Development setup](#development-setup)
+  - [Testing](#testing)
+  - [Building on Windows](#building-on-windows)
+  - [Morsewurst Keyer firmware and build documentation](#morsewurst-keyer-firmware-and-build-documentation)
+  - [Project structure](#project-structure)
+  - [Updates](#updates)
+  - [Data and privacy](#data-and-privacy)
+  - [Coming next](#coming-next)
+  - [License](#license)
+
+<!-- /TOC -->
+
 # Morsewurst
 
 Morsewurst is a Python-based desktop training application for practising Morse code with the Morsewurst Keyer.
@@ -31,29 +51,50 @@ The core local training workflow is functional and continues to be refined. The 
 - Windows-oriented desktop use
 - Update-checking support through a remote manifest
 
+## Network features
+
+Morsewurst includes network practice support for connecting users through a relay server. Users can join public rooms or create private rooms and exchange real-time Morse tone telemetry.
+
+The network system includes relay-side room handling, client reconnect logic, ping and server status checks, jitter-buffered receive playback and a visible network quality indicator. Morsewurst Network is still an actively developed prototype, so occasional glitches and unexpected behaviour may occur.
+
 ## Requirements
 
-- Python 3.11 or newer recommended
+- Python 3.13 recommended
+- Python 3.11 or newer should work, but the project is currently developed and tested mainly with Python 3.13
 - A Morsewurst Keyer or compatible serial telemetry source
 - Windows is the main development target
 
+Python itself is not installed by `requirements.txt`. Install Python first, then install the project dependencies.
+
+On Windows, Python 3.13 can be installed from the terminal with:
+
+```powershell
+winget install Python.Python.3.13
+```
+
+Check that Python is available:
+
+```powershell
+py -3.13 --version
+```
+
 Install Python dependencies with:
 
-```
-pip install -r requirements.txt
+```powershell
+py -3.13 -m pip install -r requirements.txt
 ```
 
 ## Running the application
 
 From the project root:
 
-```
+```powershell
 python main.py
 ```
 
 On Windows, you can also use:
 
-```
+```powershell
 .\run.ps1
 ```
 
@@ -61,15 +102,16 @@ On Windows, you can also use:
 
 Create and activate a virtual environment:
 
-```
-python -m venv .venv
+```powershell
+py -3.13 -m venv .venv
 .\.venv\Scripts\Activate.ps1
-pip install -r requirements.txt
+python -m pip install --upgrade pip
+python -m pip install -r requirements.txt
 ```
 
 Then start the program:
 
-```
+```powershell
 python main.py
 ```
 
@@ -77,23 +119,23 @@ python main.py
 
 The project includes a pytest-based regression suite for the core Morse logic, adaptive decoding, scoring, timing profiles, WX-MOR generation, settings handling, network protocol validation, jitter-buffer scheduling and relay integration.
 
-Run all tests from the project root:
+Install development and test dependencies with:
 
-```bash
-python -m pytest
+```powershell
+python -m pip install -r requirements-dev.txt
 ```
 
-The relay integration tests require the real `websockets` package. Install test dependencies with:
+Run all tests from the project root:
 
-```bash
-python -m pip install pytest websockets
+```powershell
+python -m pytest
 ```
 
 ## Building on Windows
 
 The project includes a Windows build script:
 
-```
+```powershell
 .\build_windows.ps1
 ```
 
@@ -127,7 +169,6 @@ and in Finnish:
 docs/Morsewurst_keyer_rakennusohje.md
 ```
 
-
 ## Project structure
 
 ```text
@@ -146,12 +187,6 @@ tests/         Pytest regression and integration tests
 main.py        Application entry point
 ```
 
-## Network features
-
-Morsewurst includes network practice support for connecting users through a relay server. Users can join public rooms or create private rooms and exchange real-time Morse tone telemetry.
-
-The network system includes relay-side room handling, client reconnect logic, ping and server status checks, jitter-buffered receive playback and a visible network quality indicator. Morsewurst Network is still an actively developed prototype, so occasional glitches and unexpected behaviour may occur.
-
 ## Updates
 
 Morsewurst can check for updates by reading a small remote JSON manifest. The first version of the update system only notifies the user when a newer version is available and opens the release or download page in the browser.
@@ -164,16 +199,19 @@ Morsewurst stores practice history locally on the user's computer.
 
 Network features may send real-time practice-related telemetry through the configured relay server when the user chooses to use network practice. Local training does not require network access.
 
-## Roadmap
+## Coming next
 
-Future development is expected to focus on:
+Future development is expected to focus on making Morsewurst Network more reliable, more useful and easier to use for real online Morse practice.
 
-* Further improving network practice
-* Expanding training modes
-* Refining the update workflow
-* Improving Windows packaging and release handling
-* Adding more diagnostics and troubleshooting tools
-* Improving documentation as the project continues to stabilize
+Planned and ongoing work includes:
+
+- Further improving network practice and online room features
+- Making network connection handling, reconnecting and diagnostics clearer
+- Adding more training modes
+- Possibly developing Koch method practice as its own separate application
+- Improving the update workflow so the application can eventually update itself
+- Adding better diagnostics and troubleshooting tools
+- Keeping the documentation clearer and more up to date, including small cleanups like this one
 
 ## License
 

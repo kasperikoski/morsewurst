@@ -96,6 +96,7 @@
 
   "result_panel.history_title": "Historia",
   "result_panel.history_rounds": "Kierroksia",
+  "result_panel.history_rounds_limited": "Viim. {count}",
   "result_panel.history_accuracy": "Tarkkuus",
   "result_panel.history_cleanliness": "Puhtaus",
   "result_panel.history_score": "Pisteet",
@@ -266,7 +267,7 @@
   "advanced.tab.input": "Syöte ja yhteys",
   "advanced.tab.effective_wpm": "Tehokas WPM",
   "advanced.tab.skill": "Taitotaso",
-  "advanced.tab.stats": "Tilastot",
+  "advanced.tab.stats": "Yleistä tietoa",
   "advanced.tab.debug": "Debug",
 
   "advanced.problem_chars.title": "Vaikeimmat merkit",
@@ -345,8 +346,8 @@
   "advanced.effective_wpm.min_accuracy": "Minimitarkkuus %",
   "advanced.effective_wpm.min_cleanliness": "Minimipuhtaus %",
 
-  "advanced.stats.title": "Yhteenvetotilastot",
-  "advanced.stats.description": "Kuinka monesta viimeisimmästä kierroksesta etusivun keskiarvot lasketaan.",
+  "advanced.stats.title": "Yleistä tietoa -osion historia",
+  "advanced.stats.description": "Kuinka monesta viimeisimmästä kierroksesta etusivun Yleistä tietoa -osion historian keskiarvot lasketaan. Laskenta käyttää aina enintään tämän määrän uusimpia tallennettuja kierroksia riippumatta kierroksen laadusta.",
   "advanced.stats.recent_rounds": "Viimeisiä kierroksia",
 
   "advanced.debug.title": "Debug-data",

@@ -390,24 +390,35 @@ class HistoryController:
         helpers = app.ui_helpers_controller
 
         try:
-            stats = app.db.stats_summary(
-                helpers.safe_int_var(
-                    app.stats_recent_rounds_var,
-                    default=1000,
-                    minimum=1,
-                    maximum=100000,
-                )
+            recent_rounds = helpers.safe_int_var(
+                app.stats_recent_rounds_var,
+                default=1000,
+                minimum=1,
+                maximum=100000,
             )
+
+            stats = app.db.stats_summary(recent_rounds)
+            rounds = int(stats.get("rounds") or 0)
+
         except Exception:
             self.reset_history_summary_vars("-")
             return
 
-        rounds = int(stats.get("rounds") or 0)
         if rounds <= 0:
             self.reset_history_summary_vars("0")
             return
 
-        app.result_history_rounds_var.set(str(rounds))
+        if rounds >= recent_rounds:
+            app.result_history_rounds_var.set(
+                app.i18n.t(
+                    "result_panel.history_rounds_limited",
+                    "Latest {count}",
+                    count=recent_rounds,
+                )
+            )
+        else:
+            app.result_history_rounds_var.set(str(rounds))
+
         app.result_history_accuracy_var.set("-" if stats.get("avg_accuracy") is None else f"{float(stats.get('avg_accuracy')):.1f} %")
         app.result_history_cleanliness_var.set("-" if stats.get("avg_cleanliness") is None else f"{float(stats.get('avg_cleanliness')):.1f} %")
         app.result_history_score_var.set("-" if stats.get("avg_overall_score") is None else f"{float(stats.get('avg_overall_score')):.1f}")
