@@ -1,14 +1,15 @@
 {
   "app": "Morsewurst",
-  "latest_version": "0.99.7",
+  "latest_version": "0.99.8",
   "release_date": "2026-05-24",
-  "release_url": "https://github.com/kasperikoski/morsewurst/releases/tag/v0.99.7",
+  "release_url": "https://github.com/kasperikoski/morsewurst/releases/tag/v0.99.8",
   "download_url": "",
   "release_notes": [
-    "General bug fixes and stability improvements.",
-    "Improved user profile creation and profile management.",
-    "Fixed issues related to creating and handling new user profiles.",
-    "Improved profile data handling to make the application startup and setup flow more reliable.",
-    "Refined version metadata and release configuration for version 0.99.7."
+    "Improved resilience when Morsewurst is closed unexpectedly during an active practice.",
+    "Added practice-level database tracking so full practice series and their individual rounds can be analysed together.",
+    "Saved rounds are now linked to their parent practice, including round number and practice completion status.",
+    "Added handling for completed, stopped and interrupted practice sessions.",
+    "Improved database consistency checks for practice and round relationships.",
+    "Note: this version changes the local database structure. Automatic end-user database migration is not included. Existing users may need to reset their local database or apply a manual batch repair."
   ]
 }

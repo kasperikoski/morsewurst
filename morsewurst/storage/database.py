@@ -31,16 +31,101 @@ class Database:
 
         self.conn = self._connect()
 
+        if database_existed:
+            try:
+                self._prepare_existing_database_for_current_schema()
+            except Exception:
+                pass
+
         if database_existed and not self._schema_is_compatible():
             self.replaced_incompatible_database_path = self._replace_incompatible_database()
 
         self.init_schema()
+        self._ensure_practice_tracking_schema()
+        self.ensure_practice_consistency()
+        self.mark_in_progress_practices_interrupted()
         self._write_schema_version()
 
     def _connect(self) -> sqlite3.Connection:
         conn = sqlite3.connect(self.path)
         conn.row_factory = sqlite3.Row
         return conn
+    
+
+    def _table_exists(self, table: str) -> bool:
+        cur = self.conn.cursor()
+
+        row = cur.execute(
+            """
+            SELECT name
+            FROM sqlite_master
+            WHERE type = 'table'
+            AND name = ?
+            """,
+            (table,),
+        ).fetchone()
+
+        return row is not None
+
+    def _prepare_existing_database_for_current_schema(self) -> None:
+        if not self._table_exists("sessions"):
+            return
+
+        self._ensure_practice_tracking_schema()
+        self.ensure_practice_consistency()
+
+    def _ensure_practice_tracking_schema(self) -> None:
+        cur = self.conn.cursor()
+
+        cur.execute(
+            """
+            CREATE TABLE IF NOT EXISTS practices (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                started_at TEXT NOT NULL,
+                finished_at TEXT,
+                status TEXT NOT NULL DEFAULT 'in_progress',
+                planned_rounds INTEGER NOT NULL DEFAULT 1,
+                completed_rounds INTEGER NOT NULL DEFAULT 0,
+                total_elapsed_us INTEGER NOT NULL DEFAULT 0,
+                total_standard_time_us INTEGER NOT NULL DEFAULT 0,
+                settings_json TEXT NOT NULL
+            )
+            """
+        )
+
+        if self._table_exists("sessions"):
+            session_columns = self._column_names("sessions")
+
+            if "practice_id" not in session_columns:
+                cur.execute("ALTER TABLE sessions ADD COLUMN practice_id INTEGER")
+
+            if "round_number" not in session_columns:
+                cur.execute(
+                    "ALTER TABLE sessions ADD COLUMN round_number INTEGER NOT NULL DEFAULT 1"
+                )
+
+        cur.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_sessions_practice_round
+            ON sessions(practice_id, round_number)
+            """
+        )
+
+        cur.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_practices_finished_at
+            ON practices(finished_at)
+            """
+        )
+
+        cur.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_practices_status
+            ON practices(status)
+            """
+        )
+
+        self.conn.commit()
     
 
     def _schema_is_compatible(self) -> bool:
@@ -61,6 +146,8 @@ class Database:
                     "entered",
                     "source",
                     "finish_reason",
+                    "practice_id",
+                    "round_number",
                     "accuracy",
                     "cleanliness",
                     "overall_score",
@@ -103,6 +190,17 @@ class Database:
                     "letter_gap_sd_us",
                     "avg_word_gap_us",
                     "word_gap_sd_us",
+                    "settings_json",
+                },
+                "practices": {
+                    "id",
+                    "started_at",
+                    "finished_at",
+                    "status",
+                    "planned_rounds",
+                    "completed_rounds",
+                    "total_elapsed_us",
+                    "total_standard_time_us",
                     "settings_json",
                 },
                 "events": {
@@ -275,6 +373,22 @@ class Database:
 
         cur.execute(
             """
+            CREATE TABLE IF NOT EXISTS practices (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                started_at TEXT NOT NULL,
+                finished_at TEXT,
+                status TEXT NOT NULL DEFAULT 'in_progress',
+                planned_rounds INTEGER NOT NULL DEFAULT 1,
+                completed_rounds INTEGER NOT NULL DEFAULT 0,
+                total_elapsed_us INTEGER NOT NULL DEFAULT 0,
+                total_standard_time_us INTEGER NOT NULL DEFAULT 0,
+                settings_json TEXT NOT NULL
+            )
+            """
+        )
+
+        cur.execute(
+            """
             CREATE TABLE IF NOT EXISTS sessions (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 started_at TEXT NOT NULL,
@@ -283,6 +397,9 @@ class Database:
                 entered TEXT NOT NULL,
                 source TEXT NOT NULL,
                 finish_reason TEXT NOT NULL,
+
+                practice_id INTEGER,
+                round_number INTEGER NOT NULL DEFAULT 1,
 
                 accuracy REAL NOT NULL,
                 cleanliness REAL NOT NULL DEFAULT 0,
@@ -336,7 +453,9 @@ class Database:
                 avg_word_gap_us REAL,
                 word_gap_sd_us REAL,
 
-                settings_json TEXT NOT NULL
+                settings_json TEXT NOT NULL,
+
+                FOREIGN KEY(practice_id) REFERENCES practices(id)
             )
             """
         )
@@ -494,6 +613,251 @@ class Database:
         cur = self.conn.cursor()
         cur.execute(f"PRAGMA table_info({table})")
         return {row[1] for row in cur.fetchall()}
+    
+    def create_practice(
+        self,
+        started_at: datetime,
+        planned_rounds: int,
+        settings: ChallengeSettings,
+    ) -> int:
+        cur = self.conn.cursor()
+
+        cur.execute(
+            """
+            INSERT INTO practices (
+                started_at,
+                finished_at,
+                status,
+                planned_rounds,
+                completed_rounds,
+                total_elapsed_us,
+                total_standard_time_us,
+                settings_json
+            ) VALUES (?, NULL, 'in_progress', ?, 0, 0, 0, ?)
+            """,
+            (
+                started_at.isoformat(timespec="seconds"),
+                max(1, int(planned_rounds)),
+                json.dumps(asdict(settings), ensure_ascii=False),
+            ),
+        )
+
+        self.conn.commit()
+
+        if cur.lastrowid is None:
+            raise RuntimeError("Practice insert failed: SQLite did not return lastrowid.")
+
+        return int(cur.lastrowid)
+
+    def refresh_practice_progress(self, practice_id: int) -> None:
+        try:
+            cur = self.conn.cursor()
+            cur.execute("BEGIN")
+            self._refresh_practice_progress_inside_transaction(int(practice_id))
+            self.conn.commit()
+
+        except Exception:
+            self.conn.rollback()
+            raise
+
+    def finish_practice(self, practice_id: int | None, status: str) -> None:
+        if practice_id is None:
+            return
+
+        status = str(status or "").strip().lower()
+
+        if status not in {"completed", "stopped", "interrupted"}:
+            status = "stopped"
+
+        try:
+            cur = self.conn.cursor()
+            cur.execute("BEGIN")
+
+            self._refresh_practice_progress_inside_transaction(int(practice_id))
+
+            cur.execute(
+                """
+                UPDATE practices
+                SET
+                    status = ?,
+                    finished_at = ?
+                WHERE id = ?
+                """,
+                (
+                    status,
+                    datetime.now().isoformat(timespec="seconds"),
+                    int(practice_id),
+                ),
+            )
+
+            self.conn.commit()
+
+        except Exception:
+            self.conn.rollback()
+            raise
+
+    def _refresh_practice_progress_inside_transaction(self, practice_id: int) -> None:
+        cur = self.conn.cursor()
+
+        row = cur.execute(
+            """
+            SELECT
+                COUNT(*) AS completed_rounds,
+                COALESCE(SUM(elapsed_us), 0) AS total_elapsed_us,
+                COALESCE(SUM(standard_time_us), 0) AS total_standard_time_us
+            FROM sessions
+            WHERE practice_id = ?
+            """,
+            (int(practice_id),),
+        ).fetchone()
+
+        if row is None:
+            return
+
+        cur.execute(
+            """
+            UPDATE practices
+            SET
+                completed_rounds = ?,
+                total_elapsed_us = ?,
+                total_standard_time_us = ?
+            WHERE id = ?
+            """,
+            (
+                int(row["completed_rounds"] or 0),
+                int(row["total_elapsed_us"] or 0),
+                int(row["total_standard_time_us"] or 0),
+                int(practice_id),
+            ),
+        )
+
+    def ensure_practice_consistency(self) -> int:
+        if not self._table_exists("sessions") or not self._table_exists("practices"):
+            return 0
+
+        if "practice_id" not in self._column_names("sessions"):
+            return 0
+
+        cur = self.conn.cursor()
+
+        rows = cur.execute(
+            """
+            SELECT
+                id,
+                started_at,
+                finished_at,
+                settings_json,
+                elapsed_us,
+                standard_time_us
+            FROM sessions
+            WHERE practice_id IS NULL
+            ORDER BY id ASC
+            """
+        ).fetchall()
+
+        if not rows:
+            return 0
+
+        try:
+            cur.execute("BEGIN")
+
+            for row in rows:
+                cur.execute(
+                    """
+                    INSERT INTO practices (
+                        started_at,
+                        finished_at,
+                        status,
+                        planned_rounds,
+                        completed_rounds,
+                        total_elapsed_us,
+                        total_standard_time_us,
+                        settings_json
+                    ) VALUES (?, ?, 'completed', 1, 1, ?, ?, ?)
+                    """,
+                    (
+                        row["started_at"],
+                        row["finished_at"],
+                        int(row["elapsed_us"] or 0),
+                        int(row["standard_time_us"] or 0),
+                        row["settings_json"],
+                    ),
+                )
+
+                practice_id = cur.lastrowid
+
+                if practice_id is None:
+                    raise RuntimeError("Practice insert failed during consistency repair.")
+
+                cur.execute(
+                    """
+                    UPDATE sessions
+                    SET
+                        practice_id = ?,
+                        round_number = 1
+                    WHERE id = ?
+                    """,
+                    (
+                        int(practice_id),
+                        int(row["id"]),
+                    ),
+                )
+
+            self.conn.commit()
+            return len(rows)
+
+        except Exception:
+            self.conn.rollback()
+            raise
+
+    def mark_in_progress_practices_interrupted(self) -> int:
+        if not self._table_exists("practices"):
+            return 0
+
+        cur = self.conn.cursor()
+
+        rows = cur.execute(
+            """
+            SELECT id
+            FROM practices
+            WHERE status = 'in_progress'
+            ORDER BY id ASC
+            """
+        ).fetchall()
+
+        if not rows:
+            return 0
+
+        finished_at = datetime.now().isoformat(timespec="seconds")
+
+        try:
+            cur.execute("BEGIN")
+
+            for row in rows:
+                practice_id = int(row["id"])
+
+                self._refresh_practice_progress_inside_transaction(practice_id)
+
+                cur.execute(
+                    """
+                    UPDATE practices
+                    SET
+                        status = 'interrupted',
+                        finished_at = COALESCE(finished_at, ?)
+                    WHERE id = ?
+                    """,
+                    (
+                        finished_at,
+                        practice_id,
+                    ),
+                )
+
+            self.conn.commit()
+            return len(rows)
+
+        except Exception:
+            self.conn.rollback()
+            raise
 
     def save_session(
         self,
@@ -502,6 +866,8 @@ class Database:
         settings: ChallengeSettings,
         events: List[Dict[str, Any]],
         char_results: List[CharacterResult],
+        practice_id: int,
+        round_number: int,
     ) -> int:
         finished_at = datetime.now()
         cur = self.conn.cursor()
@@ -516,6 +882,8 @@ class Database:
                     entered,
                     source,
                     finish_reason,
+                    practice_id,
+                    round_number,
 
                     accuracy,
                     cleanliness,
@@ -570,7 +938,7 @@ class Database:
                     word_gap_sd_us,
 
                     settings_json
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     started_at.isoformat(timespec="seconds"),
@@ -579,6 +947,8 @@ class Database:
                     summary.entered,
                     summary.source,
                     summary.finish_reason,
+                    int(practice_id),
+                    max(1, int(round_number)),
 
                     summary.accuracy,
                     summary.cleanliness,
@@ -965,7 +1335,7 @@ class Database:
 
         session_rows = cur.execute(
             f"""
-            SELECT id
+            SELECT id, practice_id
             FROM sessions
             {where_sql}
             """,
@@ -973,6 +1343,14 @@ class Database:
         ).fetchall()
 
         session_ids = [int(row["id"]) for row in session_rows]
+
+        practice_ids = sorted(
+            {
+                int(row["practice_id"])
+                for row in session_rows
+                if row["practice_id"] is not None
+            }
+        )
 
         if not session_ids:
             return 0
@@ -1005,6 +1383,30 @@ class Database:
                 session_ids,
             )
 
+            if start_at is None and end_at is None:
+                cur.execute("DELETE FROM practices")
+            else:
+                for practice_id in practice_ids:
+                    remaining = cur.execute(
+                        """
+                        SELECT COUNT(*) AS count
+                        FROM sessions
+                        WHERE practice_id = ?
+                        """,
+                        (practice_id,),
+                    ).fetchone()
+
+                    if int(remaining["count"] or 0) == 0:
+                        cur.execute(
+                            """
+                            DELETE FROM practices
+                            WHERE id = ?
+                            """,
+                            (practice_id,),
+                        )
+                    else:
+                        self._refresh_practice_progress_inside_transaction(practice_id)
+
             cur.execute("DELETE FROM timing_profile_state")
 
             self._rebuild_problem_stats_inside_transaction()
@@ -1030,7 +1432,7 @@ class Database:
 
         session_row = cur.execute(
             """
-            SELECT id
+            SELECT id, practice_id
             FROM sessions
             WHERE id = ?
             """,
@@ -1039,6 +1441,12 @@ class Database:
 
         if session_row is None:
             return 0
+
+        practice_id = (
+            None
+            if session_row["practice_id"] is None
+            else int(session_row["practice_id"])
+        )
 
         try:
             cur.execute("BEGIN")
@@ -1076,6 +1484,27 @@ class Database:
             )
 
             deleted = int(cur.rowcount or 0)
+
+            if practice_id is not None:
+                remaining = cur.execute(
+                    """
+                    SELECT COUNT(*) AS count
+                    FROM sessions
+                    WHERE practice_id = ?
+                    """,
+                    (practice_id,),
+                ).fetchone()
+
+                if int(remaining["count"] or 0) == 0:
+                    cur.execute(
+                        """
+                        DELETE FROM practices
+                        WHERE id = ?
+                        """,
+                        (practice_id,),
+                    )
+                else:
+                    self._refresh_practice_progress_inside_transaction(practice_id)
 
             cur.execute("DELETE FROM timing_profile_state")
 

@@ -42,6 +42,7 @@ class PracticeController:
 
     def __init__(self, app: "MorsewurstApp") -> None:
         self.app = app
+        self.current_practice_id: Optional[int] = None
 
     def finish_reason_label(self, reason: object) -> str:
         reason_code = str(reason or "").strip()
@@ -100,8 +101,14 @@ class PracticeController:
         app.decoder_controller.refresh_timing_profiles()
         app.practice_running = True
         app.current_round_number = 0
-        app.total_rounds = app.settings.practice_rounds
+        app.total_rounds = max(1, int(app.settings.practice_rounds))
         app.practice_summaries = []
+
+        self.current_practice_id = app.db.create_practice(
+            datetime.now(),
+            app.total_rounds,
+            app.settings,
+        )
 
         self._update_practice_buttons()
         app.results_controller.update_practice_series_summary()
@@ -131,6 +138,10 @@ class PracticeController:
 
         if app.round.active and not app.round.finished:
             self._discard_current_round(FINISH_REASON_USER_STOPPED)
+
+        if self.current_practice_id is not None:
+            app.db.finish_practice(self.current_practice_id, "stopped")
+            self.current_practice_id = None
 
         app.round_state_var.set(
             app.i18n.t("practice.round_state.stopped", "Practice: stopped")
@@ -222,6 +233,11 @@ class PracticeController:
         app = self.app
 
         app.practice_running = False
+
+        if self.current_practice_id is not None:
+            app.db.finish_practice(self.current_practice_id, "completed")
+            self.current_practice_id = None
+
         app.round_state_var.set(
             app.i18n.t("practice.round_state.series_complete", "Practice: complete")
         )
@@ -326,6 +342,11 @@ class PracticeController:
             return
 
         app.practice_running = False
+
+        if self.current_practice_id is not None:
+            app.db.finish_practice(self.current_practice_id, "completed")
+            self.current_practice_id = None
+            
         app.status_controller.set_main_status(
             app.i18n.t(
                 "practice.status.series_complete_upper",
@@ -341,6 +362,23 @@ class PracticeController:
         app.input_entry.configure(state=tk.NORMAL)
         self._update_practice_buttons()
 
+    def shutdown_active_practice(self) -> None:
+        """Mark an unfinished practice as interrupted during application shutdown.
+
+        Already saved rounds remain saved. An active unfinished round is not saved.
+        """
+
+        app = self.app
+
+        if self.current_practice_id is None:
+            return
+
+        try:
+            app.db.finish_practice(self.current_practice_id, "interrupted")
+        finally:
+            self.current_practice_id = None
+            app.practice_running = False
+
     def _save_finished_round(self, *, auto_continue: bool = True) -> None:
         """Persist the finished round and schedule slower after-save updates."""
         app = self.app
@@ -352,13 +390,24 @@ class PracticeController:
 
         app.round.started_at = app.round.started_at or datetime.now()
 
+        if self.current_practice_id is None:
+            self.current_practice_id = app.db.create_practice(
+                app.round.started_at,
+                app.total_rounds,
+                app.settings,
+            )
+
         session_id = app.db.save_session(
             app.round.started_at,
             app.last_summary,
             app.settings,
             app.round.events,
             app.last_char_results,
+            practice_id=self.current_practice_id,
+            round_number=app.round.round_number,
         )
+
+        app.db.refresh_practice_progress(self.current_practice_id)
 
         app.debug_controller.write_round_snapshot_if_enabled()
         app.decoder_controller.refresh_timing_profiles()

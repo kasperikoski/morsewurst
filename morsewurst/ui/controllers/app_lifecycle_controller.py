@@ -64,6 +64,11 @@ class AppLifecycleController:
 
         app = self.app
 
+        try:
+            app.practice_controller.shutdown_active_practice()
+        except Exception:
+            pass
+
         app.audio_controller.stop_morse_speed_preview()
 
         try:
@@ -111,6 +116,11 @@ class AppLifecycleController:
     def on_close(self) -> None:
         """Stop background activity, save settings and close the application."""
         app = self.app
+
+        try:
+            app.practice_controller.shutdown_active_practice()
+        except Exception:
+            pass
 
         app.audio_controller.stop_morse_speed_preview()
         app.settings_controller.save_ui_settings()
