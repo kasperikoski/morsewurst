@@ -5,6 +5,8 @@
 from __future__ import annotations
 
 import queue
+import subprocess
+import sys
 from typing import TYPE_CHECKING, Any, Dict
 
 import tkinter as tk
@@ -56,6 +58,41 @@ class AppLifecycleController:
 
         app.event_queue: queue.Queue[Dict[str, Any]] = queue.Queue()
         app.serial_reader = SerialReader(app.event_queue)
+
+    def restart_application(self) -> None:
+        """Restart the current Morsewurst process."""
+
+        app = self.app
+
+        app.audio_controller.stop_morse_speed_preview()
+
+        try:
+            app.settings_controller.save_ui_settings()
+        except Exception:
+            pass
+
+        try:
+            app.auto_connect_serial_var.set(False)
+        except Exception:
+            pass
+
+        try:
+            app.serial_reader.disconnect()
+        except Exception:
+            pass
+
+        try:
+            app.network_manager.stop()
+        except Exception:
+            pass
+
+        if getattr(sys, "frozen", False):
+            args = [sys.executable, *sys.argv[1:]]
+        else:
+            args = [sys.executable, *sys.argv]
+
+        subprocess.Popen(args)
+        app.destroy()
 
     def focus_input(self, force: bool = False) -> None:
         """Keep the input field focused while a round is active, when enabled."""

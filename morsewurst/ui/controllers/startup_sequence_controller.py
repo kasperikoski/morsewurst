@@ -91,7 +91,11 @@ class StartupSequenceController:
             startup.startup_delay(1.0)
 
             startup.finish_startup_screen()
-            app.update_controller.check_for_updates_after_startup()
+
+            if app.profile_controller.initial_profile_setup_required:
+                app.after(300, app.profile_controller.open_initial_profile_window)
+            else:
+                app.update_controller.check_for_updates_after_startup()
 
         except Exception:
             self.recover_from_startup_error()

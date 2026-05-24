@@ -11,17 +11,12 @@ import unicodedata
 from dataclasses import asdict, dataclass
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
 
 import morsewurst.config as config
 
 
 PROFILE_REGISTRY_VERSION = 1
-DEFAULT_PROFILE_NAME = "Default"
 
-DATABASE_FILENAME = "morsewurst.sqlite3"
-UI_SETTINGS_FILENAME = "ui_settings.json"
-NETWORK_SETTINGS_FILENAME = "network_settings.json"
 DEBUG_DIRNAME = "debug"
 
 
@@ -93,63 +88,66 @@ class ProfileStore:
         self.backup_dir = backup_dir or config.BACKUP_DIR
         self.base_data_dir = base_data_dir or config.BASE_DATA_DIR
 
-    def prepare_active_profile(self, *, default_name: str = DEFAULT_PROFILE_NAME) -> UserProfile:
-        """Ensure profiles exist, migrate legacy root data, and apply active paths."""
+    def load_existing_registry(self) -> ProfileRegistry:
+        """Load the profile registry"""
 
-        registry = self.load_or_bootstrap(default_name=default_name)
-        active = self.active_profile(registry)
-
-        active_dir = self.profile_dir(active.id)
-        active_dir.mkdir(parents=True, exist_ok=True)
-        (active_dir / DEBUG_DIRNAME).mkdir(parents=True, exist_ok=True)
-
-        config.set_active_data_dir(active_dir)
-
-        return active
-
-    def load_or_bootstrap(self, *, default_name: str = DEFAULT_PROFILE_NAME) -> ProfileRegistry:
         self.base_data_dir.mkdir(parents=True, exist_ok=True)
         self.profiles_dir.mkdir(parents=True, exist_ok=True)
         self.backup_dir.mkdir(parents=True, exist_ok=True)
 
-        if not self.registry_path.exists():
-            return self.bootstrap_legacy_profile(default_name=default_name)
-
         registry = self.load()
 
-        if not registry.profiles:
-            return self.bootstrap_legacy_profile(default_name=default_name)
+        if registry.profiles:
+            existing_ids = {profile.id for profile in registry.profiles}
 
-        if registry.active_profile_id not in {profile.id for profile in registry.profiles}:
-            registry.active_profile_id = registry.profiles[0].id
-            self.save(registry)
+            if registry.active_profile_id not in existing_ids:
+                registry.active_profile_id = registry.profiles[0].id
+                self.save(registry)
 
         return registry
 
-    def bootstrap_legacy_profile(self, *, default_name: str = DEFAULT_PROFILE_NAME) -> ProfileRegistry:
-        """Create the first profile and move old root-level data into it."""
+    def has_profiles(self) -> bool:
+        """Return True when at least one user profile exists."""
 
-        name = clean_profile_name(default_name) or DEFAULT_PROFILE_NAME
-        profile_id = normalize_profile_id(name)
+        registry = self.load_existing_registry()
+        return bool(registry.profiles)
+    
+    def create_first_profile(self, name: object) -> UserProfile:
+        """Create the first real user profile without creating a Default profile first.
+
+        If the matching profile folder already exists but profiles.json is missing,
+        adopt that folder instead of crashing. This preserves partially created or
+        manually restored profile data.
+        """
+
+        self.base_data_dir.mkdir(parents=True, exist_ok=True)
+        self.profiles_dir.mkdir(parents=True, exist_ok=True)
+        self.backup_dir.mkdir(parents=True, exist_ok=True)
+
+        registry = self.load_existing_registry()
+
+        if registry.profiles:
+            raise ProfileError("User profiles already exist.")
+
+        clean_name = clean_profile_name(name)
+        if not clean_name:
+            raise ProfileError("Profile name is empty.")
+
+        profile_id = normalize_profile_id(clean_name)
+        profile_dir = self.profile_dir(profile_id)
+
+        if profile_dir.exists() and not profile_dir.is_dir():
+            raise DuplicateProfileError("A file with that profile name already exists.")
+
         now = utc_now_iso()
-
         profile = UserProfile(
             id=profile_id,
-            name=name,
+            name=clean_name,
             created_at=now,
             updated_at=now,
         )
 
-        profile_dir = self.profile_dir(profile.id)
         profile_dir.mkdir(parents=True, exist_ok=True)
-
-        self._move_legacy_file(DATABASE_FILENAME, profile_dir / DATABASE_FILENAME)
-        self._move_legacy_file(f"{DATABASE_FILENAME}-wal", profile_dir / f"{DATABASE_FILENAME}-wal")
-        self._move_legacy_file(f"{DATABASE_FILENAME}-shm", profile_dir / f"{DATABASE_FILENAME}-shm")
-        self._move_legacy_file(UI_SETTINGS_FILENAME, profile_dir / UI_SETTINGS_FILENAME)
-        self._move_legacy_file(NETWORK_SETTINGS_FILENAME, profile_dir / NETWORK_SETTINGS_FILENAME)
-        self._move_legacy_dir(DEBUG_DIRNAME, profile_dir / DEBUG_DIRNAME)
-
         (profile_dir / DEBUG_DIRNAME).mkdir(parents=True, exist_ok=True)
 
         registry = ProfileRegistry(
@@ -159,7 +157,21 @@ class ProfileStore:
         )
 
         self.save(registry)
-        return registry
+        return profile
+
+    def prepare_active_profile(self) -> UserProfile:
+        """Apply the active profile paths for this process."""
+
+        registry = self.load_existing_registry()
+        active = self.active_profile(registry)
+
+        active_dir = self.profile_dir(active.id)
+        active_dir.mkdir(parents=True, exist_ok=True)
+        (active_dir / DEBUG_DIRNAME).mkdir(parents=True, exist_ok=True)
+
+        config.set_active_data_dir(active_dir)
+
+        return active
 
     def load(self) -> ProfileRegistry:
         try:
@@ -220,7 +232,7 @@ class ProfileStore:
         tmp.replace(self.registry_path)
 
     def active_profile(self, registry: ProfileRegistry | None = None) -> UserProfile:
-        registry = registry or self.load_or_bootstrap()
+        registry = registry or self.load_existing_registry()
 
         for profile in registry.profiles:
             if profile.id == registry.active_profile_id:
@@ -232,7 +244,7 @@ class ProfileStore:
         raise ProfileNotFoundError("No user profiles exist.")
 
     def list_profiles(self) -> list[UserProfile]:
-        registry = self.load_or_bootstrap()
+        registry = self.load_existing_registry()
         return list(registry.profiles)
 
     def profile_dir(self, profile_id: str) -> Path:
@@ -240,7 +252,12 @@ class ProfileStore:
         return self.profiles_dir / clean_id
 
     def create_profile(self, name: object) -> UserProfile:
-        registry = self.load_or_bootstrap()
+        registry = self.load_existing_registry()
+
+        if not registry.profiles:
+            raise ProfileNotFoundError(
+                "No user profiles exist. Use create_first_profile() first."
+            )
 
         clean_name = clean_profile_name(name)
         if not clean_name:
@@ -269,7 +286,7 @@ class ProfileStore:
         return profile
 
     def activate_profile(self, profile_id: str) -> UserProfile:
-        registry = self.load_or_bootstrap()
+        registry = self.load_existing_registry()
         clean_id = normalize_profile_id(profile_id)
 
         for profile in registry.profiles:
@@ -281,7 +298,7 @@ class ProfileStore:
         raise ProfileNotFoundError("Profile was not found.")
 
     def rename_profile(self, profile_id: str, new_name: object) -> UserProfile:
-        registry = self.load_or_bootstrap()
+        registry = self.load_existing_registry()
         old_id = normalize_profile_id(profile_id)
 
         clean_name = clean_profile_name(new_name)
@@ -318,7 +335,7 @@ class ProfileStore:
         return profile
 
     def delete_profile(self, profile_id: str) -> Path:
-        registry = self.load_or_bootstrap()
+        registry = self.load_existing_registry()
         clean_id = normalize_profile_id(profile_id)
 
         if len(registry.profiles) <= 1:
@@ -345,7 +362,7 @@ class ProfileStore:
         return backup_path
 
     def is_active_profile(self, profile_id: str) -> bool:
-        registry = self.load_or_bootstrap()
+        registry = self.load_existing_registry()
         return registry.active_profile_id == normalize_profile_id(profile_id)
 
     def _find_profile(self, registry: ProfileRegistry, profile_id: str) -> UserProfile:
@@ -356,30 +373,6 @@ class ProfileStore:
                 return profile
 
         raise ProfileNotFoundError("Profile was not found.")
-
-    def _move_legacy_file(self, filename: str, target: Path) -> None:
-        source = self.base_data_dir / filename
-
-        if not source.exists():
-            return
-
-        if target.exists():
-            return
-
-        target.parent.mkdir(parents=True, exist_ok=True)
-        source.replace(target)
-
-    def _move_legacy_dir(self, dirname: str, target: Path) -> None:
-        source = self.base_data_dir / dirname
-
-        if not source.exists() or not source.is_dir():
-            return
-
-        if target.exists():
-            return
-
-        target.parent.mkdir(parents=True, exist_ok=True)
-        source.replace(target)
 
     def _unique_backup_path(self, profile_id: str) -> Path:
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")

@@ -704,7 +704,26 @@ def score_round(
     elapsed_us = metrics["elapsed_us"]
 
     if elapsed_us is not None and elapsed_us > 0:
-        gross_wpm = paris_wpm_for_text(target_display, elapsed_us)
+        # Completed rounds use the full target text, because the user has
+        # reached the intended exercise length.
+        #
+        # Interrupted or idle-finished rounds use the actually entered text.
+        # Otherwise a long target plus one quickly sent character can produce
+        # an absurd PARIS WPM, because telemetry elapsed time only covers the
+        # sent tone events and does not include the final idle timeout.
+        #
+        # Very short interrupted rounds are ignored for WPM display, because
+        # one or two entered characters are too little evidence for a useful
+        # PARIS WPM value.
+        wpm_text = target_display
+
+        if finish_reason != "completed":
+            wpm_text = entered_display
+
+            if len(normalize_for_score(wpm_text, keep_spaces=False)) < 3:
+                wpm_text = ""
+
+        gross_wpm = paris_wpm_for_text(wpm_text, elapsed_us)
 
         # Net WPM is kept for continuity, but accuracy and cleanliness are the
         # primary learning metrics.

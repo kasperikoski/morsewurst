@@ -1,16 +1,14 @@
 {
   "app": "Morsewurst",
-  "latest_version": "0.99.6",
-  "release_date": "2026-05-23",
-  "release_url": "https://github.com/kasperikoski/morsewurst/releases/tag/v0.99.6",
+  "latest_version": "0.99.7",
+  "release_date": "2026-05-24",
+  "release_url": "https://github.com/kasperikoski/morsewurst/releases/tag/v0.99.7",
   "download_url": "",
   "release_notes": [
-    "Added local user profiles with separate profile-specific data folders.",
-    "Users can now create, select, rename and delete Morsewurst profiles.",
-    "Each profile can have its own database, UI settings, network settings and debug data.",
-    "Existing legacy data is migrated into the default profile on first startup.",
-    "Deleted profiles are moved to a timestamped backup folder instead of being permanently removed.",
-    "Added regression tests for profile creation, activation, renaming, deletion, backup handling and legacy data migration.",
-    "Various bug fixes and UI responsiveness improvements."
+    "General bug fixes and stability improvements.",
+    "Improved user profile creation and profile management.",
+    "Fixed issues related to creating and handling new user profiles.",
+    "Improved profile data handling to make the application startup and setup flow more reliable.",
+    "Refined version metadata and release configuration for version 0.99.7."
   ]
 }

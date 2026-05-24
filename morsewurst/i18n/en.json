@@ -262,6 +262,16 @@
 
   "control.switch_profile": "Switch user",
 
+  "profiles.initial_setup.title": "Create user profile",
+  "profiles.initial_setup.description": "Morsewurst needs a user profile before it can be used. Create the first profile and restart the application.",
+  "profiles.initial_setup.name_label": "Profile name",
+  "profiles.initial_setup.create_and_restart": "Create profile and restart",
+  "profiles.initial_setup.name_required": "Enter a profile name.",
+  "profiles.initial_setup.created_restart": "Profile {name} was created. Morsewurst will now restart.",
+  "profiles.initial_setup.close_blocked": "Create a user profile before using Morsewurst.",
+  "profiles.initial_setup.exit_title": "Exit Morsewurst",
+  "profiles.initial_setup.exit_confirm": "Do you want to exit Morsewurst without creating a user profile?",
+
   "profiles.window.title": "User profiles",
   "profiles.window.description": "Select, add, rename or delete local Morsewurst user profiles. Switching profiles takes effect after restarting Morsewurst.",
   "profiles.column.name": "Profile",
@@ -292,6 +302,7 @@
 
   "profiles.message.select_first": "Select a profile first.",
   "profiles.message.restart_required": "Profile {name} was selected.\n\nThe change takes effect after restarting Morsewurst.",
+  "profiles.message.selected_restart_now": "User profile {name} was selected.\n\nMorsewurst will now restart.",
 
   "profiles.error.duplicate": "A profile with that name already exists.",
   "profiles.error.last_profile": "The last profile cannot be deleted.",

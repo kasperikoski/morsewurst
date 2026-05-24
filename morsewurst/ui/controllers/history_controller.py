@@ -48,7 +48,7 @@ class HistoryController:
         accuracy = self.row_get(row, "accuracy", 0.0)
         cleanliness = self.row_get(row, "cleanliness")
         overall = self.row_get(row, "overall_score")
-        wpm = self.row_get(row, "gross_wpm") or self.row_get(row, "avg_wpm") or self.row_get(row, "net_wpm")
+        wpm = self.row_get(row, "gross_wpm")
 
         return (
             self.row_get(row, "id", "-"),

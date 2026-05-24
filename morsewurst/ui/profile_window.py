@@ -8,7 +8,6 @@ import tkinter as tk
 from tkinter import messagebox, simpledialog, ttk
 from typing import TYPE_CHECKING
 
-import morsewurst.config as config
 from morsewurst.storage.profile_store import (
     DuplicateProfileError,
     LastProfileError,
@@ -198,15 +197,9 @@ class ProfileWindow(tk.Toplevel):
         profile = self.app.profile_controller.activate_profile(profile_id)
         self.refresh_profiles()
 
-        messagebox.showinfo(
-            self.app.i18n.t("profiles.window.title"),
-            self.app.i18n.t("profiles.message.restart_required", name=profile.name),
-            parent=self,
-        )
+        self._show_restart_now_dialog(profile.name)
 
-        self.status_var.set(
-            self.app.i18n.t("profiles.status.selected_restart", name=profile.name)
-        )
+        self.app.app_lifecycle_controller.restart_application()
 
     def rename_profile(self) -> None:
         profile_id = self.selected_profile_id()
@@ -315,6 +308,58 @@ class ProfileWindow(tk.Toplevel):
         self.status_var.set(
             self.app.i18n.t("profiles.status.deleted", name=profile_name)
         )
+
+    def _show_restart_now_dialog(self, profile_name: str) -> None:
+        dialog = tk.Toplevel(self)
+        dialog.withdraw()
+
+        dialog.title(self.app.i18n.t("profiles.window.title"))
+        self.app.window_controller.apply_window_icon(dialog)
+        
+        dialog.resizable(False, False)
+        dialog.transient(self)
+        dialog.grab_set()
+
+        frame = ttk.Frame(dialog, padding=18)
+        frame.pack(fill=tk.BOTH, expand=True)
+
+        message = self.app.i18n.t(
+            "profiles.message.selected_restart_now",
+            name=profile_name,
+        )
+
+        ttk.Label(
+            frame,
+            text=message,
+            wraplength=360,
+            justify=tk.CENTER,
+        ).pack(fill=tk.X, pady=(0, 16))
+
+        ok_button = ttk.Button(
+            frame,
+            text="OK",
+            command=dialog.destroy,
+        )
+        ok_button.pack(anchor=tk.CENTER)
+
+        dialog.update_idletasks()
+
+        width = dialog.winfo_reqwidth()
+        height = dialog.winfo_reqheight()
+
+        self.update_idletasks()
+
+        x = self.winfo_rootx() + max(0, (self.winfo_width() - width) // 2)
+        y = self.winfo_rooty() + max(0, (self.winfo_height() - height) // 2)
+
+        dialog.geometry(f"{width}x{height}+{x}+{y}")
+
+        dialog.deiconify()
+        dialog.lift()
+        dialog.focus_force()
+        ok_button.focus_set()
+
+        dialog.wait_window()
 
     def _center_on_parent(self) -> None:
         self.update_idletasks()

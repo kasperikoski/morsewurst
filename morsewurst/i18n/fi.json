@@ -262,6 +262,16 @@
 
   "control.switch_profile": "Vaihda käyttäjää",
 
+  "profiles.initial_setup.title": "Luo käyttäjäprofiili",
+  "profiles.initial_setup.description": "Morsewurst tarvitsee käyttäjäprofiilin ennen käyttöä. Luo ensimmäinen profiili ja käynnistä ohjelma uudelleen.",
+  "profiles.initial_setup.name_label": "Profiilin nimi",
+  "profiles.initial_setup.create_and_restart": "Luo profiili ja käynnistä uudelleen",
+  "profiles.initial_setup.name_required": "Anna profiilille nimi.",
+  "profiles.initial_setup.created_restart": "Profiili {name} luotiin. Morsewurst käynnistetään nyt uudelleen.",
+  "profiles.initial_setup.close_blocked": "Luo käyttäjäprofiili ennen Morsewurstin käyttöä.",
+  "profiles.initial_setup.exit_title": "Sulje Morsewurst",
+  "profiles.initial_setup.exit_confirm": "Haluatko sulkea Morsewurstin luomatta käyttäjäprofiilia?",
+
   "profiles.window.title": "Käyttäjäprofiilit",
   "profiles.window.description": "Valitse, lisää, nimeä uudelleen tai poista paikallisia Morsewurst-käyttäjäprofiileja. Profiilin vaihtaminen tulee voimaan, kun Morsewurst käynnistetään uudelleen.",
   "profiles.column.name": "Profiili",
@@ -292,6 +302,7 @@
 
   "profiles.message.select_first": "Valitse ensin profiili.",
   "profiles.message.restart_required": "Profiili {name} valittiin.\n\nMuutos tulee voimaan, kun Morsewurst käynnistetään uudelleen.",
+  "profiles.message.selected_restart_now": "Käyttäjäprofiili {name} valittiin.\n\nMorsewurst käynnistetään nyt uudelleen.",
 
   "profiles.error.duplicate": "Samanniminen profiili on jo olemassa.",
   "profiles.error.last_profile": "Viimeistä profiilia ei voi poistaa.",
