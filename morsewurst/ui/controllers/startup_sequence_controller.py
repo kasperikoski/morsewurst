@@ -74,9 +74,13 @@ class StartupSequenceController:
             serial.refresh_ports()
             startup.startup_delay(0.20)
 
-            startup.startup_status(app.i18n.t("app.startup.loading_practice_data"), 90)
+            startup.startup_status(app.i18n.t("app.startup.loading_practice_data"), 88)
             history.load_tables()
-            startup.startup_delay(0.25)
+            startup.startup_delay(0.15)
+
+            startup.startup_status(app.i18n.t("app.startup.loading_keying_statistics"), 93)
+            history.load_keying_event_summary_for_startup()
+            startup.startup_delay(0.15)
 
             startup.startup_status(app.i18n.t("app.startup.finishing"), 97)
             practice.update_practice_buttons()

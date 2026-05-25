@@ -472,6 +472,13 @@ class Database:
 
         cur.execute(
             """
+            CREATE INDEX IF NOT EXISTS idx_events_event_type
+            ON events(event_type)
+            """
+        )
+
+        cur.execute(
+            """
             CREATE TABLE IF NOT EXISTS char_results (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 session_id INTEGER NOT NULL,
@@ -1570,6 +1577,100 @@ class Database:
             """
         )
         
+    def keying_event_summary(self) -> Dict[str, int]:
+        """Return total tone-event counts by key source.
+
+        Straight tone events are close to physical straight-key presses.
+        Iambic tone events are generated Morse elements, not physical paddle presses.
+        """
+
+        return self._keying_event_summary_from_connection(self.conn)
+
+
+    def keying_event_summary_from_file(self) -> Dict[str, int]:
+        """Return keying event totals using a separate read-only connection.
+
+        This is safe to call from a background thread because it does not reuse
+        the main Tk/UI thread SQLite connection.
+        """
+
+        conn = sqlite3.connect(self.path)
+        conn.row_factory = sqlite3.Row
+
+        try:
+            return self._keying_event_summary_from_connection(conn)
+        finally:
+            conn.close()
+
+
+    def _keying_event_summary_from_connection(
+        self,
+        conn: sqlite3.Connection,
+    ) -> Dict[str, int]:
+        """Return keying and produced-character totals from the given connection.
+
+        Tone totals are based on raw telemetry events.
+
+        Produced-character totals are based on recognized entered characters in
+        char_results. They include correct, substitution and insertion rows, but
+        exclude spaces, empty values, deletions and the decoder unknown character.
+        """
+
+        tone_row = conn.execute(
+            """
+            SELECT
+                SUM(
+                    CASE
+                        WHEN LOWER(COALESCE(json_extract(event_json, '$.src'), '')) = 'straight'
+                        THEN 1 ELSE 0
+                    END
+                ) AS straight_presses,
+                SUM(
+                    CASE
+                        WHEN LOWER(COALESCE(json_extract(event_json, '$.src'), '')) = 'iambic'
+                        THEN 1 ELSE 0
+                    END
+                ) AS iambic_elements,
+                COUNT(*) AS tone_total
+            FROM events
+            WHERE event_type = 'tone'
+            """
+        ).fetchone()
+
+        char_row = conn.execute(
+            """
+            SELECT
+                SUM(
+                    CASE
+                        WHEN LOWER(COALESCE(source, '')) = 'straight'
+                        THEN 1 ELSE 0
+                    END
+                ) AS straight_chars,
+                SUM(
+                    CASE
+                        WHEN LOWER(COALESCE(source, '')) = 'iambic'
+                        THEN 1 ELSE 0
+                    END
+                ) AS iambic_chars,
+                COUNT(*) AS produced_chars_total
+            FROM char_results
+            WHERE entered_char IS NOT NULL
+              AND entered_char != ''
+              AND entered_char != ' '
+              AND entered_char != ?
+              AND result IN ('correct', 'substitution', 'insertion')
+            """,
+            (config.DECODER_UNKNOWN_CHAR,),
+        ).fetchone()
+
+        return {
+            "straight_presses": int(tone_row["straight_presses"] or 0) if tone_row is not None else 0,
+            "iambic_elements": int(tone_row["iambic_elements"] or 0) if tone_row is not None else 0,
+            "tone_total": int(tone_row["tone_total"] or 0) if tone_row is not None else 0,
+            "straight_chars": int(char_row["straight_chars"] or 0) if char_row is not None else 0,
+            "iambic_chars": int(char_row["iambic_chars"] or 0) if char_row is not None else 0,
+            "produced_chars_total": int(char_row["produced_chars_total"] or 0) if char_row is not None else 0,
+        }
 
     def stats_summary(self, recent_sessions: int = 1000) -> Dict[str, Any]:
         recent_sessions = max(1, int(recent_sessions))

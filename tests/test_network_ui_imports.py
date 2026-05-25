@@ -13,7 +13,6 @@ NETWORK_UI_PACKAGE = "morsewurst.ui.network"
 EXPECTED_NETWORK_UI_MODULES = {
     "morsewurst.ui.network",
     "morsewurst.ui.network.lobby_window",
-    "morsewurst.ui.network.lobby_state",
     "morsewurst.ui.network.lobby_actions",
     "morsewurst.ui.network.server_queries",
     "morsewurst.ui.network.widgets",
@@ -37,10 +36,6 @@ EXPECTED_CORE_IMPORTS_USED_BY_NETWORK_UI = {
 EXPECTED_CLASSES = {
     "morsewurst.ui.network.lobby_window": {
         "NetworkLobbyWindow",
-    },
-    "morsewurst.ui.network.lobby_state": {
-        "RoomSelectionState",
-        "ServerQueryState",
     },
     "morsewurst.ui.network.lobby_actions": {
         "LobbyActionsMixin",

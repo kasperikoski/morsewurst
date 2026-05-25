@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+import threading
 from typing import TYPE_CHECKING, Any, Optional
 
 import tkinter as tk
@@ -32,6 +33,298 @@ class HistoryController:
         self.update_skill_rating_summary(cached_rating=skill_rating)
         self.update_target_wpm_suggestion_indicator()
         self.refresh_stats_window_if_open()
+
+    def load_keying_event_summary_for_startup(self) -> None:
+        """Load keying event totals synchronously during the startup screen.
+
+        Startup runs before Tk's mainloop is active. The normal background
+        refresher schedules its result back with after(), which is reliable
+        after startup but can leave the startup-time panel stuck in the
+        loading state. During the splash screen we do the count directly so
+        the values are ready before the main window is shown.
+        """
+
+        app = self.app
+
+        app.keying_event_summary_loading = True
+        self.set_keying_event_summary_loading()
+
+        try:
+            summary = app.db.keying_event_summary()
+        except Exception as error:
+            app.keying_event_summary_loaded = False
+            app.general_straight_presses_var.set("-")
+            app.general_iambic_elements_var.set("-")
+            app.general_tone_total_var.set("-")
+
+            try:
+                app.status_controller.set_main_status(
+                    f"Keying statistics startup load failed: {error}",
+                    state="warning",
+                )
+            except Exception:
+                pass
+        else:
+            self.apply_keying_event_summary(summary)
+        finally:
+            app.keying_event_summary_loading = False
+
+    def schedule_initial_keying_event_summary(self) -> None:
+        """Schedule the first keying event summary refresh after startup.
+
+        The first full count can scan a large events table. Scheduling it after
+        the UI has entered the Tk event loop avoids leaving the panel stuck in
+        the loading state during application startup.
+        """
+
+        app = self.app
+
+        if getattr(app, "keying_event_summary_loaded", False):
+            return
+
+        if getattr(app, "keying_event_summary_loading", False):
+            return
+
+        if getattr(app, "keying_event_summary_startup_scheduled", False):
+            return
+
+        app.keying_event_summary_startup_scheduled = True
+
+        def start_refresh() -> None:
+            app.keying_event_summary_startup_scheduled = False
+
+            if getattr(app, "keying_event_summary_loaded", False):
+                return
+
+            if getattr(app, "keying_event_summary_loading", False):
+                return
+
+            self.update_keying_event_summary_async()
+
+        try:
+            app.after(750, start_refresh)
+        except Exception:
+            app.keying_event_summary_startup_scheduled = False
+
+
+    def update_keying_event_summary_async(self, *, force: bool = False) -> None:
+        """Load keying event totals in a background thread.
+
+        The query can eventually scan a large events table, so it should not block
+        the Tk UI thread. A separate SQLite connection is used inside the worker.
+        """
+
+        app = self.app
+
+        if getattr(app, "keying_event_summary_loading", False) and not force:
+            return
+
+        app.keying_event_summary_loading = True
+        self.set_keying_event_summary_loading()
+
+        def worker() -> None:
+            summary: dict[str, int] | None = None
+            error: Exception | None = None
+
+            try:
+                summary = app.db.keying_event_summary_from_file()
+            except Exception as exc:
+                error = exc
+
+            def finish() -> None:
+                app.keying_event_summary_loading = False
+
+                if summary is None:
+                    app.keying_event_summary_loaded = False
+                    app.general_straight_presses_var.set("-")
+                    app.general_iambic_elements_var.set("-")
+                    app.general_tone_total_var.set("-")
+
+                    if error is not None:
+                        app.status_controller.set_main_status(
+                            f"Keying statistics refresh failed: {error}",
+                            state="warning",
+                        )
+                    return
+
+                self.apply_keying_event_summary(summary)
+
+            try:
+                app.after(0, finish)
+            except Exception:
+                app.keying_event_summary_loading = False
+
+        threading.Thread(target=worker, daemon=True).start()
+
+
+    def set_keying_event_summary_loading(self) -> None:
+        """Show a lightweight loading state for keying event totals."""
+
+        app = self.app
+        loading_text = app.i18n.t("general_info.calculating", "calculating...")
+
+        app.general_straight_presses_var.set("-")
+        app.general_iambic_elements_var.set("-")
+        app.general_tone_total_var.set(loading_text)
+        app.general_straight_chars_var.set("-")
+        app.general_iambic_chars_var.set("-")
+
+
+    def apply_keying_event_summary(self, summary: dict[str, int]) -> None:
+        """Store and display keying event totals."""
+
+        app = self.app
+
+        clean_summary = {
+            "straight_presses": max(0, int(summary.get("straight_presses", 0) or 0)),
+            "iambic_elements": max(0, int(summary.get("iambic_elements", 0) or 0)),
+            "tone_total": max(0, int(summary.get("tone_total", 0) or 0)),
+            "straight_chars": max(0, int(summary.get("straight_chars", 0) or 0)),
+            "iambic_chars": max(0, int(summary.get("iambic_chars", 0) or 0)),
+            "produced_chars_total": max(0, int(summary.get("produced_chars_total", 0) or 0)),
+        }
+
+        app.keying_event_summary = clean_summary
+        app.keying_event_summary_loaded = True
+
+        self.update_keying_event_summary_display()
+
+
+    def increment_keying_event_summary_from_round(
+        self,
+        events: list[dict[str, Any]],
+        char_results: list[Any],
+    ) -> None:
+        """Increment displayed keying and produced-character totals from a saved round."""
+
+        app = self.app
+
+        if not getattr(app, "keying_event_summary_loaded", False):
+            return
+
+        summary = dict(getattr(app, "keying_event_summary", {}) or {})
+
+        straight_presses = int(summary.get("straight_presses", 0) or 0)
+        iambic_elements = int(summary.get("iambic_elements", 0) or 0)
+        tone_total = int(summary.get("tone_total", 0) or 0)
+        straight_chars = int(summary.get("straight_chars", 0) or 0)
+        iambic_chars = int(summary.get("iambic_chars", 0) or 0)
+        produced_chars_total = int(summary.get("produced_chars_total", 0) or 0)
+
+        for event in events:
+            if event.get("type") != "tone":
+                continue
+
+            tone_total += 1
+            source = str(event.get("src", "")).strip().lower()
+
+            if source == "straight":
+                straight_presses += 1
+            elif source == "iambic":
+                iambic_elements += 1
+
+        for char_result in char_results:
+            entered_char = self.char_result_value(char_result, "entered_char")
+            result = str(self.char_result_value(char_result, "result", "") or "").strip().lower()
+            source = str(self.char_result_value(char_result, "source", "") or "").strip().lower()
+
+            if not self.is_countable_produced_character(entered_char, result):
+                continue
+
+            produced_chars_total += 1
+
+            if source == "straight":
+                straight_chars += 1
+            elif source == "iambic":
+                iambic_chars += 1
+
+        self.apply_keying_event_summary(
+            {
+                "straight_presses": straight_presses,
+                "iambic_elements": iambic_elements,
+                "tone_total": tone_total,
+                "straight_chars": straight_chars,
+                "iambic_chars": iambic_chars,
+                "produced_chars_total": produced_chars_total,
+            }
+        )
+
+
+    def char_result_value(self, char_result: Any, field: str, default: Any = None) -> Any:
+        """Return a value from either a CharacterResult object or a dict."""
+
+        if isinstance(char_result, dict):
+            return char_result.get(field, default)
+
+        return getattr(char_result, field, default)
+
+
+    def is_countable_produced_character(
+        self,
+        entered_char: Any,
+        result: str,
+    ) -> bool:
+        """Return whether a char_result row should count as a produced character."""
+
+        if result not in {"correct", "substitution", "insertion"}:
+            return False
+
+        char = "" if entered_char is None else str(entered_char)
+
+        if char == "":
+            return False
+
+        if char == " ":
+            return False
+
+        if char == "�":
+            return False
+
+        return True
+
+
+    def update_keying_event_summary_display(self) -> None:
+        """Update keying event total variables from the cached summary."""
+
+        app = self.app
+        summary = getattr(app, "keying_event_summary", {}) or {}
+
+        app.general_straight_presses_var.set(
+            self.format_keying_count(summary.get("straight_presses", 0))
+        )
+        app.general_iambic_elements_var.set(
+            self.format_keying_count(summary.get("iambic_elements", 0))
+        )
+        app.general_tone_total_var.set(
+            self.format_keying_count(summary.get("tone_total", 0))
+        )
+        app.general_straight_chars_var.set(
+            self.format_keying_count(summary.get("straight_chars", 0))
+        )
+        app.general_iambic_chars_var.set(
+            self.format_keying_count(summary.get("iambic_chars", 0))
+        )
+
+
+    def format_keying_count(self, value: Any) -> str:
+        """Format a keying event count for the compact general info panel."""
+
+        try:
+            count = max(0, int(value))
+        except Exception:
+            return "-"
+
+        text = f"{count:,}"
+
+        try:
+            language = str(self.app.i18n.language)
+        except Exception:
+            language = "en"
+
+        if language == "fi":
+            text = text.replace(",", " ")
+
+        return f"~ {text}"
 
     def load_history_table(self) -> None:
         app = self.app
@@ -421,7 +714,6 @@ class HistoryController:
         app.result_history_accuracy_var.set("-" if stats.get("avg_accuracy") is None else f"{float(stats.get('avg_accuracy')):.1f} %")
         app.result_history_cleanliness_var.set("-" if stats.get("avg_cleanliness") is None else f"{float(stats.get('avg_cleanliness')):.1f} %")
         app.result_history_score_var.set("-" if stats.get("avg_overall_score") is None else f"{float(stats.get('avg_overall_score')):.1f}")
-        app.result_history_timing_var.set("-" if stats.get("avg_timing_score") is None else f"{float(stats.get('avg_timing_score')):.1f} %")
         app.result_history_gross_wpm_var.set("-" if stats.get("avg_gross_wpm") is None else f"{float(stats.get('avg_gross_wpm')):.1f}")
         app.result_history_net_wpm_var.set("-" if stats.get("avg_net_wpm") is None else f"{float(stats.get('avg_net_wpm')):.1f}")
         app.result_history_device_wpm_var.set("-" if stats.get("avg_device_wpm") is None else f"{float(stats.get('avg_device_wpm')):.1f}")
@@ -436,7 +728,6 @@ class HistoryController:
         app.result_history_accuracy_var.set("-")
         app.result_history_cleanliness_var.set("-")
         app.result_history_score_var.set("-")
-        app.result_history_timing_var.set("-")
         app.result_history_gross_wpm_var.set("-")
         app.result_history_net_wpm_var.set("-")
         app.result_history_device_wpm_var.set("-")
@@ -622,7 +913,11 @@ class HistoryController:
         else:
             app.skill_charset_coverage_value_var.set("-")
 
-        app.skill_charset_scope_value_var.set(f"{charset_scope_factor:.2f}x")
+        charset_scope_text = f"{charset_scope_factor:.2f}x"
+        if charset_scope_factor >= 0.9995:
+            charset_scope_text += f" ({app.i18n.t('skill.charset_scope_max', 'max')})"
+
+        app.skill_charset_scope_value_var.set(charset_scope_text)
         app.skill_warning_var.set(rating.reason)
 
     def skill_timing_text(self, rating: Any) -> str:

@@ -9,6 +9,7 @@
   "app.startup.building_ui": "Rakennetaan käyttöliittymää.",
   "app.startup.checking_serial_ports": "Tarkistetaan sarjaportit.",
   "app.startup.loading_practice_data": "Ladataan harjoitusdataa.",
+  "app.startup.loading_keying_statistics": "Lasketaan näppäilytilastoja.",
   "app.startup.finishing": "Viimeistellään.",
   "app.startup.ready": "Valmis",
 
@@ -98,6 +99,12 @@
 
   "general_info.title": "Yleistä tietoa",
   "general_info.history_title": "Historia",
+  "general_info.straight_presses": "Pumppauksia",
+  "general_info.iambic_elements": "Iambic-elementtejä",
+  "general_info.tone_total": "Tonet yhteensä",
+  "general_info.straight_chars": "Merkkejä pumpulla",
+  "general_info.iambic_chars": "Iambic-merkkejä",
+  "general_info.calculating": "lasketaan...",
 
   "result_panel.history_title": "Historia",
   "result_panel.history_rounds": "Kierroksia",
@@ -105,7 +112,6 @@
   "result_panel.history_accuracy": "Tarkkuus",
   "result_panel.history_cleanliness": "Puhtaus",
   "result_panel.history_score": "Pisteet",
-  "result_panel.history_timing": "Ajoitus",
   "result_panel.history_gross_wpm": "PARIS WPM",
   "result_panel.history_net_wpm": "Netto-WPM",
   "result_panel.history_device_wpm": "Laite-WPM",
@@ -154,6 +160,7 @@
   "skill.total_rounds": "Yht.kier.",
   "skill.charset_coverage": "Merkistön kattavuus",
   "skill.charset_scope_factor": "Tasokerroin",
+  "skill.charset_scope_max": "maksimi",
 
   "progression.title.no_level": "Ei vielä tasoa",
   "progression.title.first_steps": "Ensiaskeleet",
@@ -709,6 +716,12 @@
   "network.public_rooms.retrying_with_existing_one": "{count} huone. Yritetään päivittää uudelleen...",
   "network.public_rooms.retrying_with_existing_many": "{count} huonetta. Yritetään päivittää uudelleen...",
   "network.public_rooms.load_failed": "Julkisia huoneita ei voitu ladata. Yritetään uudelleen... ({count} peräkkäistä epäonnistumista: {message})",
+  "network.public_rooms.load_failed_dns": "Julkisten huoneiden päivitys ei saanut selvitettyä palvelimen osoitetta. Yritetään uudelleen... ({count} peräkkäistä epäonnistumista: {message})",
+  "network.public_rooms.load_failed_timeout": "Julkisten huoneiden päivitys aikakatkaistiin. Yritetään uudelleen... ({count} peräkkäistä epäonnistumista: {message})",
+  "network.public_rooms.load_failed_transient": "Julkisten huoneiden päivitys epäonnistui, mutta palvelinyhteys näyttää edelleen toimivan. Yritetään uudelleen... ({count} peräkkäistä epäonnistumista: {message})",
+  "network.public_rooms.error_dns": "Palvelimen osoitetta ei saatu juuri nyt selvitettyä. Tämä on yleensä hetkellinen DNS- tai verkkoyhteyden ongelma.",
+  "network.public_rooms.error_timeout": "Julkisten huoneiden lataus aikakatkaistiin. Verkkoyhteys tai palvelin voi olla juuri nyt hidas.",
+  "network.public_rooms.error_unknown": "Tuntematon virhe.",
   "network.public_rooms.default_description": "Julkinen kanava ilman salasanaa.",
   "network.public_rooms.users": "Käyttäjiä: {current}/{max}.",
 

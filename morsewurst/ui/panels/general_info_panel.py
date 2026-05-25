@@ -41,14 +41,14 @@ def _section_title(parent: ttk.Frame, text: str) -> None:
         parent,
         text=text,
         font=("Segoe UI", 11, "bold"),
-    ).grid(row=0, column=0, columnspan=2, sticky=tk.W, pady=(0, 6))
+    ).grid(row=0, column=0, columnspan=3, sticky=tk.W, pady=(0, 6))
 
 
 def build_general_info_panel(app: tk.Misc, parent: ttk.Frame) -> None:
     """Build the general information panel.
 
     This panel is intended for long-term or supporting information.
-    At the moment it contains history summary values.
+    It contains historical averages and lightweight keying telemetry totals.
     """
 
     info_frame = ttk.LabelFrame(parent, text=app.i18n.t("general_info.title"))
@@ -64,30 +64,50 @@ def build_general_info_panel(app: tk.Misc, parent: ttk.Frame) -> None:
     history_box = ttk.Frame(content)
     history_box.pack(anchor=tk.NW, fill=tk.X)
 
+    for column in range(3):
+        history_box.columnconfigure(column, weight=1)
+
     _section_title(history_box, app.i18n.t("general_info.history_title"))
 
     _metric_cell(history_box, 1, 0, app.i18n.t("result_panel.history_rounds"), app.result_history_rounds_var)
     _metric_cell(history_box, 1, 1, app.i18n.t("result_panel.history_accuracy"), app.result_history_accuracy_var)
+    _metric_cell(history_box, 1, 2, app.i18n.t("general_info.straight_presses"), app.general_straight_presses_var, width=12)
 
     _metric_cell(history_box, 2, 0, app.i18n.t("result_panel.history_cleanliness"), app.result_history_cleanliness_var)
     _metric_cell(history_box, 2, 1, app.i18n.t("result_panel.history_score"), app.result_history_score_var)
+    _metric_cell(history_box, 2, 2, app.i18n.t("general_info.iambic_elements"), app.general_iambic_elements_var, width=12)
 
     _metric_cell(history_box, 3, 0, app.i18n.t("result_panel.history_gross_wpm"), app.result_history_gross_wpm_var)
     _metric_cell(history_box, 3, 1, app.i18n.t("result_panel.history_net_wpm"), app.result_history_net_wpm_var)
+    _metric_cell(
+        history_box,
+        3,
+        2,
+        app.i18n.t("general_info.tone_total"),
+        app.general_tone_total_var,
+        width=12,
+    )
+
+    _metric_cell(
+        history_box,
+        4,
+        2,
+        app.i18n.t("general_info.straight_chars"),
+        app.general_straight_chars_var,
+        width=12,
+    )
+
+    _metric_cell(
+        history_box,
+        5,
+        2,
+        app.i18n.t("general_info.iambic_chars"),
+        app.general_iambic_chars_var,
+        width=12,
+    )
 
     _metric_cell(history_box, 4, 0, app.i18n.t("result_panel.history_device_wpm"), app.result_history_device_wpm_var)
     _metric_cell(history_box, 4, 1, app.i18n.t("result_panel.history_straight_ratio"), app.result_history_straight_ratio_var)
 
     _metric_cell(history_box, 5, 0, app.i18n.t("result_panel.history_dot_variation"), app.result_history_dot_variation_var)
     _metric_cell(history_box, 5, 1, app.i18n.t("result_panel.history_dash_variation"), app.result_history_dash_variation_var)
-
-    # Reserved space for future general information.
-    placeholder = ttk.Frame(content)
-    placeholder.pack(fill=tk.X, pady=(8, 0))
-
-    ttk.Label(
-        placeholder,
-        text="",
-        foreground="#666666",
-        font=("Segoe UI", 9),
-    ).pack(anchor=tk.W)

@@ -172,13 +172,30 @@ class RuntimeController:
         app.result_history_accuracy_var = tk.StringVar(value="-")
         app.result_history_cleanliness_var = tk.StringVar(value="-")
         app.result_history_score_var = tk.StringVar(value="-")
-        app.result_history_timing_var = tk.StringVar(value="-")
         app.result_history_gross_wpm_var = tk.StringVar(value="-")
         app.result_history_net_wpm_var = tk.StringVar(value="-")
         app.result_history_device_wpm_var = tk.StringVar(value="-")
         app.result_history_straight_ratio_var = tk.StringVar(value="-")
         app.result_history_dot_variation_var = tk.StringVar(value="-")
         app.result_history_dash_variation_var = tk.StringVar(value="-")
+
+        app.general_straight_presses_var = tk.StringVar(value="-")
+        app.general_iambic_elements_var = tk.StringVar(value="-")
+        app.general_tone_total_var = tk.StringVar(value="-")
+        app.general_straight_chars_var = tk.StringVar(value="-")
+        app.general_iambic_chars_var = tk.StringVar(value="-")
+
+        app.keying_event_summary = {
+            "straight_presses": 0,
+            "iambic_elements": 0,
+            "tone_total": 0,
+            "straight_chars": 0,
+            "iambic_chars": 0,
+            "produced_chars_total": 0,
+        }
+        app.keying_event_summary_loaded = False
+        app.keying_event_summary_loading = False
+        app.keying_event_summary_startup_scheduled = False
 
         app.timer_var = tk.StringVar(value=app.i18n.t("runtime.timer_placeholder"))
         app.round_state_var = tk.StringVar(value=app.i18n.t("runtime.round_state_inactive"))

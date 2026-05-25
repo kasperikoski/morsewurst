@@ -494,6 +494,11 @@ class PracticeController:
 
         app.db.refresh_practice_progress(int(practice_id))
 
+        try:
+            app.history_controller.increment_keying_event_summary_from_round(events, char_results)
+        except Exception:
+            pass
+
         self.pending_after_round_updates_session_id = session_id
 
         app.debug_controller.write_round_snapshot_if_enabled()

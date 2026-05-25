@@ -103,20 +103,13 @@ class NetworkServerQueriesMixin:
                 self.tr(self._count_key("network.public_rooms.count", count), count=count)
             )
 
-        if self._public_room_refresh_after_id is not None:
-            try:
-                self.after_cancel(self._public_room_refresh_after_id)
-            except Exception:
-                pass
-
-        self._public_room_refresh_after_id = self.after(
-            max(1, int(PUBLIC_ROOMS_REFRESH_SECONDS)) * 1000,
-            lambda: self._refresh_public_rooms_async(silent=True),
-        )
+        self._schedule_public_rooms_refresh()
 
     def _public_rooms_failed(self, message: str) -> None:
         self._public_rooms_loading = False
         self._public_rooms_failed_attempts += 1
+
+        formatted_message = self._format_public_rooms_error(message)
 
         if self.public_rooms:
             count = len(self.public_rooms)
@@ -133,25 +126,139 @@ class NetworkServerQueriesMixin:
             self._render_public_rooms()
 
         if self._public_rooms_failed_attempts >= self._public_rooms_error_threshold:
+            recent_server_contact = self._public_rooms_has_recent_server_contact()
+            notice_key = self._public_rooms_failure_notice_key(message)
+
+            if recent_server_contact and notice_key == "network.public_rooms.load_failed":
+                notice_key = "network.public_rooms.load_failed_transient"
+
+            fallback_notice = self.tr(
+                "network.public_rooms.load_failed",
+                count=self._public_rooms_failed_attempts,
+                message=formatted_message,
+            )
+
             self._public_rooms_error_visible = True
             self._show_notice(
                 self.tr(
-                    "network.public_rooms.load_failed",
+                    notice_key,
+                    default=fallback_notice,
                     count=self._public_rooms_failed_attempts,
-                    message=message,
+                    message=formatted_message,
                 ),
-                "error",
+                "warning" if recent_server_contact else "error",
             )
 
+        self._schedule_public_rooms_refresh(
+            delay_ms=self._public_rooms_retry_delay_ms()
+        )
+
+    def _schedule_public_rooms_refresh(self, *, delay_ms: int | None = None) -> None:
         if self._public_room_refresh_after_id is not None:
             try:
                 self.after_cancel(self._public_room_refresh_after_id)
             except Exception:
                 pass
 
-        self._public_room_refresh_after_id = self.after(
-            max(1, int(PUBLIC_ROOMS_REFRESH_SECONDS)) * 1000,
-            lambda: self._refresh_public_rooms_async(silent=True),
+        if delay_ms is None:
+            delay_ms = max(1, int(PUBLIC_ROOMS_REFRESH_SECONDS)) * 1000
+
+        try:
+            self._public_room_refresh_after_id = self.after(
+                max(1000, int(delay_ms)),
+                lambda: self._refresh_public_rooms_async(silent=True),
+            )
+        except Exception:
+            self._public_room_refresh_after_id = None
+
+    def _public_rooms_retry_delay_ms(self) -> int:
+        attempts = int(getattr(self, "_public_rooms_failed_attempts", 0))
+
+        if attempts <= 1:
+            return 2000
+        if attempts == 2:
+            return 5000
+        if attempts == 3:
+            return 10000
+        if attempts == 4:
+            return 20000
+
+        return 30000
+
+    def _public_rooms_has_recent_server_contact(self) -> bool:
+        now = time.monotonic()
+
+        for payload in (
+            getattr(self, "last_server_pong", None),
+            getattr(self, "last_server_info", None),
+        ):
+            if not isinstance(payload, dict):
+                continue
+
+            received = payload.get("client_received_monotonic")
+
+            try:
+                if received is not None and now - float(received) <= 45.0:
+                    return True
+            except Exception:
+                pass
+
+        connected_checker = getattr(self, "_server_is_connected", None)
+
+        if callable(connected_checker):
+            try:
+                if connected_checker():
+                    return True
+            except Exception:
+                pass
+
+        manager = getattr(self.app, "network_manager", None)
+
+        if manager is not None:
+            try:
+                if bool(getattr(manager, "control_channel_ready", False)):
+                    return True
+            except Exception:
+                pass
+
+        return False
+
+    def _public_rooms_failure_notice_key(self, message: str) -> str:
+        text = str(message or "").lower()
+
+        if "getaddrinfo failed" in text or "errno 11002" in text:
+            return "network.public_rooms.load_failed_dns"
+
+        if "timed out" in text or "timeout" in text:
+            return "network.public_rooms.load_failed_timeout"
+
+        return "network.public_rooms.load_failed"
+
+    def _format_public_rooms_error(self, message: str) -> str:
+        text = str(message or "").strip()
+        lower = text.lower()
+
+        if "getaddrinfo failed" in lower or "errno 11002" in lower:
+            return self.tr(
+                "network.public_rooms.error_dns",
+                default=(
+                    "Server address could not be resolved. "
+                    "This is usually a temporary DNS or network issue."
+                ),
+            )
+
+        if "timed out" in lower or "timeout" in lower:
+            return self.tr(
+                "network.public_rooms.error_timeout",
+                default=(
+                    "The public room list request timed out. "
+                    "The network or server may be slow right now."
+                ),
+            )
+
+        return text or self.tr(
+            "network.public_rooms.error_unknown",
+            default="Unknown error.",
         )
 
     def _request_initial_server_snapshot(self) -> None:

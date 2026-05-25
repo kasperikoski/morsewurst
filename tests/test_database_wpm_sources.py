@@ -7,6 +7,7 @@ from typing import Any
 
 import pytest
 
+from morsewurst import config
 from morsewurst.core.scoring import estimate_paris_time_us
 from morsewurst.core.skill_rating import calculate_skill_rating
 from morsewurst.storage.database import Database
@@ -211,6 +212,53 @@ def _insert_char_result(
             result,
             ".-",
             source,
+        ),
+    )
+    db.conn.commit()
+
+
+def _insert_many_char_results(
+    db: Database,
+    *,
+    session_id: int,
+    start_position: int,
+    target_char: str,
+    results: list[str],
+    source: str = "straight",
+) -> None:
+    for offset, result in enumerate(results):
+        _insert_char_result(
+            db,
+            session_id=session_id,
+            position_index=start_position + offset,
+            target_char=target_char,
+            result=result,
+            source=source,
+        )
+
+
+def _insert_event(
+    db: Database,
+    *,
+    session_id: int,
+    event_index: int,
+    event_type: str,
+    event_json: dict[str, Any],
+) -> None:
+    db.conn.execute(
+        """
+        INSERT INTO events (
+            session_id,
+            event_index,
+            event_type,
+            event_json
+        ) VALUES (?, ?, ?, ?)
+        """,
+        (
+            int(session_id),
+            int(event_index),
+            str(event_type),
+            json.dumps(event_json, ensure_ascii=False),
         ),
     )
     db.conn.commit()
@@ -680,6 +728,192 @@ def test_calculate_skill_rating_keeps_capped_skill_values_but_exposes_uncapped_p
     assert rating.used_rounds == 2
     assert rating.straight_used_rounds == 2
     assert rating.iambic_used_rounds == 2
+
+
+def test_keying_event_summary_counts_tone_events_by_source(tmp_path: Path) -> None:
+    db = _new_db(tmp_path)
+    base = datetime(2026, 1, 9, 12, 0, 0)
+
+    session_id = _insert_round(
+        db,
+        finished_at=base,
+        source_counts={},
+    )
+
+    events = [
+        ("tone", {"type": "tone", "src": "straight"}),
+        ("tone", {"type": "tone", "src": "STRAIGHT"}),
+        ("tone", {"type": "tone", "src": "iambic"}),
+        ("tone", {"type": "tone", "src": "iambic"}),
+        ("tone", {"type": "tone"}),
+        ("heartbeat", {"type": "heartbeat", "src": "straight"}),
+    ]
+
+    for index, (event_type, payload) in enumerate(events):
+        _insert_event(
+            db,
+            session_id=session_id,
+            event_index=index,
+            event_type=event_type,
+            event_json=payload,
+        )
+
+    expected = {
+        "straight_presses": 2,
+        "iambic_elements": 2,
+        "tone_total": 5,
+        "straight_chars": 0,
+        "iambic_chars": 0,
+        "produced_chars_total": 0,
+    }
+
+    assert db.keying_event_summary() == expected
+    assert db.keying_event_summary_from_file() == expected
+
+
+def test_skill_full_charset_character_results_uses_recent_high_quality_long_rounds(tmp_path: Path) -> None:
+    db = _new_db(tmp_path)
+    base = datetime(2026, 1, 10, 12, 0, 0)
+
+    old_valid = _insert_round(
+        db,
+        finished_at=base + timedelta(minutes=1),
+        accuracy=100.0,
+        cleanliness=100.0,
+        source_counts={},
+    )
+    _insert_many_char_results(
+        db,
+        session_id=old_valid,
+        start_position=0,
+        target_char="/",
+        results=["correct"] * 20,
+    )
+
+    low_accuracy = _insert_round(
+        db,
+        finished_at=base + timedelta(minutes=2),
+        accuracy=80.0,
+        cleanliness=100.0,
+        source_counts={},
+    )
+    _insert_many_char_results(
+        db,
+        session_id=low_accuracy,
+        start_position=0,
+        target_char="?",
+        results=["correct"] * 20,
+    )
+
+    low_cleanliness = _insert_round(
+        db,
+        finished_at=base + timedelta(minutes=3),
+        accuracy=100.0,
+        cleanliness=80.0,
+        source_counts={},
+    )
+    _insert_many_char_results(
+        db,
+        session_id=low_cleanliness,
+        start_position=0,
+        target_char="$",
+        results=["correct"] * 20,
+    )
+
+    valid = _insert_round(
+        db,
+        finished_at=base + timedelta(minutes=4),
+        accuracy=100.0,
+        cleanliness=100.0,
+        source_counts={},
+    )
+    _insert_many_char_results(
+        db,
+        session_id=valid,
+        start_position=0,
+        target_char="!",
+        results=["correct", "correct", "substitution"],
+    )
+
+    rows = db.skill_full_charset_character_results(
+        recent_sessions=3,
+        min_target_chars=12,
+        min_accuracy=90.0,
+        min_cleanliness=85.0,
+    )
+    by_char = {row["char"]: row for row in rows}
+
+    assert list(by_char) == ["!"]
+
+    assert by_char["!"]["attempts"] == 3
+    assert by_char["!"]["correct"] == 2
+    assert by_char["!"]["errors"] == 1
+    assert by_char["!"]["qualified_rounds"] == 1
+
+
+def test_calculate_skill_rating_uses_strict_full_charset_scope_for_visible_level_only(tmp_path: Path) -> None:
+    db = _new_db(tmp_path)
+    base = datetime(2026, 1, 11, 12, 0, 0)
+
+    for index in range(config.SKILL_RATING_FULL_CHARSET_MIN_ROUNDS):
+        source = "straight" if index % 2 == 0 else "iambic"
+
+        _insert_round(
+            db,
+            finished_at=base + timedelta(minutes=index),
+            actual_wpm=20.0,
+            target_wpm=20.0,
+            accuracy=100.0,
+            cleanliness=100.0,
+            source_counts={source: 12},
+        )
+
+    burst_session = _insert_round(
+        db,
+        finished_at=base + timedelta(minutes=60),
+        target="B" * config.SKILL_RATING_FULL_CHARSET_MIN_ATTEMPTS,
+        actual_wpm=20.0,
+        target_wpm=20.0,
+        accuracy=100.0,
+        cleanliness=100.0,
+        source_counts={},
+    )
+    _insert_many_char_results(
+        db,
+        session_id=burst_session,
+        start_position=0,
+        target_char="B",
+        results=["correct"] * config.SKILL_RATING_FULL_CHARSET_MIN_ATTEMPTS,
+    )
+
+    rating = calculate_skill_rating(db, recent_rounds=100)
+
+    assert rating.raw_skill is not None
+    assert rating.level_skill is not None
+
+    # The repeated "A" evidence spans 15 high-quality rounds and qualifies.
+    # The burst "B" evidence has enough attempts, but only one qualified round,
+    # so it must not count for strict full-charset level coverage.
+    assert rating.full_charset_total == len(config.LETTERS + config.NUMBERS + config.PUNCTUATION)
+    assert rating.full_charset_qualified_count == 1
+
+    expected_coverage = 1 / rating.full_charset_total
+    expected_scope = (
+        config.SKILL_RATING_CHARSET_SCOPE_MIN_FACTOR
+        + (
+            config.SKILL_RATING_CHARSET_SCOPE_MAX_FACTOR
+            - config.SKILL_RATING_CHARSET_SCOPE_MIN_FACTOR
+        )
+        * expected_coverage
+    )
+
+    assert rating.full_charset_qualified_coverage == pytest.approx(expected_coverage, abs=0.0001)
+    assert rating.charset_scope_factor == pytest.approx(expected_scope, abs=0.0001)
+    assert rating.level_skill == pytest.approx(
+        round(rating.raw_skill * rating.charset_scope_factor, 2),
+        abs=0.01,
+    )
+    assert rating.level_skill < rating.raw_skill
 
 
 def test_database_no_longer_exposes_removed_legacy_key_source_wpm_method(tmp_path: Path) -> None:

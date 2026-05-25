@@ -9,6 +9,7 @@
   "app.startup.building_ui": "Building user interface.",
   "app.startup.checking_serial_ports": "Checking serial ports.",
   "app.startup.loading_practice_data": "Loading practice data.",
+  "app.startup.loading_keying_statistics": "Calculating keying statistics.",
   "app.startup.finishing": "Finishing.",
   "app.startup.ready": "Ready",
 
@@ -98,6 +99,12 @@
 
   "general_info.title": "General information",
   "general_info.history_title": "History",
+  "general_info.straight_presses": "Straight presses",
+  "general_info.iambic_elements": "Iambic elements",
+  "general_info.tone_total": "Tone total",
+  "general_info.straight_chars": "Straight chars",
+  "general_info.iambic_chars": "Iambic chars",
+  "general_info.calculating": "calculating...",
 
   "result_panel.history_title": "History",
   "result_panel.history_rounds": "Rounds",
@@ -105,7 +112,6 @@
   "result_panel.history_accuracy": "Accuracy",
   "result_panel.history_cleanliness": "Cleanliness",
   "result_panel.history_score": "Score",
-  "result_panel.history_timing": "Timing",
   "result_panel.history_gross_wpm": "PARIS WPM",
   "result_panel.history_net_wpm": "Net WPM",
   "result_panel.history_device_wpm": "Device WPM",
@@ -154,6 +160,7 @@
   "skill.total_rounds": "Total rounds",
   "skill.charset_coverage": "Charset coverage",
   "skill.charset_scope_factor": "Level factor",
+  "skill.charset_scope_max": "max",
 
   "progression.title.no_level": "No level yet",
   "progression.title.first_steps": "First steps",
@@ -709,6 +716,12 @@
   "network.public_rooms.retrying_with_existing_one": "{count} room. Retrying refresh...",
   "network.public_rooms.retrying_with_existing_many": "{count} rooms. Retrying refresh...",
   "network.public_rooms.load_failed": "Public rooms could not be loaded. Retrying... ({count} consecutive failures: {message})",
+  "network.public_rooms.load_failed_dns": "Public room refresh could not resolve the server address. Retrying... ({count} consecutive failures: {message})",
+  "network.public_rooms.load_failed_timeout": "Public room refresh timed out. Retrying... ({count} consecutive failures: {message})",
+  "network.public_rooms.load_failed_transient": "Public room refresh failed, but the server connection still looks active. Retrying... ({count} consecutive failures: {message})",
+  "network.public_rooms.error_dns": "Server address could not be resolved. This is usually a temporary DNS or network issue.",
+  "network.public_rooms.error_timeout": "The public room list request timed out. The network or server may be slow right now.",
+  "network.public_rooms.error_unknown": "Unknown error.",
   "network.public_rooms.default_description": "Public channel without a password.",
   "network.public_rooms.users": "Users: {current}/{max}.",
 
