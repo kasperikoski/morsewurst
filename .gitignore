@@ -12,6 +12,7 @@ env/
 
 # Local user files
 /Morsewurst Project Folder/
+/wiki/
 
 # Build and packaging output
 build/

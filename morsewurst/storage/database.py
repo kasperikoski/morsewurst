@@ -666,7 +666,7 @@ class Database:
 
         status = str(status or "").strip().lower()
 
-        if status not in {"completed", "stopped", "interrupted"}:
+        if status not in {"completed", "stopped", "interrupted", "modified"}:
             status = "stopped"
 
         try:
@@ -714,6 +714,10 @@ class Database:
         if row is None:
             return
 
+        completed_rounds = int(row["completed_rounds"] or 0)
+        total_elapsed_us = int(row["total_elapsed_us"] or 0)
+        total_standard_time_us = int(row["total_standard_time_us"] or 0)
+
         cur.execute(
             """
             UPDATE practices
@@ -724,12 +728,39 @@ class Database:
             WHERE id = ?
             """,
             (
-                int(row["completed_rounds"] or 0),
-                int(row["total_elapsed_us"] or 0),
-                int(row["total_standard_time_us"] or 0),
+                completed_rounds,
+                total_elapsed_us,
+                total_standard_time_us,
                 int(practice_id),
             ),
         )
+
+        practice_row = cur.execute(
+            """
+            SELECT status, planned_rounds
+            FROM practices
+            WHERE id = ?
+            """,
+            (int(practice_id),),
+        ).fetchone()
+
+        if practice_row is not None:
+            status = str(practice_row["status"] or "")
+            planned_rounds = int(practice_row["planned_rounds"] or 0)
+
+            if (
+                status == "completed"
+                and planned_rounds > 0
+                and completed_rounds < planned_rounds
+            ):
+                cur.execute(
+                    """
+                    UPDATE practices
+                    SET status = 'modified'
+                    WHERE id = ?
+                    """,
+                    (int(practice_id),),
+                )
 
     def ensure_practice_consistency(self) -> int:
         if not self._table_exists("sessions") or not self._table_exists("practices"):

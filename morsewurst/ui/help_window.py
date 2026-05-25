@@ -10,9 +10,12 @@ from tkinter import ttk
 import morsewurst.config as config
 
 try:
-    from morsewurst.ui.help_content import HELP_DOCUMENT
+    from morsewurst.ui import help_content as _help_content
 except ModuleNotFoundError:
-    HELP_DOCUMENT = None
+    _help_content = None
+
+HELP_DOCUMENT = getattr(_help_content, "HELP_DOCUMENT", None)
+build_help_document = getattr(_help_content, "build_help_document", None)
 
 
 class HelpWindow(tk.Toplevel):
@@ -145,13 +148,7 @@ class HelpWindow(tk.Toplevel):
         self.text.configure(state=tk.NORMAL)
         self.text.delete("1.0", tk.END)
 
-        if HELP_DOCUMENT is not None:
-            blocks = HELP_DOCUMENT
-        else:
-            blocks = [
-                {"type": "title", "text": self.app.i18n.t("help_window.fallback_title")},
-                {"type": "paragraph", "text": self.app.i18n.t("help_window.fallback_paragraph")},
-            ]
+        blocks = self._load_help_blocks()
 
         for block in blocks:
             block_type = str(block.get("type", "paragraph"))
@@ -176,6 +173,47 @@ class HelpWindow(tk.Toplevel):
                 self.text.insert(tk.END, text + "\n", "paragraph")
 
         self.text.configure(state=tk.DISABLED)
+
+    def _load_help_blocks(self) -> list[dict[str, str]]:
+        if callable(build_help_document):
+            try:
+                return build_help_document(self.app.i18n)
+            except Exception:
+                pass
+
+        if HELP_DOCUMENT is not None:
+            return self._resolve_help_document(HELP_DOCUMENT)
+
+        return [
+            {"type": "title", "text": self.app.i18n.t("help_window.fallback_title")},
+            {"type": "paragraph", "text": self.app.i18n.t("help_window.fallback_paragraph")},
+        ]
+
+    def _resolve_help_document(self, document: object) -> list[dict[str, str]]:
+        blocks: list[dict[str, str]] = []
+
+        try:
+            iterable = list(document)  # type: ignore[arg-type]
+        except Exception:
+            return blocks
+
+        for raw_block in iterable:
+            if not isinstance(raw_block, dict):
+                continue
+
+            block_type = str(raw_block.get("type", "paragraph"))
+            key = str(raw_block.get("key", "")).strip()
+
+            if key:
+                text = self.app.i18n.t(key)
+            else:
+                text = str(raw_block.get("text", ""))
+
+            text = text.strip()
+            if text:
+                blocks.append({"type": block_type, "text": text})
+
+        return blocks
 
     def _center_on_parent(self, parent: tk.Misc) -> None:
         try:

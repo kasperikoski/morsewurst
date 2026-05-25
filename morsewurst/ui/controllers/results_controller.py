@@ -74,17 +74,34 @@ class ResultsController:
         standard_us = self.practice_total_standard_us()
 
         if elapsed_us is None:
-            app.timer_var.set("Kokonaisaika: -")
+            app.timer_var.set(
+                app.i18n.t(
+                    "result_panel.practice_total_time",
+                    "Total time: {elapsed}",
+                    elapsed="-",
+                )
+            )
             return
 
         elapsed_text = self.format_seconds_label(elapsed_us)
 
         if standard_us is None:
-            app.timer_var.set(f"Kokonaisaika: {elapsed_text}")
+            app.timer_var.set(
+                app.i18n.t(
+                    "result_panel.practice_total_time",
+                    "Total time: {elapsed}",
+                    elapsed=elapsed_text,
+                )
+            )
             return
 
         app.timer_var.set(
-            f"Kokonaisaika: {elapsed_text} | Vertailuaika {self.format_seconds_label(standard_us)}"
+            app.i18n.t(
+                "result_panel.practice_total_time_with_reference",
+                "Total time: {elapsed} | Reference time {reference}",
+                elapsed=elapsed_text,
+                reference=self.format_seconds_label(standard_us),
+            )
         )
 
     def straight_ratio_quality_percent(self, ratio: Any) -> Optional[float]:
@@ -151,7 +168,9 @@ class ResultsController:
         """Reset the latest round result panel values."""
         app = self.app
 
-        app.result_latest_title_var.set("Viimeisin kierros")
+        app.result_latest_title_var.set(
+            app.i18n.t("result_panel.latest_title", "Latest round")
+        )
         app.result_latest_accuracy_var.set("-")
         app.result_latest_cleanliness_var.set("-")
         app.result_latest_score_var.set("-")
@@ -179,10 +198,14 @@ class ResultsController:
         """Update the latest round result panel from a score summary."""
         app = self.app
 
-        if summary.finish_reason != "kesken" and summary.elapsed_us is not None:
-            title = f"Viimeisin kierros ({self.format_seconds_label(summary.elapsed_us)})"
+        if summary.finish_reason != "in_progress" and summary.elapsed_us is not None:
+            title = app.i18n.t(
+                "result_panel.latest_title_with_elapsed",
+                "Latest round ({elapsed})",
+                elapsed=self.format_seconds_label(summary.elapsed_us),
+            )
         else:
-            title = "Viimeisin kierros"
+            title = app.i18n.t("result_panel.latest_title", "Latest round")
 
         app.result_latest_title_var.set(title)
         app.result_latest_accuracy_var.set(

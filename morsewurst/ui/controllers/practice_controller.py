@@ -43,6 +43,13 @@ class PracticeController:
     def __init__(self, app: "MorsewurstApp") -> None:
         self.app = app
         self.current_practice_id: Optional[int] = None
+        self.pending_after_round_updates_session_id: Optional[int] = None
+
+        self.inter_round_countdown_running = False
+        self.inter_round_countdown_after_id: Optional[str] = None
+        self.inter_round_countdown_generation = 0
+        self.inter_round_countdown_started_at: Optional[float] = None
+        self.inter_round_countdown_seconds = 3.0
 
     def finish_reason_label(self, reason: object) -> str:
         reason_code = str(reason or "").strip()
@@ -110,6 +117,8 @@ class PracticeController:
             app.settings,
         )
 
+        self.pending_after_round_updates_session_id = None
+
         self._update_practice_buttons()
         app.results_controller.update_practice_series_summary()
         app.status_controller.set_main_status(
@@ -134,6 +143,8 @@ class PracticeController:
             )
             return
 
+        self._cancel_inter_round_countdown(restore_state_text=True)
+
         app.practice_running = False
 
         if app.round.active and not app.round.finished:
@@ -142,6 +153,8 @@ class PracticeController:
         if self.current_practice_id is not None:
             app.db.finish_practice(self.current_practice_id, "stopped")
             self.current_practice_id = None
+
+        self._schedule_pending_after_round_updates()
 
         app.round_state_var.set(
             app.i18n.t("practice.round_state.stopped", "Practice: stopped")
@@ -238,6 +251,8 @@ class PracticeController:
             app.db.finish_practice(self.current_practice_id, "completed")
             self.current_practice_id = None
 
+        self._schedule_pending_after_round_updates()
+
         app.round_state_var.set(
             app.i18n.t("practice.round_state.series_complete", "Practice: complete")
         )
@@ -304,9 +319,46 @@ class PracticeController:
             )
             app.input_entry.configure(state=tk.DISABLED)
 
+            if self.current_practice_id is None:
+                self.current_practice_id = app.db.create_practice(
+                    app.round.started_at or datetime.now(),
+                    app.total_rounds,
+                    app.settings,
+                )
+
+            round_started_at = app.round.started_at or datetime.now()
+            app.round.started_at = round_started_at
+
+            round_summary = app.last_summary
+            round_events = [dict(event) for event in app.round.events]
+            round_char_results = list(app.last_char_results)
+            round_practice_id = int(self.current_practice_id)
+            round_number = int(app.round.round_number)
+
+            should_continue_to_next_round = (
+                auto_continue
+                and app.practice_running
+                and app.current_round_number < app.total_rounds
+            )
+
+            if should_continue_to_next_round:
+                self._begin_inter_round_countdown()
+                save_auto_continue = False
+            else:
+                save_auto_continue = auto_continue
+
             app.after(
                 50,
-                lambda: self._save_finished_round(auto_continue=auto_continue),
+                lambda: self._save_finished_round(
+                    auto_continue=save_auto_continue,
+                    show_saved_status=not should_continue_to_next_round,
+                    started_at=round_started_at,
+                    summary=round_summary,
+                    events=round_events,
+                    char_results=round_char_results,
+                    practice_id=round_practice_id,
+                    round_number=round_number,
+                ),
             )
             return
 
@@ -338,7 +390,7 @@ class PracticeController:
         app = self.app
 
         if app.current_round_number < app.total_rounds:
-            app.after(1200, self._start_next_round)
+            self._begin_inter_round_countdown()
             return
 
         app.practice_running = False
@@ -346,7 +398,9 @@ class PracticeController:
         if self.current_practice_id is not None:
             app.db.finish_practice(self.current_practice_id, "completed")
             self.current_practice_id = None
-            
+
+        self._schedule_pending_after_round_updates()
+
         app.status_controller.set_main_status(
             app.i18n.t(
                 "practice.status.series_complete_upper",
@@ -370,6 +424,8 @@ class PracticeController:
 
         app = self.app
 
+        self._cancel_inter_round_countdown(restore_state_text=False)
+
         if self.current_practice_id is None:
             return
 
@@ -379,54 +435,110 @@ class PracticeController:
             self.current_practice_id = None
             app.practice_running = False
 
-    def _save_finished_round(self, *, auto_continue: bool = True) -> None:
-        """Persist the finished round and schedule slower after-save updates."""
+    def _save_finished_round(
+        self,
+        *,
+        auto_continue: bool = True,
+        show_saved_status: bool = True,
+        started_at: Optional[datetime] = None,
+        summary: Any = None,
+        events: Optional[list[Dict[str, Any]]] = None,
+        char_results: Optional[list[Any]] = None,
+        practice_id: Optional[int] = None,
+        round_number: Optional[int] = None,
+    ) -> None:
+        """Persist a finished round from an immutable round snapshot."""
         app = self.app
 
-        if app.last_summary is None:
+        summary = summary if summary is not None else app.last_summary
+
+        if summary is None:
             if auto_continue and app.practice_running:
                 self._advance_after_finished_round()
             return
 
-        app.round.started_at = app.round.started_at or datetime.now()
+        started_at = started_at or app.round.started_at or datetime.now()
+        events = (
+            events
+            if events is not None
+            else [dict(event) for event in app.round.events]
+        )
+        char_results = (
+            char_results
+            if char_results is not None
+            else list(app.last_char_results)
+        )
 
-        if self.current_practice_id is None:
-            self.current_practice_id = app.db.create_practice(
-                app.round.started_at,
-                app.total_rounds,
-                app.settings,
-            )
+        if practice_id is None:
+            if self.current_practice_id is None:
+                self.current_practice_id = app.db.create_practice(
+                    started_at,
+                    app.total_rounds,
+                    app.settings,
+                )
+
+            practice_id = int(self.current_practice_id)
+
+        if round_number is None:
+            round_number = int(app.round.round_number)
 
         session_id = app.db.save_session(
-            app.round.started_at,
-            app.last_summary,
+            started_at,
+            summary,
             app.settings,
-            app.round.events,
-            app.last_char_results,
-            practice_id=self.current_practice_id,
-            round_number=app.round.round_number,
+            events,
+            char_results,
+            practice_id=int(practice_id),
+            round_number=int(round_number),
         )
 
-        app.db.refresh_practice_progress(self.current_practice_id)
+        app.db.refresh_practice_progress(int(practice_id))
+
+        self.pending_after_round_updates_session_id = session_id
 
         app.debug_controller.write_round_snapshot_if_enabled()
-        app.decoder_controller.refresh_timing_profiles()
 
-        app.status_var.set(
-            app.i18n.t(
-                "practice.status.saved_round",
-                "Saved round #{session_id}",
-                session_id=session_id,
+        if show_saved_status:
+            app.status_var.set(
+                app.i18n.t(
+                    "practice.status.saved_round",
+                    "Saved round #{session_id}",
+                    session_id=session_id,
+                )
             )
-        )
 
         if auto_continue and app.practice_running:
             self._advance_after_finished_round()
 
+    
+    def _schedule_pending_after_round_updates(self) -> None:
+        """Schedule heavy after-round updates once, using the latest saved round."""
+        app = self.app
+
+        session_id = self.pending_after_round_updates_session_id
+
+        if session_id is None:
+            return
+
+        self.pending_after_round_updates_session_id = None
+
         app.after(
             150,
-            lambda session_id=session_id: self._deferred_after_round_updates(session_id),
+            lambda session_id=session_id: self._run_deferred_after_round_updates(session_id),
         )
+
+
+    def _run_deferred_after_round_updates(self, session_id: int) -> None:
+        """Run heavier updates after the practice has stopped or completed."""
+        app = self.app
+
+        try:
+            app.decoder_controller.refresh_timing_profiles()
+        except Exception:
+            pass
+
+        self._deferred_after_round_updates(session_id)
+        
 
     def _deferred_after_round_updates(self, session_id: int) -> None:
         """Update skill, history, problem tables and summaries after saving."""
@@ -534,6 +646,118 @@ class PracticeController:
         app.round.hid_text = ""
         app.round.telemetry_text = ""
         app.decoder_controller.clear_raw_telemetry()
+
+    def _begin_inter_round_countdown(self) -> None:
+        """Start the visual countdown before the next round in the same practice."""
+        app = self.app
+
+        if not app.practice_running:
+            return
+
+        if app.current_round_number >= app.total_rounds:
+            return
+
+        self._cancel_inter_round_countdown(restore_state_text=False)
+
+        self.inter_round_countdown_running = True
+        self.inter_round_countdown_generation += 1
+        self.inter_round_countdown_started_at = time.monotonic()
+
+        next_round = app.current_round_number + 1
+
+        app.input_entry.configure(state=tk.DISABLED)
+
+        app.round_state_var.set(
+            app.i18n.t(
+                "practice.round_state.next_round_countdown",
+                "Round {next}/{total}: starts soon",
+                next=next_round,
+                total=app.total_rounds,
+            )
+        )
+
+        app.status_var.set(
+            app.i18n.t(
+                "practice.status.next_round_countdown",
+                "Next round starts soon.",
+            )
+        )
+
+        self._show_start_countdown_bar()
+        self._update_practice_buttons()
+        self._update_inter_round_countdown_bar(self.inter_round_countdown_generation)
+
+
+    def _cancel_inter_round_countdown(self, restore_state_text: bool = True) -> None:
+        """Cancel the countdown between practice rounds."""
+        app = self.app
+
+        self.inter_round_countdown_generation += 1
+
+        if self.inter_round_countdown_after_id is not None:
+            try:
+                app.after_cancel(self.inter_round_countdown_after_id)
+            except Exception:
+                pass
+
+        self.inter_round_countdown_after_id = None
+        self.inter_round_countdown_started_at = None
+        self.inter_round_countdown_running = False
+
+        if restore_state_text:
+            self._hide_start_countdown_bar()
+
+
+    def _update_inter_round_countdown_bar(self, generation: int) -> None:
+        """Redraw and advance the countdown before the next practice round."""
+        app = self.app
+
+        if generation != self.inter_round_countdown_generation:
+            return
+
+        if not self.inter_round_countdown_running or not app.practice_running:
+            return
+
+        self.inter_round_countdown_started_at = (
+            self.inter_round_countdown_started_at or time.monotonic()
+        )
+
+        now = time.monotonic()
+        duration = max(0.1, float(self.inter_round_countdown_seconds))
+        elapsed = max(0.0, now - self.inter_round_countdown_started_at)
+        remaining = max(0.0, duration - elapsed)
+        fraction = max(0.0, min(1.0, remaining / duration))
+
+        self._draw_start_countdown_bar(fraction, remaining)
+
+        if remaining <= 0:
+            self._finish_inter_round_countdown(generation)
+            return
+
+        self.inter_round_countdown_after_id = app.after(
+            50,
+            lambda: self._update_inter_round_countdown_bar(generation),
+        )
+
+
+    def _finish_inter_round_countdown(self, generation: int) -> None:
+        """Finish the inter-round countdown and start the next round."""
+        app = self.app
+
+        if generation != self.inter_round_countdown_generation:
+            return
+
+        if not self.inter_round_countdown_running:
+            return
+
+        self.inter_round_countdown_running = False
+        self.inter_round_countdown_after_id = None
+        self.inter_round_countdown_started_at = None
+
+        self._hide_start_countdown_bar()
+
+        if app.practice_running:
+            self._start_next_round()
 
     def _begin_start_countdown(self) -> None:
         """Start the visual pre-practice countdown."""
