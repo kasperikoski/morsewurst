@@ -72,6 +72,14 @@ class SkillRating:
     mastery_adjustment: float
 
     raw_skill: Optional[float]
+
+    # Level-only adjusted skill. raw_skill remains the displayed Overall skill WPM.
+    level_skill: Optional[float]
+    full_charset_total: int
+    full_charset_qualified_count: int
+    full_charset_qualified_coverage: float
+    charset_scope_factor: float
+
     level: int
     level_progress: float
     title: str
@@ -95,6 +103,12 @@ QUALIFIED_MIN_CLEANLINESS = float(_cfg("SKILL_RATING_QUALIFIED_MIN_CLEANLINESS",
 
 CONFIDENCE_K = float(_cfg("SKILL_RATING_CHARACTER_CONFIDENCE_K", 15.0))
 COVERAGE_MIN_ATTEMPTS = int(_cfg("SKILL_RATING_COVERAGE_MIN_ATTEMPTS", 5))
+
+FULL_CHARSET_MIN_ATTEMPTS = int(_cfg("SKILL_RATING_FULL_CHARSET_MIN_ATTEMPTS", 15))
+FULL_CHARSET_MIN_ROUNDS = int(_cfg("SKILL_RATING_FULL_CHARSET_MIN_ROUNDS", 15))
+FULL_CHARSET_MIN_ACCURACY = float(_cfg("SKILL_RATING_FULL_CHARSET_MIN_ACCURACY", 75.0))
+CHARSET_SCOPE_MIN_FACTOR = float(_cfg("SKILL_RATING_CHARSET_SCOPE_MIN_FACTOR", 0.70))
+CHARSET_SCOPE_MAX_FACTOR = float(_cfg("SKILL_RATING_CHARSET_SCOPE_MAX_FACTOR", 1.00))
 
 SAMPLE_CONFIDENCE_K = float(_cfg("SKILL_RATING_SAMPLE_CONFIDENCE_K", 30.0))
 
@@ -583,6 +597,98 @@ def _character_mastery(
     return mastery, mastery_factor, coverage_factor
 
 
+def _full_supported_charset() -> str:
+    """Return the full Morsewurst character set used for level-only scope."""
+
+    chars = (
+        str(getattr(config, "LETTERS", "") or "")
+        + str(getattr(config, "NUMBERS", "") or "")
+        + str(getattr(config, "PUNCTUATION", "") or "")
+    )
+
+    return "".join(dict.fromkeys(ch.upper() for ch in chars if ch and not ch.isspace()))
+
+
+def _full_charset_scope_metrics(character_rows: Sequence[Any]) -> dict[str, float | int]:
+    """Calculate full-character-set coverage used only for level progression.
+
+    This is intentionally separate from _character_mastery() so that the existing
+    mastery and coverage values keep their current meaning.
+
+    The rows passed here should already come from high-quality skill evidence
+    rounds. A character counts only after enough appearances, enough distinct
+    high-quality rounds and sufficient character-specific accuracy.
+    """
+
+    full_charset = _full_supported_charset()
+    full_charset_set = set(full_charset)
+    full_total = len(full_charset)
+
+    by_char: dict[str, dict[str, int]] = {}
+
+    for row in character_rows:
+        char = str(_row_get(row, "char", "") or "").upper()
+
+        if not char or char.isspace() or char not in full_charset_set:
+            continue
+
+        attempts = int(_row_get(row, "attempts", 0) or 0)
+        correct = int(_row_get(row, "correct", 0) or 0)
+        qualified_rounds = int(_row_get(row, "qualified_rounds", 0) or 0)
+
+        if attempts <= 0:
+            continue
+
+        current = by_char.setdefault(
+            char,
+            {
+                "attempts": 0,
+                "correct": 0,
+                "qualified_rounds": 0,
+            },
+        )
+
+        current["attempts"] += attempts
+        current["correct"] += correct
+        current["qualified_rounds"] += qualified_rounds
+
+    qualified_count = 0
+
+    for char in full_charset:
+        stats = by_char.get(char, {"attempts": 0, "correct": 0, "qualified_rounds": 0})
+        attempts = int(stats["attempts"])
+        correct = int(stats["correct"])
+        qualified_rounds = int(stats["qualified_rounds"])
+
+        if attempts < FULL_CHARSET_MIN_ATTEMPTS:
+            continue
+
+        if qualified_rounds < FULL_CHARSET_MIN_ROUNDS:
+            continue
+
+        accuracy = (correct / attempts) * 100.0 if attempts > 0 else 0.0
+
+        if accuracy >= FULL_CHARSET_MIN_ACCURACY:
+            qualified_count += 1
+
+    coverage = 0.0 if full_total <= 0 else _clamp(qualified_count / full_total, 0.0, 1.0)
+
+    min_factor = _clamp(CHARSET_SCOPE_MIN_FACTOR, 0.0, 1.0)
+    max_factor = _clamp(CHARSET_SCOPE_MAX_FACTOR, min_factor, 1.0)
+    scope_factor = _clamp(
+        min_factor + ((max_factor - min_factor) * coverage),
+        min_factor,
+        max_factor,
+    )
+
+    return {
+        "full_charset_total": int(full_total),
+        "full_charset_qualified_count": int(qualified_count),
+        "full_charset_qualified_coverage": round(coverage, 4),
+        "charset_scope_factor": round(scope_factor, 4),
+    }
+
+
 def _relative_score(actual: Optional[float], ideal: Optional[float]) -> Optional[float]:
     if actual is None or ideal is None:
         return None
@@ -720,6 +826,14 @@ def empty_skill_rating(reason: str, recent_rounds: int) -> SkillRating:
         rating_confidence=0.0,
         mastery_adjustment=1.0,
         raw_skill=None,
+        level_skill=None,
+        full_charset_total=len(_full_supported_charset()),
+        full_charset_qualified_count=0,
+        full_charset_qualified_coverage=0.0,
+        charset_scope_factor=round(
+            _clamp(CHARSET_SCOPE_MIN_FACTOR, 0.0, 1.0),
+            4,
+        ),
         level=progression.level,
         level_progress=progression.level_progress,
         title=progression.title,
@@ -783,6 +897,19 @@ def calculate_skill_rating(
         expected_charset,
     )
 
+    full_charset_row_loader = getattr(db, "skill_full_charset_character_results", None)
+    if callable(full_charset_row_loader):
+        full_charset_rows = full_charset_row_loader(
+            recent_rounds,
+            min_target_chars=MIN_TARGET_CHARS,
+            min_accuracy=QUALIFIED_MIN_ACCURACY,
+            min_cleanliness=QUALIFIED_MIN_CLEANLINESS,
+        )
+    else:
+        full_charset_rows = []
+
+    full_charset_scope = _full_charset_scope_metrics(full_charset_rows)
+
     avg_accuracy, avg_cleanliness, quality_factor = _quality_factor(session_rows)
     timing_quality_score = None
     straight_timing_score = None
@@ -841,7 +968,10 @@ def calculate_skill_rating(
         * mastery_adj
     )
 
-    progression = progression_from_raw_skill(raw_skill)
+    charset_scope_factor = float(full_charset_scope["charset_scope_factor"])
+    level_skill = raw_skill * charset_scope_factor
+
+    progression = progression_from_raw_skill(level_skill)
 
     if used_rounds < MIN_QUALIFIED_ROUNDS:
         ok = False
@@ -905,6 +1035,11 @@ def calculate_skill_rating(
         rating_confidence=round(rating_conf, 4),
         mastery_adjustment=round(mastery_adj, 4),
         raw_skill=round(raw_skill, 2),
+        level_skill=round(level_skill, 2),
+        full_charset_total=int(full_charset_scope["full_charset_total"]),
+        full_charset_qualified_count=int(full_charset_scope["full_charset_qualified_count"]),
+        full_charset_qualified_coverage=float(full_charset_scope["full_charset_qualified_coverage"]),
+        charset_scope_factor=round(charset_scope_factor, 4),
         level=progression.level,
         level_progress=round(progression.level_progress, 4),
         title=progression.title,

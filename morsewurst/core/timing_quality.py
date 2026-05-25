@@ -543,7 +543,7 @@ def _score_gap_infos_for_source(
             target_units = _gap_target_units(source_name, "word")
             word_scores.append(_gap_score_from_units(float(gap_units), target_units))
 
-        elif gap_kind in {"letter", "soft_letter"}:
+        elif gap_kind == "letter":
             target_units = _gap_target_units(source_name, "letter")
             letter_scores.append(_gap_score_from_units(float(gap_units), target_units))
 

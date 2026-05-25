@@ -63,6 +63,12 @@ def build_skill_panel(app: tk.Misc, parent: ttk.Frame) -> None:
     _metric_cell(confidence_grid, 3, app.i18n.t("skill.min_rounds"), app.skill_used_rounds_value_var)
     _metric_cell(confidence_grid, 4, app.i18n.t("skill.total_rounds"), app.skill_total_used_rounds_value_var)
 
+    charset_grid = ttk.Frame(skill)
+    charset_grid.pack(anchor=tk.W, padx=8, pady=(4, 0), fill=tk.X)
+
+    _metric_cell(charset_grid, 0, app.i18n.t("skill.charset_coverage"), app.skill_charset_coverage_value_var)
+    _metric_cell(charset_grid, 1, app.i18n.t("skill.charset_scope_factor"), app.skill_charset_scope_value_var)
+
     ttk.Label(
         skill,
         textvariable=app.skill_warning_var,

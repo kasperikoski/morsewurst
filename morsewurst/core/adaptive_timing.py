@@ -133,21 +133,6 @@ class DecoderSettings:
 
     max_gap_for_learning_units: float = 30.0
 
-    # Rescue settings remain accepted by the decoder API but the simplified
-    # decoder does not depend on target-assisted rescue for live stability.
-    soft_boundary_rescue_enabled: bool = False
-    soft_boundary_unknown_only: bool = True
-    soft_boundary_max_splits: int = 0
-    soft_letter_gap_min_units: float = 2.35
-    soft_letter_gap_target_units: float = 3.0
-    soft_boundary_contrast_ratio: float = 1.35
-    soft_boundary_min_score: float = 58.0
-    soft_boundary_split_penalty: float = 7.0
-    target_split_rescue_enabled: bool = False
-    target_split_max_splits: int = 0
-    target_split_min_gap_units: float = 2.0
-    target_split_min_score: float = 42.0
-
     # New profile seed values.
     profile_straight_element_unit_us: Optional[float] = None
     profile_straight_gap_unit_us: Optional[float] = None

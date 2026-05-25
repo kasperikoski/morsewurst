@@ -292,106 +292,6 @@ def _source_timing_summary(decoded: Any) -> dict[str, Any]:
     return _jsonable(timing)
 
 
-def _rescue_summary(decoded: Any) -> dict[str, Any]:
-    char_infos = [
-        info
-        for info in list(getattr(decoded, "char_infos", []) or [])
-        if isinstance(info, dict)
-    ]
-
-    gap_infos = [
-        gap
-        for gap in list(getattr(decoded, "gap_infos", []) or [])
-        if isinstance(gap, dict)
-    ]
-
-    rescue_attempts = [
-        attempt
-        for attempt in list(getattr(decoded, "rescue_attempts", []) or [])
-        if isinstance(attempt, dict)
-    ]
-
-    rescued_gaps: list[dict[str, Any]] = []
-    for index, gap in enumerate(gap_infos):
-        is_rescued = (
-            gap.get("kind") == "soft_letter"
-            or bool(gap.get("soft_boundary"))
-            or str(gap.get("boundary_kind") or "") in {"soft", "target_soft"}
-        )
-
-        if not is_rescued:
-            continue
-
-        rescued_gaps.append(
-            {
-                "gap_index": index,
-                "kind": gap.get("kind"),
-                "original_kind": gap.get("original_kind"),
-                "boundary_kind": gap.get("boundary_kind"),
-                "rescue_kind": gap.get("rescue_kind"),
-                "gap_us": gap.get("gap_us"),
-                "gap_units": gap.get("gap_units"),
-                "gap_unit_us": gap.get("gap_unit_us"),
-                "soft_boundary_confidence": gap.get("soft_boundary_confidence"),
-                "soft_boundary_score": gap.get("soft_boundary_score"),
-                "from_t1": gap.get("from_t1"),
-                "to_t0": gap.get("to_t0"),
-            }
-        )
-
-    rescued_chars: list[dict[str, Any]] = []
-    for index, info in enumerate(char_infos):
-        if not bool(info.get("soft_boundary_rescue")):
-            continue
-
-        rescued_chars.append(
-            {
-                "char_index": index,
-                "ch": info.get("ch"),
-                "code": info.get("code"),
-                "gap_before_us": info.get("gap_before_us"),
-                "gap_before_units": info.get("gap_before_units"),
-                "gap_kind": info.get("gap_kind"),
-                "boundary_kind": info.get("boundary_kind"),
-                "rescue_kind": info.get("rescue_kind"),
-                "rescue_original_code": info.get("rescue_original_code"),
-                "rescue_confidence": info.get("rescue_confidence"),
-            }
-        )
-
-    accepted_attempts = [
-        attempt for attempt in rescue_attempts
-        if bool(attempt.get("accepted"))
-    ]
-
-    target_split_count = sum(
-        1
-        for gap in rescued_gaps
-        if gap.get("rescue_kind") == "target_split"
-        or gap.get("boundary_kind") == "target_soft"
-    )
-
-    unknown_soft_boundary_count = sum(
-        1
-        for gap in rescued_gaps
-        if gap.get("rescue_kind") in {"unknown_soft_boundary", "soft_boundary"}
-        or gap.get("boundary_kind") == "soft"
-    )
-
-    return {
-        "soft_boundary_count": int(getattr(decoded, "soft_boundary_count", 0)),
-        "rescued_gap_count": len(rescued_gaps),
-        "rescued_char_count": len(rescued_chars),
-        "target_split_count": target_split_count,
-        "unknown_soft_boundary_count": unknown_soft_boundary_count,
-        "attempt_count": len(rescue_attempts),
-        "accepted_attempt_count": len(accepted_attempts),
-        "rescued_gaps": rescued_gaps,
-        "rescued_chars": rescued_chars,
-        "attempts": _jsonable(rescue_attempts),
-    }
-
-
 def _settings_snapshot(app: Any) -> dict[str, Any]:
     ui_settings: dict[str, Any] = {}
     decoder_settings: dict[str, Any] = {}
@@ -499,8 +399,6 @@ def build_round_debug_snapshot(
             "decoded_char_count": len(getattr(decoded, "char_infos", []) or []),
             "decoded_element_count": len(getattr(decoded, "element_infos", []) or []),
             "decoded_gap_count": len(getattr(decoded, "gap_infos", []) or []),
-            "soft_boundary_count": int(getattr(decoded, "soft_boundary_count", 0)),
-            "rescue_attempt_count": len(getattr(decoded, "rescue_attempts", []) or []),
         },
         "settings": _settings_snapshot(app),
         "timing": {
@@ -518,9 +416,7 @@ def build_round_debug_snapshot(
             "char_infos": _jsonable(getattr(decoded, "char_infos", []) or []),
             "element_infos": _jsonable(getattr(decoded, "element_infos", []) or []),
             "gap_infos": _jsonable(getattr(decoded, "gap_infos", []) or []),
-            "rescue_attempts": _jsonable(getattr(decoded, "rescue_attempts", []) or []),
         },
-        "rescue_summary": _rescue_summary(decoded),
         "presses": _build_presses(tones, decoded),
         "timeline": _build_timeline(
             tones,

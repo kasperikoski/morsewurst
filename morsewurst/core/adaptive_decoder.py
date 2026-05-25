@@ -41,7 +41,6 @@ class DecodedTelemetry:
     char_infos: list[dict[str, Any]] = field(default_factory=list)
     element_infos: list[dict[str, Any]] = field(default_factory=list)
     gap_infos: list[dict[str, Any]] = field(default_factory=list)
-    rescue_attempts: list[dict[str, Any]] = field(default_factory=list)
 
     def timing_for_source(self, source: Any) -> SourceTimingEstimate:
         return self.timing.for_source(source)
@@ -62,10 +61,6 @@ class DecodedTelemetry:
     def unit_us(self) -> float:
         # Backward-compatible convenience property for older drawing code.
         return self.gap_unit_us
-
-    @property
-    def soft_boundary_count(self) -> int:
-        return sum(1 for info in self.gap_infos if bool(info.get("soft_boundary")))
 
 
 def _decode_symbol(symbol: str, settings: DecoderSettings) -> str:
@@ -200,7 +195,6 @@ def _classify_gap(previous: NormalizedToneEvent, current: NormalizedToneEvent, t
     return {
         "kind": kind,
         "boundary_kind": boundary,
-        "soft_boundary": False,
         "source": source,
         "gap_us": gap_us,
         "gap_units": gap_units,
@@ -274,10 +268,6 @@ def _char_info(
         "gap_unit_us": first.get("gap_unit_us"),
         "dit_us": first.get("dit_us"),
         "wpm": first.get("wpm"),
-        "soft_boundary_rescue": False,
-        "rescue_original_code": None,
-        "rescue_confidence": None,
-        "rescue_kind": None,
     }
 
 
@@ -297,10 +287,6 @@ def _space_info(gap_info: dict[str, Any]) -> dict[str, Any]:
         "gap_unit_us": float(gap_info.get("gap_unit_us") or 0.0),
         "dit_us": None,
         "wpm": None,
-        "soft_boundary_rescue": False,
-        "rescue_original_code": None,
-        "rescue_confidence": None,
-        "rescue_kind": None,
     }
 
 
@@ -413,5 +399,4 @@ def decode_tone_events(
         char_infos=char_infos,
         element_infos=element_infos,
         gap_infos=gap_infos,
-        rescue_attempts=[],
     )

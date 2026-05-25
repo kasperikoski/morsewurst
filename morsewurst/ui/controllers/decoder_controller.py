@@ -301,28 +301,12 @@ class DecoderController:
         self.write_telemetry_text_widget("")
 
     def telemetry_char_tag(self, info: dict[str, Any]) -> Optional[str]:
-        """Return the visual tag for one decoded telemetry character.
-
-        Important:
-        soft_boundary_rescue alone is not enough, because rescued split output
-        may mark all produced characters as rescued. For display purposes we
-        only color the character whose gap before it was actually a soft
-        boundary.
-        """
+        """Return the visual tag for one decoded telemetry character."""
         unknown_char = str(getattr(config, "DECODER_UNKNOWN_CHAR", "�"))
         ch = str(info.get("ch") or "")
 
         if ch == unknown_char:
             return "unknown"
-
-        boundary_kind = str(info.get("boundary_kind") or "").lower()
-        gap_kind = str(info.get("gap_kind") or "").lower()
-
-        if boundary_kind in {"soft", "target_soft"}:
-            return "rescued"
-
-        if gap_kind == "soft_letter":
-            return "rescued"
 
         return None
 

@@ -9,7 +9,7 @@ import sys
 from pathlib import Path
 
 APP_NAME = "Morsewurst"
-APP_VERSION = "0.99.8"
+APP_VERSION = "0.99.9"
 
 # ============================================================
 # Update check
@@ -456,6 +456,20 @@ SKILL_RATING_QUALIFIED_MIN_ACCURACY = 90.0
 SKILL_RATING_QUALIFIED_MIN_CLEANLINESS = 85.0
 SKILL_RATING_CHARACTER_CONFIDENCE_K = 15.0
 SKILL_RATING_COVERAGE_MIN_ATTEMPTS = 5
+
+# Full-character-set coverage affects only the visible level/title progression.
+# It does not change raw skill WPM, scoring, WPM values, character mastery or
+# stored round data.
+
+# Minimum total appearances in high-quality rounds before a full-charset character can count.
+SKILL_RATING_FULL_CHARSET_MIN_ATTEMPTS = 15
+# Minimum number of high-quality rounds containing the character before it can count.
+SKILL_RATING_FULL_CHARSET_MIN_ROUNDS = 15
+# Minimum character-specific accuracy within high-quality rounds before the character can count.
+SKILL_RATING_FULL_CHARSET_MIN_ACCURACY = 75.0
+SKILL_RATING_CHARSET_SCOPE_MIN_FACTOR = 0.70
+SKILL_RATING_CHARSET_SCOPE_MAX_FACTOR = 1.00
+
 SKILL_RATING_SAMPLE_CONFIDENCE_K = 30.0
 SKILL_RATING_MASTERY_ADJUSTMENT_MIN = 0.75
 SKILL_RATING_MASTERY_ADJUSTMENT_MAX = 1.05

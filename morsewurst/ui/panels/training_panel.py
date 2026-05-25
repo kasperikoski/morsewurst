@@ -117,11 +117,6 @@ def build_training_panel(app: tk.Misc, parent: ttk.Frame) -> None:
     app.telemetry_text_widget.pack(fill=tk.X, anchor=tk.W, padx=12, pady=8)
 
     app.telemetry_text_widget.tag_configure(
-        "rescued",
-        foreground="#9a6b00",
-        font=("Consolas", 17, "bold"),
-    )
-    app.telemetry_text_widget.tag_configure(
         "unknown",
         foreground="#b00020",
         font=("Consolas", 17, "bold"),

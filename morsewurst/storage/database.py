@@ -161,7 +161,6 @@ class Database:
                     "timing_intra_gap_score",
                     "timing_letter_gap_score",
                     "timing_word_gap_score",
-                    "soft_boundary_count",
                     "profile_eligible",
                     "profile_reject_reason",
                     "profile_max_element_units",
@@ -415,8 +414,6 @@ class Database:
                 timing_intra_gap_score REAL,
                 timing_letter_gap_score REAL,
                 timing_word_gap_score REAL,
-
-                soft_boundary_count INTEGER NOT NULL DEFAULT 0,
 
                 profile_eligible INTEGER NOT NULL DEFAULT 1,
                 profile_reject_reason TEXT,
@@ -931,8 +928,6 @@ class Database:
                     timing_letter_gap_score,
                     timing_word_gap_score,
 
-                    soft_boundary_count,
-
                     profile_eligible,
                     profile_reject_reason,
                     profile_max_element_units,
@@ -969,7 +964,7 @@ class Database:
                     word_gap_sd_us,
 
                     settings_json
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     started_at.isoformat(timespec="seconds"),
@@ -995,8 +990,6 @@ class Database:
                     summary.timing_intra_gap_score,
                     summary.timing_letter_gap_score,
                     summary.timing_word_gap_score,
-
-                    summary.soft_boundary_count,
 
                     1 if summary.profile_eligible else 0,
                     summary.profile_reject_reason,
@@ -1164,7 +1157,6 @@ class Database:
                 overall_score,
                 speed_score,
                 timing_score,
-                soft_boundary_count,
 
                 correct_count,
                 error_count,
@@ -1949,7 +1941,6 @@ class Database:
                 overall_score,
                 speed_score,
                 timing_score,
-                soft_boundary_count,
 
                 correct_count,
                 error_count,
@@ -2030,7 +2021,6 @@ class Database:
                 s.overall_score,
                 s.speed_score,
                 s.timing_score,
-                s.soft_boundary_count,
 
                 s.correct_count,
                 s.error_count,
@@ -2127,7 +2117,6 @@ class Database:
                     "overall_score": row["overall_score"],
                     "speed_score": row["speed_score"],
                     "timing_score": row["timing_score"],
-                    "soft_boundary_count": row["soft_boundary_count"],
 
                     "correct_count": row["correct_count"],
                     "error_count": row["error_count"],
@@ -2218,6 +2207,68 @@ class Database:
 
         return list(cur.fetchall())
     
+
+    def skill_full_charset_character_results(
+        self,
+        recent_sessions: int = 1000,
+        min_target_chars: int = 12,
+        min_accuracy: float = 90.0,
+        min_cleanliness: float = 85.0,
+    ) -> List[sqlite3.Row]:
+        """Return character evidence for full-character-set level coverage.
+
+        This is intentionally separate from skill_character_results(). It only
+        uses high-quality, sufficiently long rounds so that the full charset
+        level correction is based on demonstrated character use inside good
+        overall performances.
+        """
+
+        cur = self.conn.cursor()
+
+        cur.execute(
+            """
+            WITH base_recent AS (
+                SELECT id
+                FROM sessions
+                WHERE COALESCE(
+                    NULLIF(length_target, 0),
+                    LENGTH(REPLACE(target, ' ', ''))
+                ) >= ?
+                ORDER BY id DESC
+                LIMIT ?
+            ),
+            qualified_sessions AS (
+                SELECT id
+                FROM sessions
+                WHERE id IN (SELECT id FROM base_recent)
+                  AND accuracy >= ?
+                  AND cleanliness >= ?
+            )
+            SELECT
+                cr.target_char AS char,
+                COUNT(*) AS attempts,
+                SUM(CASE WHEN cr.result = 'correct' THEN 1 ELSE 0 END) AS correct,
+                SUM(CASE WHEN cr.result = 'correct' THEN 0 ELSE 1 END) AS errors,
+                COUNT(DISTINCT cr.session_id) AS qualified_rounds
+            FROM char_results cr
+            WHERE cr.session_id IN (SELECT id FROM qualified_sessions)
+              AND cr.target_char IS NOT NULL
+              AND cr.target_char != ''
+              AND cr.target_char != ' '
+              AND cr.result IN ('correct', 'substitution', 'deletion')
+            GROUP BY cr.target_char
+            ORDER BY cr.target_char ASC
+            """,
+            (
+                int(min_target_chars),
+                int(recent_sessions),
+                float(min_accuracy),
+                float(min_cleanliness),
+            ),
+        )
+
+        return list(cur.fetchall())
+
 
     def skill_timing_source_data(
         self,
@@ -2606,7 +2657,6 @@ class Database:
                 overall_score,
                 speed_score,
                 timing_score,
-                soft_boundary_count,
 
                 correct_count,
                 error_count,
@@ -3292,7 +3342,6 @@ class Database:
               AND s.timing_score IS NOT NULL
               AND s.timing_score >= ?
               AND COALESCE(s.profile_eligible, 1) = 1
-              AND COALESCE(s.soft_boundary_count, 0) <= 2
 
               AND cr.source IS NOT NULL
               AND LOWER(cr.source) = ?
@@ -3423,7 +3472,6 @@ class Database:
               AND s.timing_score IS NOT NULL
               AND s.timing_score >= ?
               AND COALESCE(s.profile_eligible, 1) = 1
-              AND COALESCE(s.soft_boundary_count, 0) <= 2
 
               AND cr.source IS NOT NULL
               AND LOWER(cr.source) = ?

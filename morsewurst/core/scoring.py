@@ -656,7 +656,6 @@ def score_round(
         target_text=target_display,
     )
     timing_score = timing_quality.total_score
-    soft_boundary_count = int(getattr(decoded, "soft_boundary_count", 0))
 
     (
         profile_eligible,
@@ -748,7 +747,6 @@ def score_round(
         deletions=deletions,
         length_target=len(target_accuracy_score),
         length_entered=len(entered_accuracy_score),
-        soft_boundary_count=soft_boundary_count,
         elapsed_us=int(metrics["elapsed_us"]) if metrics["elapsed_us"] is not None else None,
         standard_time_us=standard_time_us,
         time_ok=time_ok,

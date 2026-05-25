@@ -199,6 +199,8 @@ class RuntimeController:
         app.skill_coverage_value_var = tk.StringVar(value="-")
         app.skill_used_rounds_value_var = tk.StringVar(value="-")
         app.skill_total_used_rounds_value_var = tk.StringVar(value="-")
+        app.skill_charset_coverage_value_var = tk.StringVar(value="-")
+        app.skill_charset_scope_value_var = tk.StringVar(value="-")
         app.skill_warning_var = tk.StringVar(value="")
 
     def init_setting_vars(self) -> None:

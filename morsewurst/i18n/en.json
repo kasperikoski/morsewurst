@@ -149,9 +149,11 @@
   "skill.adjustment": "Adjustment",
   "skill.confidence": "Confidence",
   "skill.mastery": "Characters",
-  "skill.coverage": "Coverage",
+  "skill.coverage": "Data coverage",
   "skill.min_rounds": "Min rounds",
   "skill.total_rounds": "Total rounds",
+  "skill.charset_coverage": "Charset coverage",
+  "skill.charset_scope_factor": "Level factor",
 
   "progression.title.no_level": "No level yet",
   "progression.title.first_steps": "First steps",
@@ -418,7 +420,7 @@
 
   "debug_window.title": "Debug data",
   "debug_window.header": "Debug data",
-  "debug_window.description": "This shows the debug snapshot saved after the round. It contains the tone events received by the Python program, calculated gaps, decoder timing values, rescue decisions, and the final interpretation.",
+  "debug_window.description": "This shows the debug snapshot saved after the round. It contains the tone events received by the Python program, calculated gaps, decoder timing values, and the final interpretation.",
   "debug_window.button.show_latest": "Show latest round",
   "debug_window.button.show_history_pretty": "Show history (pretty)",
   "debug_window.button.show_history_raw": "Show raw JSONL",

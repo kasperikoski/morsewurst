@@ -92,9 +92,6 @@ class ScoreSummary:
     length_target: int
     length_entered: int
 
-    # Decoder assistance.
-    soft_boundary_count: int
-
     # Timing and speed.
     elapsed_us: Optional[int]
     standard_time_us: Optional[int]

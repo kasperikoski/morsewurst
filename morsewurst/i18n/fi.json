@@ -149,9 +149,11 @@
   "skill.adjustment": "Korjaus",
   "skill.confidence": "Luottamus",
   "skill.mastery": "Merkit",
-  "skill.coverage": "Kattavuus",
+  "skill.coverage": "Aineiston kattavuus",
   "skill.min_rounds": "Min.kier.",
   "skill.total_rounds": "Yht.kier.",
+  "skill.charset_coverage": "Merkistön kattavuus",
+  "skill.charset_scope_factor": "Tasokerroin",
 
   "progression.title.no_level": "Ei vielä tasoa",
   "progression.title.first_steps": "Ensiaskeleet",
@@ -418,7 +420,7 @@
 
   "debug_window.title": "Debug-data",
   "debug_window.header": "Debug-data",
-  "debug_window.description": "Tässä näkyy kierroksen jälkeen tallennettu debug-snapshot. Se sisältää Python-ohjelman vastaanottamat tone-tapahtumat, lasketut tauot, dekooderin timing-arvot, rescue-päätökset ja lopullisen tulkinnan.",
+  "debug_window.description": "Tässä näkyy kierroksen jälkeen tallennettu debug-snapshot. Se sisältää Python-ohjelman vastaanottamat tone-tapahtumat, lasketut tauot, dekooderin timing-arvot ja lopullisen tulkinnan.",
   "debug_window.button.show_latest": "Näytä viimeisin kierros",
   "debug_window.button.show_history_pretty": "Näytä historia siistinä",
   "debug_window.button.show_history_raw": "Näytä raaka JSONL",

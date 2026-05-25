@@ -221,7 +221,6 @@ class HistoryController:
             deletions=int(details.get("deletions") or 0),
             length_target=int(details.get("length_target") or 0),
             length_entered=int(details.get("length_entered") or 0),
-            soft_boundary_count=int(details.get("soft_boundary_count") or 0),
 
             elapsed_us=self.optional_int(details.get("elapsed_us")),
             standard_time_us=self.optional_int(details.get("standard_time_us")),
@@ -488,6 +487,8 @@ class HistoryController:
         app.skill_coverage_value_var.set("-")
         app.skill_used_rounds_value_var.set("-")
         app.skill_total_used_rounds_value_var.set("-")
+        app.skill_charset_coverage_value_var.set("-")
+        app.skill_charset_scope_value_var.set("-")
 
     def set_skill_error(self, message: str) -> None:
         app = self.app
@@ -608,6 +609,20 @@ class HistoryController:
         app.skill_coverage_value_var.set(f"{rating.coverage_factor * 100:.0f} %")
         app.skill_used_rounds_value_var.set(str(rating.used_rounds))
         app.skill_total_used_rounds_value_var.set(str(total_key_rounds))
+
+        full_total = int(getattr(rating, "full_charset_total", 0) or 0)
+        qualified_count = int(getattr(rating, "full_charset_qualified_count", 0) or 0)
+        qualified_coverage = float(getattr(rating, "full_charset_qualified_coverage", 0.0) or 0.0)
+        charset_scope_factor = float(getattr(rating, "charset_scope_factor", 1.0) or 1.0)
+
+        if full_total > 0:
+            app.skill_charset_coverage_value_var.set(
+                f"{qualified_count}/{full_total} ({qualified_coverage * 100:.0f} %)"
+            )
+        else:
+            app.skill_charset_coverage_value_var.set("-")
+
+        app.skill_charset_scope_value_var.set(f"{charset_scope_factor:.2f}x")
         app.skill_warning_var.set(rating.reason)
 
     def skill_timing_text(self, rating: Any) -> str:
