@@ -90,7 +90,7 @@ class WindowController:
                 pass
 
         try:
-            return config.resource_path("Assets/morse.ico")
+            return config.resource_path("assets/morse.ico")
         except Exception:
             return None
 

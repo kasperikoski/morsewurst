@@ -33,12 +33,12 @@ def resource_path(relative_path: str) -> Path:
 # ============================================================
 # Data and assets
 # ============================================================
-SOUND_DIR = resource_path("Assets/sounds")
+SOUND_DIR = resource_path("assets/sounds")
 
-STARTUP_SCREEN_IMAGE = resource_path("Assets/img/startup_screen.png")
+STARTUP_SCREEN_IMAGE = resource_path("assets/img/startup_screen.png")
 STARTUP_SCREEN_MIN_MS = 3000
 
-NETWORK_STARTUP_SCREEN_IMAGE = resource_path("Assets/img/network_startup_screen.png")
+NETWORK_STARTUP_SCREEN_IMAGE = resource_path("assets/img/network_startup_screen.png")
 NETWORK_STARTUP_SCREEN_MIN_MS = 3000
 NETWORK_STARTUP_READY_TIMEOUT_SECONDS = 12.0
 
