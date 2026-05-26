@@ -26,6 +26,7 @@ class HistoryController:
 
     def __init__(self, app: "MorsewurstApp") -> None:
         self.app = app
+        self._last_seen_skill_level: Optional[int] = None
 
     def load_tables(self, *, skill_rating: Optional[Any] = None) -> None:
         log_app_event(
@@ -811,7 +812,12 @@ class HistoryController:
         app.result_history_dot_variation_var.set("-")
         app.result_history_dash_variation_var.set("-")
 
-    def update_skill_rating_summary(self, *, cached_rating: Optional[Any] = None) -> None:
+    def update_skill_rating_summary(
+        self,
+        *,
+        cached_rating: Optional[Any] = None,
+        allow_level_up_sound: bool = False,
+    ) -> None:
         app = self.app
         helpers = app.ui_helpers_controller
 
@@ -844,14 +850,86 @@ class HistoryController:
                 context={"recent_rounds": recent_rounds, "rating": summarize_rating(rating)},
             )
             self.set_empty_skill_rating(rating, recent_rounds)
+            self._last_seen_skill_level = None
             return
 
         self.set_skill_rating_values(rating)
+        self._handle_level_up_sound(
+            rating,
+            allow_sound=allow_level_up_sound,
+            recent_rounds=recent_rounds,
+        )
         log_app_event(
             "app.skill_summary.updated",
             message="Skill summary updated.",
-            context={"recent_rounds": recent_rounds, "rating": summarize_rating(rating)},
+            context={
+                "recent_rounds": recent_rounds,
+                "rating": summarize_rating(rating),
+                "level_up_sound_allowed": allow_level_up_sound,
+            },
         )
+
+    def _skill_level_from_rating(self, rating: Any) -> Optional[int]:
+        try:
+            return int(getattr(rating, "level"))
+        except Exception:
+            return None
+
+    def _handle_level_up_sound(
+        self,
+        rating: Any,
+        *,
+        allow_sound: bool,
+        recent_rounds: int,
+    ) -> None:
+        current_level = self._skill_level_from_rating(rating)
+        if current_level is None:
+            return
+
+        previous_level = self._last_seen_skill_level
+        self._last_seen_skill_level = current_level
+
+        if previous_level is None:
+            return
+
+        if current_level <= previous_level:
+            return
+
+        if not allow_sound:
+            log_app_event(
+                "app.skill_level.increased_without_sound",
+                message="Skill level increased during a summary refresh where level-up sound is disabled.",
+                context={
+                    "previous_level": previous_level,
+                    "current_level": current_level,
+                    "recent_rounds": recent_rounds,
+                },
+            )
+            return
+
+        try:
+            self.app.audio_controller.play_sound("level_up")
+            log_app_event(
+                "app.skill_level.level_up_sound_played",
+                message="Level-up sound was triggered after skill level increased.",
+                context={
+                    "previous_level": previous_level,
+                    "current_level": current_level,
+                    "recent_rounds": recent_rounds,
+                },
+            )
+        except Exception as exc:
+            log_app_exception(
+                "app.skill_level.level_up_sound_failed",
+                exc,
+                level="warning",
+                message="Level-up sound could not be played.",
+                context={
+                    "previous_level": previous_level,
+                    "current_level": current_level,
+                    "recent_rounds": recent_rounds,
+                },
+            )
 
     def skill_two_col(self, left_label: str, left_value: str, right_label: str = "", right_value: str = "") -> str:
         left = f"{left_label:<18}{left_value:<10}"

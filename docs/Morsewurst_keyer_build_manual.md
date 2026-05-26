@@ -1,6 +1,7 @@
 # Morsewurst Keyer
 
 **Design:** Kasperi Koski
+
 **Contents:** Morsewurst Python program, Arduino code, and 3D-printable enclosure
 
 ## Short description
@@ -236,17 +237,17 @@ If the volume control works backwards, meaning the sound gets louder when it sho
 
 Resistors from the middle terminal:
 
-| From the middle terminal | To                  |
-| ------------------------ | ------------------- |
-| 1 kΩ resistor            | Headphone jack TIP  |
-| 1 kΩ resistor            | Headphone jack RING |
-| 2.2 kΩ resistor          | GND                 |
+| From the middle terminal  | To                  |
+| ------------------------- | ------------------- |
+| 1 kΩ resistor             | Headphone jack TIP  |
+| 1 kΩ resistor             | Headphone jack RING |
+| 2.2 kΩ or 10 kΩ resistor* | GND                 |
 
 The two 1 kΩ resistors are separate. They are not in series with each other.
 
 The headphone jack SLEEVE or GND goes directly to ground without a resistor.
 
-If the sidetone can still be heard in the headphones even when the potentiometer is fully at zero, try a larger resistor to ground.
+\* If the sidetone can still be heard in the headphones even when the potentiometer is fully at zero, try a larger resistor to ground.
 
 For example:
 
@@ -264,7 +265,7 @@ GND    -> other potentiometer outer terminal
 Potentiometer middle terminal
   ├── 1 kΩ -> headphone jack TIP
   ├── 1 kΩ -> headphone jack RING
-  └── 2.2 kΩ -> GND
+  └── 2.2 kΩ or 10 kΩ -> GND
 
 Headphone jack SLEEVE -> GND
 ```
@@ -410,11 +411,11 @@ The mode can be enabled or disabled from the device settings.
 
 ## Files
 
-| File                 | Purpose                |
-| -------------------- | ---------------------- |
-| Morsewurst_keyer.ino | Arduino firmware       |
-| Morsewurst_keyer.stl | 3D-printable enclosure |
-| Morsewurst           | Practice program       |
+| File                       | Purpose                |
+| -------------------------- | ---------------------- |
+| morsewurst_keyer_\*_\*.ino | Arduino firmware       |
+| Morsewurst_keyer.stl       | 3D-printable enclosure |
+| Morsewurst                 | Practice program       |
 
 ## Summary
 
@@ -501,7 +502,7 @@ This helps Morsewurst find the correct COM port or serial port even when the use
 Example:
 
 ```json
-{"v":1,"type":"hello","app":"morsewurst","device":"Morsewurst Keyer","fw":"1.0","mode":"raw_timing"}
+{"v":1,"type":"hello","app":"morsewurst","device":"Morsewurst","fw":"1.0","mode":"raw_timing"}
 ```
 
 Fields:
@@ -685,7 +686,7 @@ Each JSON object must be sent on its own line.
 Correct:
 
 ```text
-{"v":1,"type":"heartbeat","app":"morsewurst","device":"Morsewurst Keyer","fw":"1.0","mode":"raw_timing","uptime":5000000,"wpm":20,"telemetry":true}
+{"v":1,"type":"heartbeat","app":"morsewurst","device":"Morsewurst","fw":"1.0","mode":"raw_timing","uptime":5000000,"wpm":20,"telemetry":true}
 {"v":1,"type":"tone","src":"straight","t0":6000000,"t1":6100000,"dur":100000}
 ```
 
@@ -704,8 +705,8 @@ The simplest compatible device does this:
 Minimum example:
 
 ```json
-{"v":1,"type":"hello","app":"morsewurst","device":"Morsewurst Keyer","fw":"1.0","mode":"raw_timing"}
-{"v":1,"type":"heartbeat","app":"morsewurst","device":"Morsewurst Keyer","fw":"1.0","mode":"raw_timing","uptime":5000000,"wpm":20,"telemetry":true}
+{"v":1,"type":"hello","app":"morsewurst","device":"Morsewurst","fw":"1.0","mode":"raw_timing"}
+{"v":1,"type":"heartbeat","app":"morsewurst","device":"Morsewurst","fw":"1.0","mode":"raw_timing","uptime":5000000,"wpm":20,"telemetry":true}
 {"v":1,"type":"tone","src":"straight","t0":6000000,"t1":6100000,"dur":100000}
 ```
 
@@ -752,12 +753,12 @@ For Morsewurst, USB HID Keyboard mode is not required. The actual compatibility 
 A good Morsewurst-compatible device sends, for example, a sequence like this:
 
 ```json
-{"v":1,"type":"hello","app":"morsewurst","device":"Morsewurst Keyer","fw":"1.0","mode":"raw_timing"}
-{"v":1,"type":"heartbeat","app":"morsewurst","device":"Morsewurst Keyer","fw":"1.0","mode":"raw_timing","uptime":5000000,"wpm":20,"telemetry":true}
+{"v":1,"type":"hello","app":"morsewurst","device":"Morsewurst","fw":"1.0","mode":"raw_timing"}
+{"v":1,"type":"heartbeat","app":"morsewurst","device":"Morsewurst","fw":"1.0","mode":"raw_timing","uptime":5000000,"wpm":20,"telemetry":true}
 {"v":1,"type":"tone","src":"straight","t0":6000000,"t1":6060000,"dur":60000}
 {"v":1,"type":"tone","src":"straight","t0":6120000,"t1":6300000,"dur":180000}
 {"v":1,"type":"tone","src":"straight","t0":6360000,"t1":6420000,"dur":60000}
-{"v":1,"type":"heartbeat","app":"morsewurst","device":"Morsewurst Keyer","fw":"1.0","mode":"raw_timing","uptime":10000000,"wpm":20,"telemetry":true}
+{"v":1,"type":"heartbeat","app":"morsewurst","device":"Morsewurst","fw":"1.0","mode":"raw_timing","uptime":10000000,"wpm":20,"telemetry":true}
 ```
 
 When a device sends lines like these over a USB CDC Serial connection, Morsewurst can read the events, identify the device, and analyse Morse timing regardless of which microcontroller or electronics the device is built with.

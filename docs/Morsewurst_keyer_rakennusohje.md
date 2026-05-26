@@ -1,6 +1,7 @@
 # Morsewurst Keyer
 
-**Suunnittelu:** Kasperi Koski  
+**Suunnittelu:** Kasperi Koski
+
 **Sisältö:** Morsewurst (Python-ohjelma), Arduino-koodi ja 3D-tulostettava kotelo
 
 ## Lyhyt kuvaus
@@ -12,7 +13,7 @@ Laite voi toimia myös USB-näppäimistönä. Tällöin se kirjoittaa puretut me
 Ohjelmakoodi ladataan Arduino IDE:llä tiedostosta:
 
 ```text
-Morsewurst_keyer.ino
+morsewurst_keyer_\*_\*.ino
 ```
 
 3D-tulostettava kotelo on tiedosto:
@@ -236,17 +237,17 @@ Jos äänenvoimakkuuden säätö toimii väärinpäin, eli ääni kovenee silloi
 
 Keskimmäisestä nastasta lähtevät vastukset:
 
-| Keskimmäisestä nastasta | Mihin                 |
-| ----------------------- | --------------------- |
-| 1 kΩ vastus             | Kuulokeliittimen TIP  |
-| 1 kΩ vastus             | Kuulokeliittimen RING |
-| 2,2 kΩ vastus           | GND                   |
+| Keskimmäisestä nastasta  | Mihin                 |
+| ------------------------ | --------------------- |
+| 1 kΩ vastus              | Kuulokeliittimen TIP  |
+| 1 kΩ vastus              | Kuulokeliittimen RING |
+| 2,2 kΩ tai 10 kΩ vastus* | GND                   |
 
 Nämä kaksi 1 kΩ vastusta ovat erillisiä. Ne eivät ole sarjassa keskenään.
 
 Kuulokeliittimen SLEEVE tai GND menee suoraan maahan ilman vastusta.
 
-Jos sidetone-ääni kuuluu edelleen kuulokkeista vaikka potentiometri olisi täysin nollassa, kannattaa kokeilla suurempaa maahan menevää vastusta.
+\* Jos sidetone-ääni kuuluu edelleen kuulokkeista vaikka potentiometri olisi täysin nollassa, kannattaa kokeilla suurempaa maahan menevää vastusta.
 
 Esimerkiksi:
 - 2,2 kΩ voi joissain kokoonpanoissa päästää hieman ääntä läpi
@@ -263,7 +264,7 @@ GND    -> potentiometrin toinen reunimmainen nasta
 Potentiometrin keskimmäinen nasta
   ├── 1 kΩ -> kuulokeliitin TIP
   ├── 1 kΩ -> kuulokeliitin RING
-  └── 2,2 kΩ -> GND
+  └── 2,2 kΩ tai 10 kΩ -> GND
 
 Kuulokeliitin SLEEVE -> GND
 ```
@@ -380,7 +381,7 @@ Tilan voi ottaa käyttöön tai pois laitteen asetuksista.
 
 ## Rakennusjärjestys
 
-1. Lataa `Morsewurst_keyer.ino` Arduino IDE:en
+1. Lataa `morsewurst_keyer_\*_\*.ino` Arduino IDE:en
 2. Valitse oikea ESP32-S3-kortti ja USB-asetukset
 3. Testaa ESP32:n ohjelmointi USB-C-kaapelilla
 4. Kytke OLED-näyttö ja varmista, että kuva näkyy oikein
@@ -410,11 +411,11 @@ Tilan voi ottaa käyttöön tai pois laitteen asetuksista.
 
 ## Tiedostot
 
-| Tiedosto             | Tarkoitus              |
-| -------------------- | ---------------------- |
-| Morsewurst_keyer.ino | Arduino-firmware       |
-| Morsewurst_keyer.stl | 3D-tulostettava kotelo |
-| Morsewurst           | Harjoitteluun          |
+| Tiedosto                   | Tarkoitus              |
+| -------------------------- | ---------------------- |
+| morsewurst_keyer_\*_\*.ino | Arduino-firmware       |
+| Morsewurst_keyer.stl       | 3D-tulostettava kotelo |
+| Morsewurst                 | Harjoitteluun          |
 
 
 ## Yhteenveto

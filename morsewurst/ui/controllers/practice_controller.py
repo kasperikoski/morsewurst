@@ -807,7 +807,10 @@ class PracticeController:
             app.history_controller.update_stats_summary()
 
             if rating is not None:
-                app.history_controller.update_skill_rating_summary(cached_rating=rating)
+                app.history_controller.update_skill_rating_summary(
+                    cached_rating=rating,
+                    allow_level_up_sound=True,
+                )
 
             if not bool(getattr(app, "practice_running", False)):
                 app.history_controller.update_target_wpm_suggestion_indicator()
