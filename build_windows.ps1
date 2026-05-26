@@ -22,7 +22,6 @@ $RequiredFiles = @(
     "assets\img\network_startup_screen.png",
     "morsewurst\ui\network\__init__.py",
     "morsewurst\ui\network\lobby_window.py",
-    "morsewurst\ui\network\lobby_state.py",
     "morsewurst\ui\network\lobby_actions.py",
     "morsewurst\ui\network\server_queries.py",
     "morsewurst\ui\network\startup_screen.py",
@@ -69,7 +68,6 @@ python -m PyInstaller `
     --collect-all sounddevice `
     --hidden-import morsewurst.ui.network `
     --hidden-import morsewurst.ui.network.lobby_window `
-    --hidden-import morsewurst.ui.network.lobby_state `
     --hidden-import morsewurst.ui.network.lobby_actions `
     --hidden-import morsewurst.ui.network.server_queries `
     --hidden-import morsewurst.ui.network.startup_screen `

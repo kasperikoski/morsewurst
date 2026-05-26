@@ -24,9 +24,8 @@ Output/
 *.msi
 *.zip
 
-# Installer folder and its contents
-installer/
-installer/*.exe
+# Installer output folder
+/installer/
 
 # Inno Setup temporary/output files
 *.iss~
