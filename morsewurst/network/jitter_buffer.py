@@ -10,6 +10,7 @@ from dataclasses import dataclass
 from typing import Any, Callable, Dict, Optional
 
 import morsewurst.config as config
+from morsewurst.core.logging_service import log_event, log_exception
 from morsewurst.network.models import PlaybackSettings
 from morsewurst.network.protocol import ProtocolError, validate_tone_message
 from morsewurst.network.tone_player import TonePlayer
@@ -70,6 +71,14 @@ class JitterBuffer:
         try:
             tone = validate_tone_message(message)
         except ProtocolError as exc:
+            log_exception(
+                "network",
+                "network.playback.invalid_tone",
+                exc,
+                level="warning",
+                message="Invalid remote tone message was ignored.",
+                context={"message_type": message.get("type")},
+            )
             self._status("warning", f"Virheellinen tone-viesti ohitettiin: {exc}")
             return
 
@@ -86,6 +95,13 @@ class JitterBuffer:
             try:
                 self.tone_player.start()
             except Exception as exc:
+                log_exception(
+                    "network",
+                    "network.playback.start_failed",
+                    exc,
+                    message="Audio playback could not be started.",
+                    context={"jitter_buffer_ms": self.playback_settings.jitter_buffer_ms},
+                )
                 self._status("error", f"Audio playback could not be started: {exc}")
                 return
 
@@ -111,6 +127,20 @@ class JitterBuffer:
 
             if not self._stale_drop_notice_sent:
                 self._stale_drop_notice_sent = True
+                log_event(
+                    "network",
+                    "network.playback.stale_tone_dropped",
+                    level="warning",
+                    message="Stale receive tone was dropped after a pause or connection stall.",
+                    context={
+                        "sender_id": sender_id,
+                        "stream_id": stream_id,
+                        "seq": seq,
+                        "lateness_ms": round(lateness * 1000.0, 1),
+                        "stale_drop_ms": round(stale_drop_seconds * 1000.0, 1),
+                        "jitter_buffer_ms": self.playback_settings.jitter_buffer_ms,
+                    },
+                )
                 self._status(
                     "warning",
                     "Vanhat vastaanottoäänet ohitettiin tauon tai yhteyskatkon jälkeen.",
@@ -126,6 +156,21 @@ class JitterBuffer:
             state.last_seq = max(state.last_seq, seq)
 
             lateness_ms = lateness * 1000.0
+            log_event(
+                "network",
+                "network.playback.late_tone_dropped",
+                level="warning",
+                message="Late receive tone was dropped.",
+                context={
+                    "sender_id": sender_id,
+                    "stream_id": stream_id,
+                    "seq": seq,
+                    "lateness_ms": round(lateness_ms, 1),
+                    "drop_late_ms": self.drop_late_ms,
+                    "jitter_buffer_ms": self.playback_settings.jitter_buffer_ms,
+                    "hint": self._jitter_buffer_hint(lateness_ms).strip(),
+                },
+            )
             self._status(
                 "warning",
                 (
@@ -140,6 +185,21 @@ class JitterBuffer:
             state.late_events += 1
             scheduled_start = now + 0.010
             lateness_ms = lateness * 1000.0
+            log_event(
+                "network",
+                "network.playback.late_tone_scheduled_immediately",
+                level="warning",
+                message="Late receive tone was scheduled immediately.",
+                context={
+                    "sender_id": sender_id,
+                    "stream_id": stream_id,
+                    "seq": seq,
+                    "lateness_ms": round(lateness_ms, 1),
+                    "late_grace_ms": self.late_grace_ms,
+                    "jitter_buffer_ms": self.playback_settings.jitter_buffer_ms,
+                    "hint": self._jitter_buffer_hint(lateness_ms).strip(),
+                },
+            )
             self._status(
                 "warning",
                 (
@@ -184,6 +244,17 @@ class JitterBuffer:
                 last_seq=seq,
             )
             self._streams[key] = state
+            log_event(
+                "network",
+                "network.playback.buffer_reset",
+                message="Receive jitter buffer was reset for stream.",
+                context={
+                    "sender_id": sender_id,
+                    "stream_id": stream_id,
+                    "seq": seq,
+                    "jitter_buffer_ms": self.playback_settings.jitter_buffer_ms,
+                },
+            )
             self._status(
                 "info",
                 f"Uusi vastaanottopuskuri: {sender_id}, buffer {self.playback_settings.jitter_buffer_ms} ms.",

@@ -9,6 +9,7 @@ import time
 import tkinter as tk
 
 import morsewurst.config as config
+from morsewurst.core.logging_service import log_event, log_exception
 
 from morsewurst.network.defaults import DEFAULT_RELAY_URI
 from morsewurst.network.models import NetworkSettings, PlaybackSettings
@@ -24,6 +25,18 @@ from morsewurst.ui.network_matrix_theme import MatrixTheme
 
 class LobbyActionsMixin:
     def join_public_room(self, room: PublicRoom) -> None:
+        log_event(
+            "network",
+            "network.room.join_public_selected",
+            message="Public room join selected.",
+            context={
+                "server_uri": self._server_uri(),
+                "room_id": room.id,
+                "room_name": room.name,
+                "client_count": room.client_count,
+                "max_clients": room.max_clients,
+            },
+        )
         self._connect(
             room_key=room.id,
             password="",
@@ -39,14 +52,35 @@ class LobbyActionsMixin:
         password = str(self.private_password_var.get() or "").replace("\r", "").replace("\n", "")[:256]
 
         if not room_key:
+            log_event(
+                "network",
+                "network.room.join_private_validation_failed",
+                level="warning",
+                message="Private room join was blocked because the room name is empty.",
+                context={"server_uri": self._server_uri()},
+            )
             self._show_notice(self.tr("network.private_room.enter_name"), "warning")
             return
 
         if not password:
+            log_event(
+                "network",
+                "network.room.join_private_validation_failed",
+                level="warning",
+                message="Private room join was blocked because the password is empty.",
+                context={"server_uri": self._server_uri(), "room": room_key},
+            )
             self._show_notice(self.tr("network.private_room.enter_password"), "warning")
             return
 
         self.private_room_var.set(display_name)
+
+        log_event(
+            "network",
+            "network.room.join_private_selected",
+            message="Private room join selected.",
+            context={"server_uri": self._server_uri(), "room": room_key, "display_name": display_name},
+        )
 
         self._connect(
             room_key=room_key,
@@ -65,6 +99,17 @@ class LobbyActionsMixin:
         access: str,
         description: str = "",
     ) -> None:
+        log_event(
+            "network",
+            "network.room.connect_started",
+            message="Network room connection started from UI.",
+            context={
+                "server_uri": self._server_uri(),
+                "room": room_key,
+                "title": title,
+                "access": access,
+            },
+        )
         self._clear_notice()
         self._save_current_settings(last_room=room_key)
 
@@ -86,15 +131,46 @@ class LobbyActionsMixin:
         try:
             self.app.network_manager.connect_to_room(settings)
         except Exception as exc:
+            log_exception(
+                "network",
+                "network.room.connect_failed",
+                exc,
+                message="Network room connection failed before the manager accepted it.",
+                context={
+                    "server_uri": self._server_uri(),
+                    "room": room_key,
+                    "title": title,
+                    "access": access,
+                },
+            )
             self._handle_connection_error(str(exc))
 
     def disconnect(self) -> None:
         room_title = self.connected_room_title or self.connected_room_id or self.tr("network.remembered_rooms.default_title")
+        log_event(
+            "network",
+            "network.room.leave_started",
+            message="Leaving network room.",
+            context={
+                "server_uri": self._server_uri(),
+                "room_key": self.connected_room_key,
+                "room_id": self.connected_room_id,
+                "room_title": room_title,
+                "room_access": self.connected_room_access,
+            },
+        )
 
         try:
             self.app.network_manager.stop()
-        except Exception:
-            pass
+        except Exception as exc:
+            log_exception(
+                "network",
+                "network.room.leave_stop_failed",
+                exc,
+                level="warning",
+                message="Network manager stop failed while leaving a room.",
+                context={"server_uri": self._server_uri(), "room_title": room_title},
+            )
 
         self.connected_room_key = ""
         self.connected_room_id = ""
@@ -113,6 +189,12 @@ class LobbyActionsMixin:
         self.room_status_var.set(self.tr("network.room.left", room=room_title))
         self._set_network_quality("standby", self.tr("network.quality.detail.idle"), force=True)
         self.show_lobby_view()
+        log_event(
+            "network",
+            "network.room.left",
+            message="Left network room.",
+            context={"server_uri": self._server_uri(), "room_title": room_title},
+        )
 
     def _network_settings(self, *, room_name: str, password: str) -> NetworkSettings:
         playback = PlaybackSettings(
@@ -134,6 +216,12 @@ class LobbyActionsMixin:
         )
 
     def save_settings(self, *, last_room: str | None = None) -> None:
+        log_event(
+            "network",
+            "network.settings.ui_save_requested",
+            message="Network settings save requested from UI.",
+            context={"server_uri": self._server_uri(), "last_room": last_room or self.settings.last_room},
+        )
         self._save_current_settings(last_room=last_room or self.settings.last_room)
         applied = self._apply_live_settings()
 
@@ -191,9 +279,29 @@ class LobbyActionsMixin:
             )
             manager.update_playback_settings(playback)
             manager.set_transmit_enabled(bool(self.transmit_enabled_var.get()))
+            log_event(
+                "network",
+                "network.settings.live_update_success",
+                message="Live network settings were applied.",
+                context={
+                    "playback_enabled": playback.enabled,
+                    "transmit_enabled": bool(self.transmit_enabled_var.get()),
+                    "jitter_buffer_ms": playback.jitter_buffer_ms,
+                    "frequency_hz": playback.frequency_hz,
+                    "volume": playback.volume,
+                },
+            )
             self._append_log("success", self.tr("network.settings.live_updated"))
             return True
         except Exception as exc:
+            log_exception(
+                "network",
+                "network.settings.live_update_failed",
+                exc,
+                level="warning",
+                message="Live network settings could not be applied.",
+                context={"server_uri": self._server_uri()},
+            )
             self._append_log("warning", self.tr("network.settings.live_update_failed", error=exc))
             return False
         
@@ -428,6 +536,13 @@ class LobbyActionsMixin:
 
         try:
             manager.reset_receive_playback()
+            log_event(
+                "network",
+                "network.playback.reset_after_resume",
+                level="warning",
+                message="Receive playback reset after a long UI pause or sleep/resume.",
+                context={"gap_seconds": round(gap_seconds, 3), "reset_gap_seconds": reset_gap_seconds},
+            )
             self._append_log(
                 "warning",
                 self.tr(
@@ -436,6 +551,14 @@ class LobbyActionsMixin:
                 ),
             )
         except Exception as exc:
+            log_exception(
+                "network",
+                "network.playback.reset_after_resume_failed",
+                exc,
+                level="warning",
+                message="Receive playback reset after pause failed.",
+                context={"gap_seconds": round(gap_seconds, 3), "reset_gap_seconds": reset_gap_seconds},
+            )
             self._append_log(
                 "warning",
                 self.tr(
@@ -611,10 +734,35 @@ class LobbyActionsMixin:
         self._remember_successful_private_room()
 
         self.show_room_view()
+        log_event(
+            "network",
+            "network.room.ui_connected",
+            message="UI switched to connected room state.",
+            context={
+                "server_uri": self._server_uri(),
+                "room_key": room_key,
+                "room_id": visible_room_id,
+                "room_title": title,
+                "room_access": self.connected_room_access,
+            },
+        )
         self._append_log("success", self.tr("network.room.connected", room=title))
 
     def _handle_connection_error(self, text: str) -> None:
         message = self._friendly_error_message(text)
+        log_event(
+            "network",
+            "network.room.ui_connection_error",
+            level="error",
+            message=message,
+            context={
+                "server_uri": self._server_uri(),
+                "raw_error": text,
+                "pending_room_key": self.pending_room_key,
+                "pending_room_title": self.pending_room_title,
+                "pending_room_access": self.pending_room_access,
+            },
+        )
 
         try:
             self.app.network_manager.stop()
@@ -793,6 +941,17 @@ class LobbyActionsMixin:
             pass
 
     def close(self) -> None:
+        log_event(
+            "network",
+            "network.window.close_started",
+            message="Network window close started.",
+            context={
+                "server_uri": self._server_uri(),
+                "connected_room_key": self.connected_room_key,
+                "connected_room_id": self.connected_room_id,
+                "connected_room_access": self.connected_room_access,
+            },
+        )
         try:
             self._cancel_network_startup_sequence()
         except Exception:
@@ -829,8 +988,20 @@ class LobbyActionsMixin:
 
         try:
             self.app.network_manager.stop()
-        except Exception:
-            pass
+        except Exception as exc:
+            log_exception(
+                "network",
+                "network.window.manager_stop_failed",
+                exc,
+                level="warning",
+                message="Network manager stop failed while closing the network window.",
+                context={
+                    "server_uri": self._server_uri(),
+                    "connected_room_key": self.connected_room_key,
+                    "connected_room_id": self.connected_room_id,
+                    "connected_room_access": self.connected_room_access,
+                },
+            )
 
         try:
             if getattr(self.app, "network_window", None) is self:
@@ -862,5 +1033,23 @@ class LobbyActionsMixin:
 
         try:
             self.destroy()
-        except Exception:
-            pass
+            log_event(
+                "network",
+                "network.window.closed",
+                message="Network window closed.",
+                context={
+                    "server_uri": self._server_uri(),
+                    "connected_room_key": self.connected_room_key,
+                    "connected_room_id": self.connected_room_id,
+                    "connected_room_access": self.connected_room_access,
+                },
+            )
+        except Exception as exc:
+            log_exception(
+                "network",
+                "network.window.close_failed",
+                exc,
+                level="warning",
+                message="Network window could not be destroyed cleanly.",
+                context={"server_uri": self._server_uri()},
+            )

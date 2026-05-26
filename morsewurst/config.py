@@ -9,7 +9,7 @@ import sys
 from pathlib import Path
 
 APP_NAME = "Morsewurst"
-APP_VERSION = "0.99.9"
+APP_VERSION = "0.99.10"
 
 # ============================================================
 # Update check
@@ -94,6 +94,14 @@ SOUND_FILES = {
     "serial_disconnected": SOUND_DIR / "serial_disconnected.wav",
     "level_up": SOUND_DIR / "level_up.wav",
 }
+
+
+# ============================================================
+# Logging
+# ============================================================
+LOG_DIRNAME = "logs"
+LOG_MAX_BYTES = 2 * 1024 * 1024
+LOG_BACKUP_COUNT = 50
 
 
 # ============================================================

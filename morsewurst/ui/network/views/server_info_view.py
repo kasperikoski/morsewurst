@@ -8,6 +8,7 @@ from datetime import datetime
 import time
 import tkinter as tk
 
+from morsewurst.core.logging_service import log_event
 from morsewurst.ui.network_matrix_theme import (
     MatrixTheme,
     configure_toplevel,
@@ -235,12 +236,25 @@ class ServerInfoViewMixin:
         if self.server_info_window is not None:
             try:
                 if self.server_info_window.winfo_exists():
+                    log_event(
+                        "network",
+                        "network.server_info.window_focused",
+                        message="Server info window was focused.",
+                        context={"server_uri": self._server_uri()},
+                    )
                     self.server_info_window.lift()
                     self.server_info_window.focus_force()
                     self._update_server_info_window_values()
                     return
             except Exception:
                 pass
+
+        log_event(
+            "network",
+            "network.server_info.window_opened",
+            message="Server info window opened.",
+            context={"server_uri": self._server_uri()},
+        )
 
         window = tk.Toplevel(self)
         self.server_info_window = window

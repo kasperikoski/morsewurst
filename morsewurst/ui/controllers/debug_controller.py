@@ -10,6 +10,7 @@ import tkinter as tk
 from tkinter import messagebox
 
 import morsewurst.config as config
+from morsewurst.core.app_logging import log_app_event, log_app_exception
 from morsewurst.core.debug_snapshot import (
     build_round_debug_snapshot,
     clear_debug_files,
@@ -36,6 +37,15 @@ class DebugController:
         decoder = app.decoder_controller
 
         try:
+            log_app_event(
+                "app.debug.snapshot_write_started",
+                message="Round debug snapshot write started.",
+                context={
+                    "save_history": self._save_history_enabled(),
+                    "event_count": len(getattr(app.round, "events", [])),
+                    "round_number": getattr(app.round, "round_number", 0),
+                },
+            )
             current_time_us = decoder.adaptive_current_device_time_us()
 
             decoded = decoder.decode_tone_events(
@@ -59,8 +69,24 @@ class DebugController:
                 save_latest=True,
                 save_history=self._save_history_enabled(),
             )
+            log_app_event(
+                "app.debug.snapshot_write_completed",
+                message="Round debug snapshot written.",
+                context={
+                    "save_history": self._save_history_enabled(),
+                    "event_count": len(getattr(app.round, "events", [])),
+                    "round_number": getattr(app.round, "round_number", 0),
+                },
+            )
 
         except Exception as exc:
+            log_app_exception(
+                "app.debug.snapshot_write_failed",
+                exc,
+                level="warning",
+                message="Round debug snapshot write failed.",
+                context={"round_number": getattr(app.round, "round_number", 0)},
+            )
             app.status_controller.set_main_status(
                 f"Debug-datan tallennus epäonnistui: {exc}",
                 state="warning",
@@ -71,6 +97,11 @@ class DebugController:
         content = read_latest_debug_text().rstrip()
 
         if not content:
+            log_app_event(
+                "app.debug.latest_copy_missing",
+                level="warning",
+                message="Latest debug snapshot copy requested but no snapshot was found.",
+            )
             messagebox.showinfo(
                 config.APP_NAME,
                 "Viimeisintä debug-snapshotia ei löytynyt.",
@@ -80,10 +111,19 @@ class DebugController:
 
         self.app.clipboard_clear()
         self.app.clipboard_append(content)
+        log_app_event(
+            "app.debug.latest_copied",
+            message="Latest debug snapshot copied to clipboard.",
+            context={"character_count": len(content)},
+        )
         self.app.status_var.set("Viimeisin debug-snapshot kopioitu leikepöydälle.")
 
     def clear_snapshots(self) -> None:
         """Delete latest debug snapshot and debug history after confirmation."""
+        log_app_event(
+            "app.debug.clear_requested",
+            message="Debug data clear requested.",
+        )
         ok = messagebox.askyesno(
             config.APP_NAME,
             "Haluatko varmasti tyhjentää debug-datan?\n\n"
@@ -92,9 +132,18 @@ class DebugController:
         )
 
         if not ok:
+            log_app_event(
+                "app.debug.clear_cancelled",
+                message="Debug data clear was cancelled.",
+            )
             return
 
         deleted = clear_debug_files()
+        log_app_event(
+            "app.debug.clear_completed",
+            message="Debug data cleared.",
+            context={"deleted_count": deleted},
+        )
         self.app.status_var.set(f"Debug-data tyhjennetty. Poistettuja tiedostoja: {deleted}.")
 
         self.refresh_debug_window_if_open()

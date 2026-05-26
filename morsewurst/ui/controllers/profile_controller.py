@@ -10,6 +10,7 @@ from morsewurst.storage.profile_store import (
     ProfileStore,
     UserProfile,
 )
+from morsewurst.core.app_logging import log_app_event, log_app_exception
 
 if TYPE_CHECKING:
     from morsewurst.ui.app import MorsewurstApp
@@ -26,16 +27,42 @@ class ProfileController:
 
     def prepare_active_profile(self) -> UserProfile | None:
         if not self.store.has_profiles():
+            log_app_event(
+                "app.profile.initial_setup_required",
+                message="No user profiles exist; initial profile setup is required.",
+            )
             self.initial_profile_setup_required = True
             self.active_profile = None
             return None
 
         self.initial_profile_setup_required = False
         self.active_profile = self.store.prepare_active_profile()
+        log_app_event(
+            "app.profile.active_prepared",
+            message="Active user profile prepared.",
+            context={
+                "profile_id": self.active_profile.id,
+                "profile_name": self.active_profile.name,
+            },
+        )
         return self.active_profile
     
     def create_first_profile(self, name: str) -> UserProfile:
-        return self.store.create_first_profile(name)
+        try:
+            profile = self.store.create_first_profile(name)
+            log_app_event(
+                "app.profile.first_created",
+                message="First user profile created.",
+                context={"profile_id": profile.id, "profile_name": profile.name},
+            )
+            return profile
+        except Exception as exc:
+            log_app_exception(
+                "app.profile.create_failed",
+                exc,
+                message="First user profile creation failed.",
+            )
+            raise
 
     def open_initial_profile_window(self) -> None:
         from morsewurst.ui.initial_profile_window import InitialProfileWindow
@@ -48,6 +75,11 @@ class ProfileController:
             except Exception:
                 pass
 
+        log_app_event(
+            "app.window.opened",
+            message="Initial profile window opened.",
+            context={"window": "initial_profile_window"},
+        )
         self.app.initial_profile_window = InitialProfileWindow(self.app)
         self.app.window_controller.apply_window_icon(self.app.initial_profile_window)
 
@@ -73,19 +105,87 @@ class ProfileController:
             return ""
 
     def list_profiles(self) -> list[UserProfile]:
-        return self.store.list_profiles()
+        profiles = self.store.list_profiles()
+        log_app_event(
+            "app.profile.listed",
+            message="User profiles listed.",
+            context={"profile_count": len(profiles)},
+        )
+        return profiles
 
     def create_profile(self, name: str) -> UserProfile:
-        return self.store.create_profile(name)
+        try:
+            profile = self.store.create_profile(name)
+            log_app_event(
+                "app.profile.created",
+                message="User profile created.",
+                context={"profile_id": profile.id, "profile_name": profile.name},
+            )
+            return profile
+        except Exception as exc:
+            log_app_exception(
+                "app.profile.create_failed",
+                exc,
+                message="User profile creation failed.",
+            )
+            raise
 
     def activate_profile(self, profile_id: str) -> UserProfile:
-        return self.store.activate_profile(profile_id)
+        try:
+            profile = self.store.activate_profile(profile_id)
+            log_app_event(
+                "app.profile.activated",
+                message="User profile activated for next restart.",
+                context={"profile_id": profile.id, "profile_name": profile.name},
+            )
+            return profile
+        except Exception as exc:
+            log_app_exception(
+                "app.profile.activate_failed",
+                exc,
+                message="User profile activation failed.",
+                context={"profile_id": profile_id},
+            )
+            raise
 
     def rename_profile(self, profile_id: str, new_name: str) -> UserProfile:
-        return self.store.rename_profile(profile_id, new_name)
+        try:
+            profile = self.store.rename_profile(profile_id, new_name)
+            log_app_event(
+                "app.profile.renamed",
+                message="User profile renamed.",
+                context={"profile_id": profile.id, "profile_name": profile.name},
+            )
+            return profile
+        except Exception as exc:
+            log_app_exception(
+                "app.profile.rename_failed",
+                exc,
+                message="User profile rename failed.",
+                context={"profile_id": profile_id},
+            )
+            raise
 
     def delete_profile(self, profile_id: str):
-        return self.store.delete_profile(profile_id)
+        try:
+            backup_path = self.store.delete_profile(profile_id)
+            log_app_event(
+                "app.profile.deleted",
+                message="User profile deleted and backed up.",
+                context={
+                    "profile_id": profile_id,
+                    "backup_path": str(backup_path),
+                },
+            )
+            return backup_path
+        except Exception as exc:
+            log_app_exception(
+                "app.profile.delete_failed",
+                exc,
+                message="User profile deletion failed.",
+                context={"profile_id": profile_id},
+            )
+            raise
 
     def is_active_profile(self, profile_id: str) -> bool:
         return self.store.is_active_profile(profile_id)

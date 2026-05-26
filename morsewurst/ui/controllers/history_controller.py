@@ -12,6 +12,7 @@ import tkinter as tk
 
 import morsewurst.config as config
 from morsewurst.core.progression import title_key_for_level
+from morsewurst.core.app_logging import log_app_event, log_app_exception, summarize_rating, summarize_score_summary
 from morsewurst.core.skill_rating import calculate_skill_rating
 from morsewurst.models import ScoreSummary
 from morsewurst.ui.controllers.results_controller import SOURCE_ADAPTIVE_TELEMETRY
@@ -27,12 +28,22 @@ class HistoryController:
         self.app = app
 
     def load_tables(self, *, skill_rating: Optional[Any] = None) -> None:
+        log_app_event(
+            "app.history.tables_load_started",
+            message="History tables load started.",
+            context={"cached_skill_rating": skill_rating is not None},
+        )
         self.load_history_table()
         self.load_problem_table()
         self.update_stats_summary()
         self.update_skill_rating_summary(cached_rating=skill_rating)
         self.update_target_wpm_suggestion_indicator()
         self.refresh_stats_window_if_open()
+        log_app_event(
+            "app.history.tables_loaded",
+            message="History tables loaded.",
+            context={"cached_skill_rating": skill_rating is not None},
+        )
 
     def load_keying_event_summary_for_startup(self) -> None:
         """Load keying event totals synchronously during the startup screen.
@@ -50,8 +61,18 @@ class HistoryController:
         self.set_keying_event_summary_loading()
 
         try:
+            log_app_event(
+                "app.history.keying_summary_load_started",
+                message="Startup keying event summary load started.",
+            )
             summary = app.db.keying_event_summary()
         except Exception as error:
+            log_app_exception(
+                "app.history.keying_summary_load_failed",
+                error,
+                level="warning",
+                message="Startup keying event summary load failed.",
+            )
             app.keying_event_summary_loaded = False
             app.general_straight_presses_var.set("-")
             app.general_iambic_elements_var.set("-")
@@ -66,6 +87,11 @@ class HistoryController:
                 pass
         else:
             self.apply_keying_event_summary(summary)
+            log_app_event(
+                "app.history.keying_summary_loaded",
+                message="Startup keying event summary loaded.",
+                context=summary,
+            )
         finally:
             app.keying_event_summary_loading = False
 
@@ -329,11 +355,27 @@ class HistoryController:
     def load_history_table(self) -> None:
         app = self.app
 
+        try:
+            rows = app.db.recent_sessions(1000)
+        except Exception as exc:
+            log_app_exception(
+                "app.history.table_load_failed",
+                exc,
+                message="Recent sessions table load failed.",
+            )
+            raise
+
         for row_id in app.history_tree.get_children():
             app.history_tree.delete(row_id)
 
-        for row in app.db.recent_sessions(1000):
+        for row in rows:
             app.history_tree.insert("", tk.END, values=self.history_row_values(row))
+
+        log_app_event(
+            "app.history.table_loaded",
+            message="Recent sessions table loaded.",
+            context={"row_count": len(rows)},
+        )
 
     def history_row_values(self, row: Any) -> tuple[Any, ...]:
         elapsed_us = self.row_get(row, "elapsed_us")
@@ -372,6 +414,11 @@ class HistoryController:
         app = self.app
 
         if app.round.accepting_input and not app.round.finished:
+            log_app_event(
+                "app.history.round_open_blocked_active_round",
+                level="warning",
+                message="History round open was blocked because a round is active.",
+            )
             app.status_controller.set_main_status(
                 app.i18n.t(
                     "history.status.active_round_blocked",
@@ -389,9 +436,20 @@ class HistoryController:
         if app.viewing_history_session_id == session_id:
             return
 
+        log_app_event(
+            "app.history.round_open_requested",
+            message="History round open requested.",
+            context={"session_id": session_id},
+        )
         details = app.db.session_details(session_id)
 
         if details is None:
+            log_app_event(
+                "app.history.round_not_found",
+                level="warning",
+                message="History round was not found.",
+                context={"session_id": session_id},
+            )
             app.status_controller.set_main_status(
                 app.i18n.t(
                     "history.status.round_not_found",
@@ -646,7 +704,7 @@ class HistoryController:
         for row_id in app.problem_tree.get_children():
             app.problem_tree.delete(row_id)
 
-        for row in app.db.problem_characters(
+        rows = app.db.problem_characters(
             getattr(config, "PROBLEM_CHARACTER_DISPLAY_LIMIT", 10000),
             helpers.safe_int_var(
                 app.problem_recent_rounds_var,
@@ -654,7 +712,8 @@ class HistoryController:
                 minimum=1,
                 maximum=100000,
             ),
-        ):
+        )
+        for row in rows:
             app.problem_tree.insert(
                 "",
                 tk.END,
@@ -665,6 +724,12 @@ class HistoryController:
                     self.row_get(row, "error_rate", ""),
                 ),
             )
+
+        log_app_event(
+            "app.history.problem_table_loaded",
+            message="Problem character table loaded.",
+            context={"row_count": len(rows)},
+        )
 
     def refresh_stats_window_if_open(self) -> None:
         app = self.app
@@ -692,7 +757,13 @@ class HistoryController:
             stats = app.db.stats_summary(recent_rounds)
             rounds = int(stats.get("rounds") or 0)
 
-        except Exception:
+        except Exception as exc:
+            log_app_exception(
+                "app.history.stats_summary_failed",
+                exc,
+                level="warning",
+                message="History statistics summary update failed.",
+            )
             self.reset_history_summary_vars("-")
             return
 
@@ -720,6 +791,11 @@ class HistoryController:
         app.result_history_straight_ratio_var.set(app.results_controller.fmt_straight_ratio(stats.get("avg_straight_dash_dot_ratio")))
         app.result_history_dot_variation_var.set(app.results_controller.fmt_variation_percent(stats.get("avg_straight_dot_variation_percent")))
         app.result_history_dash_variation_var.set(app.results_controller.fmt_variation_percent(stats.get("avg_straight_dash_variation_percent")))
+        log_app_event(
+            "app.history.stats_summary_updated",
+            message="History statistics summary updated.",
+            context={"recent_rounds": recent_rounds, "rounds": rounds},
+        )
 
     def reset_history_summary_vars(self, rounds_text: str) -> None:
         app = self.app
@@ -752,14 +828,30 @@ class HistoryController:
             try:
                 rating = calculate_skill_rating(app.db, recent_rounds=recent_rounds)
             except Exception as exc:
+                log_app_exception(
+                    "app.skill_summary.failed",
+                    exc,
+                    message="Skill summary calculation failed.",
+                    context={"recent_rounds": recent_rounds},
+                )
                 self.set_skill_error(str(exc))
                 return
 
         if rating is None or rating.raw_skill is None:
+            log_app_event(
+                "app.skill_summary.not_enough_data",
+                message="Skill summary does not yet have enough data.",
+                context={"recent_rounds": recent_rounds, "rating": summarize_rating(rating)},
+            )
             self.set_empty_skill_rating(rating, recent_rounds)
             return
 
         self.set_skill_rating_values(rating)
+        log_app_event(
+            "app.skill_summary.updated",
+            message="Skill summary updated.",
+            context={"recent_rounds": recent_rounds, "rating": summarize_rating(rating)},
+        )
 
     def skill_two_col(self, left_label: str, left_value: str, right_label: str = "", right_value: str = "") -> str:
         left = f"{left_label:<18}{left_value:<10}"

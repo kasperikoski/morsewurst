@@ -17,7 +17,7 @@
   "training.raw_telemetry_title": "Raw telemetry",
   "training.decoded_title": "Decoded from telemetry",
 
-  "runtime.target_placeholder": "Press Start practice",
+  "runtime.target_placeholder": "Press \"Start practice\"",
   "runtime.status_ready": "Ready",
   "runtime.morse_preview_button": "Audio test",
   "runtime.serial_disconnected": "No connection",

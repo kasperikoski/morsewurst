@@ -15,6 +15,7 @@ from tkinter import messagebox
 import morsewurst.config as config
 from morsewurst.hardware.serial_reader import SerialReader
 from morsewurst.storage.database import Database
+from morsewurst.core.app_logging import log_app_event, log_app_exception
 
 if TYPE_CHECKING:
     from morsewurst.ui.app import MorsewurstApp
@@ -39,10 +40,26 @@ class AppLifecycleController:
         )
         app.protocol("WM_DELETE_WINDOW", self.on_close)
         app.window_controller.apply_window_icon(app)
+        log_app_event(
+            "app.window.configured",
+            message="Main window configured.",
+            context={
+                "geometry": getattr(config, "UI_WINDOW_GEOMETRY", ""),
+                "min_width": getattr(config, "UI_MIN_WIDTH", None),
+                "min_height": getattr(config, "UI_MIN_HEIGHT", None),
+                "profile_name": profile_name,
+            },
+        )
 
     def init_services(self) -> None:
         """Initialise persistent services and hardware readers."""
         app = self.app
+
+        log_app_event(
+            "app.services.init_started",
+            message="Application service initialization started.",
+            context={"db_path": str(config.DB_PATH)},
+        )
 
         app.db = Database(config.DB_PATH)
 
@@ -58,23 +75,48 @@ class AppLifecycleController:
 
         app.event_queue: queue.Queue[Dict[str, Any]] = queue.Queue()
         app.serial_reader = SerialReader(app.event_queue)
+        log_app_event(
+            "app.services.init_completed",
+            message="Application services initialized.",
+            context={
+                "db_path": str(config.DB_PATH),
+                "database_replaced": replaced_path is not None,
+                "replaced_path": str(replaced_path) if replaced_path is not None else "",
+            },
+        )
 
     def restart_application(self) -> None:
         """Restart the current Morsewurst process."""
 
         app = self.app
 
+        log_app_event(
+            "app.restart.requested",
+            message="Application restart requested.",
+            context={"frozen": bool(getattr(sys, "frozen", False))},
+        )
+
         try:
             app.practice_controller.shutdown_active_practice()
-        except Exception:
-            pass
+        except Exception as exc:
+            log_app_exception(
+                "app.restart.shutdown_practice_failed",
+                exc,
+                level="warning",
+                message="Active practice shutdown failed during restart.",
+            )
 
         app.audio_controller.stop_morse_speed_preview()
 
         try:
             app.settings_controller.save_ui_settings()
-        except Exception:
-            pass
+        except Exception as exc:
+            log_app_exception(
+                "app.restart.settings_save_failed",
+                exc,
+                level="warning",
+                message="Saving settings during restart failed.",
+            )
 
         try:
             app.auto_connect_serial_var.set(False)
@@ -83,20 +125,49 @@ class AppLifecycleController:
 
         try:
             app.serial_reader.disconnect()
-        except Exception:
-            pass
+        except Exception as exc:
+            log_app_exception(
+                "app.restart.serial_disconnect_failed",
+                exc,
+                level="warning",
+                message="Serial disconnect during restart failed.",
+            )
 
         try:
             app.network_manager.stop()
-        except Exception:
-            pass
+        except Exception as exc:
+            log_app_exception(
+                "app.restart.network_stop_failed",
+                exc,
+                level="warning",
+                message="Network manager stop during restart failed.",
+            )
 
         if getattr(sys, "frozen", False):
             args = [sys.executable, *sys.argv[1:]]
         else:
             args = [sys.executable, *sys.argv]
 
-        subprocess.Popen(args)
+        try:
+            subprocess.Popen(args)
+            log_app_event(
+                "app.restart.spawned",
+                message="Replacement application process was spawned.",
+                context={"args_count": len(args)},
+            )
+        except Exception as exc:
+            log_app_exception(
+                "app.restart.spawn_failed",
+                exc,
+                message="Application restart process could not be spawned.",
+                context={"args_count": len(args)},
+            )
+            raise
+
+        log_app_event(
+            "app.restart.destroying_current_process",
+            message="Current application window is closing after restart spawn.",
+        )
         app.destroy()
 
     def focus_input(self, force: bool = False) -> None:
@@ -117,13 +188,35 @@ class AppLifecycleController:
         """Stop background activity, save settings and close the application."""
         app = self.app
 
+        log_app_event(
+            "app.shutdown.started",
+            message="Application shutdown started.",
+            context={
+                "practice_running": bool(getattr(app, "practice_running", False)),
+                "serial_connected": bool(getattr(app, "serial_connected", False)),
+            },
+        )
+
         try:
             app.practice_controller.shutdown_active_practice()
-        except Exception:
-            pass
+        except Exception as exc:
+            log_app_exception(
+                "app.shutdown.practice_shutdown_failed",
+                exc,
+                level="warning",
+                message="Active practice shutdown failed during application close.",
+            )
 
         app.audio_controller.stop_morse_speed_preview()
-        app.settings_controller.save_ui_settings()
+        try:
+            app.settings_controller.save_ui_settings()
+        except Exception as exc:
+            log_app_exception(
+                "app.shutdown.settings_save_failed",
+                exc,
+                level="warning",
+                message="Saving settings during shutdown failed.",
+            )
 
         try:
             app.auto_connect_serial_var.set(False)
@@ -132,12 +225,26 @@ class AppLifecycleController:
 
         try:
             app.serial_reader.disconnect()
-        except Exception:
-            pass
+        except Exception as exc:
+            log_app_exception(
+                "app.shutdown.serial_disconnect_failed",
+                exc,
+                level="warning",
+                message="Serial disconnect during shutdown failed.",
+            )
 
         try:
             app.network_manager.stop()
-        except Exception:
-            pass
+        except Exception as exc:
+            log_app_exception(
+                "app.shutdown.network_stop_failed",
+                exc,
+                level="warning",
+                message="Network manager stop during shutdown failed.",
+            )
 
+        log_app_event(
+            "app.shutdown.completed",
+            message="Application shutdown completed.",
+        )
         app.destroy()

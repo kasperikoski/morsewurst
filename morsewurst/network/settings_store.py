@@ -13,6 +13,7 @@ from typing import Any
 from urllib.parse import urlparse
 
 import morsewurst.config as config
+from morsewurst.core.logging_service import log_event, log_exception
 from morsewurst.network.protocol import (
     new_installation_id,
     normalize_callsign,
@@ -69,31 +70,108 @@ def network_settings_path() -> Path:
 
 def load_network_settings(path: Path | None = None) -> NetworkClientSettings:
     target = path or network_settings_path()
+    log_event(
+        "network",
+        "network.settings.load_started",
+        message="Loading network settings.",
+        context={"path": str(target), "exists": target.exists()},
+    )
+
     try:
         data = json.loads(target.read_text(encoding="utf-8"))
-    except Exception:
+    except FileNotFoundError:
+        settings = settings_from_data({})
+        log_event(
+            "network",
+            "network.settings.loaded_defaults",
+            message="Network settings file does not exist; defaults are in use.",
+            context={"path": str(target), **_settings_log_context(settings)},
+        )
+        return settings
+    except Exception as exc:
+        log_exception(
+            "network",
+            "network.settings.load_failed",
+            exc,
+            level="warning",
+            message="Network settings could not be loaded; defaults are in use.",
+            context={"path": str(target)},
+        )
         return settings_from_data({})
 
     if not isinstance(data, dict):
-        return settings_from_data({})
+        settings = settings_from_data({})
+        log_event(
+            "network",
+            "network.settings.load_failed",
+            level="warning",
+            message="Network settings file did not contain a JSON object; defaults are in use.",
+            context={"path": str(target), "raw_type": type(data).__name__},
+        )
+        return settings
 
-    return settings_from_data(data)
+    settings = settings_from_data(data)
+    log_event(
+        "network",
+        "network.settings.loaded",
+        message="Network settings loaded.",
+        context={"path": str(target), **_settings_log_context(settings)},
+    )
+    return settings
 
 
 def save_network_settings(settings: NetworkClientSettings, path: Path | None = None) -> Path:
     target = path or network_settings_path()
     safe = settings_from_data(asdict(settings))
 
+    log_event(
+        "network",
+        "network.settings.save_started",
+        message="Saving network settings.",
+        context={"path": str(target), **_settings_log_context(safe)},
+    )
+
     # This old single-password option remains opt-in.
     # Remembered private rooms intentionally keep their own saved_password values.
     if not safe.remember_password:
         safe.saved_password = ""
 
-    target.parent.mkdir(parents=True, exist_ok=True)
-    tmp = target.with_suffix(target.suffix + ".tmp")
-    tmp.write_text(json.dumps(asdict(safe), ensure_ascii=False, indent=2), encoding="utf-8")
-    tmp.replace(target)
+    try:
+        target.parent.mkdir(parents=True, exist_ok=True)
+        tmp = target.with_suffix(target.suffix + ".tmp")
+        tmp.write_text(json.dumps(asdict(safe), ensure_ascii=False, indent=2), encoding="utf-8")
+        tmp.replace(target)
+    except Exception as exc:
+        log_exception(
+            "network",
+            "network.settings.save_failed",
+            exc,
+            message="Network settings could not be saved.",
+            context={"path": str(target), **_settings_log_context(safe)},
+        )
+        raise
+
+    log_event(
+        "network",
+        "network.settings.save_success",
+        message="Network settings saved.",
+        context={"path": str(target), **_settings_log_context(safe)},
+    )
     return target
+
+
+def _settings_log_context(settings: NetworkClientSettings) -> dict[str, Any]:
+    return {
+        "server_uri": settings.last_server_uri,
+        "callsign": settings.callsign,
+        "last_room": settings.last_room,
+        "playback_enabled": settings.playback_enabled,
+        "transmit_enabled": settings.transmit_enabled,
+        "jitter_buffer_ms": settings.jitter_buffer_ms,
+        "frequency_hz": settings.frequency_hz,
+        "volume": settings.volume,
+        "remembered_private_rooms_count": len(settings.remembered_private_rooms or []),
+    }
 
 
 def settings_from_data(data: dict[str, Any]) -> NetworkClientSettings:
@@ -139,6 +217,17 @@ def remember_private_room(
     saved_password = sanitize_password_for_storage(password)
 
     if not room_id or not saved_password:
+        log_event(
+            "network",
+            "network.remembered_private_room.remember_skipped",
+            level="debug",
+            message="Remembering private room was skipped because room id or password was empty.",
+            context={
+                "server_uri": clean_server_uri,
+                "has_room_id": bool(room_id),
+                "has_password": bool(saved_password),
+            },
+        )
         return settings
 
     new_room = RememberedPrivateRoom(
@@ -160,6 +249,18 @@ def remember_private_room(
     settings.remembered_private_rooms = [new_room, *existing][:MAX_REMEMBERED_PRIVATE_ROOMS]
     settings.last_server_uri = clean_server_uri
     settings.last_room = room_id
+
+    log_event(
+        "network",
+        "network.remembered_private_room.remembered",
+        message="Private room was added to remembered rooms.",
+        context={
+            "server_uri": clean_server_uri,
+            "room_id": room_id,
+            "display_name": new_room.display_name,
+            "remembered_private_rooms_count": len(settings.remembered_private_rooms),
+        },
+    )
     return settings
 
 
@@ -172,6 +273,8 @@ def forget_private_room(
     clean_server_uri = sanitize_server_uri(server_uri)
     clean_room_id = sanitize_room_name(room_id)
 
+    before_count = len(settings.remembered_private_rooms)
+
     settings.remembered_private_rooms = [
         room for room in settings.remembered_private_rooms
         if not (
@@ -180,6 +283,17 @@ def forget_private_room(
         )
     ]
 
+    log_event(
+        "network",
+        "network.remembered_private_room.forgotten",
+        message="Private room was removed from remembered rooms.",
+        context={
+            "server_uri": clean_server_uri,
+            "room_id": clean_room_id,
+            "removed": before_count != len(settings.remembered_private_rooms),
+            "remembered_private_rooms_count": len(settings.remembered_private_rooms),
+        },
+    )
     return settings
 
 

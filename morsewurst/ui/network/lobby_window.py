@@ -8,6 +8,7 @@ import queue
 import time
 import tkinter as tk
 
+from morsewurst.core.logging_service import log_event
 from morsewurst.network.defaults import DEFAULT_RELAY_URI
 from morsewurst.network.public_rooms import PublicRoom
 from morsewurst.network.settings_store import load_network_settings, network_settings_path
@@ -68,6 +69,16 @@ class NetworkLobbyWindow(
         self.app = app
         self.settings = load_network_settings()
         self.settings_file_exists = network_settings_path().exists()
+        log_event(
+            "network",
+            "network.window.opened",
+            message="Network window opened.",
+            context={
+                "settings_file_exists": self.settings_file_exists,
+                "server_uri": self.settings.last_server_uri or DEFAULT_RELAY_URI,
+                "callsign": self.settings.callsign,
+            },
+        )
 
         self.current_view = ""
         self.connected_room_key = ""

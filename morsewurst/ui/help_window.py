@@ -8,6 +8,7 @@ import tkinter as tk
 from tkinter import ttk
 
 import morsewurst.config as config
+from morsewurst.core.app_logging import log_app_event, log_app_exception
 
 try:
     from morsewurst.ui import help_content as _help_content
@@ -28,6 +29,8 @@ class HelpWindow(tk.Toplevel):
         self.transient(parent)
         self.geometry("920x720")
         self.minsize(760, 520)
+
+        self.protocol("WM_DELETE_WINDOW", self._close)
 
         self._build_ui()
         self._insert_help_content()
@@ -51,7 +54,7 @@ class HelpWindow(tk.Toplevel):
         ttk.Button(
             header,
             text=self.app.i18n.t("help_window.close_button"),
-            command=self.destroy,
+            command=self._close,
         ).pack(side=tk.RIGHT)
 
         content_frame = ttk.Frame(outer)
@@ -178,16 +181,33 @@ class HelpWindow(tk.Toplevel):
         if callable(build_help_document):
             try:
                 return build_help_document(self.app.i18n)
-            except Exception:
-                pass
+            except Exception as exc:
+                log_app_exception(
+                    "app.help.content_load_failed",
+                    exc,
+                    level="warning",
+                    message="Help document builder failed; fallback help content will be used if needed.",
+                )
 
         if HELP_DOCUMENT is not None:
             return self._resolve_help_document(HELP_DOCUMENT)
 
+        log_app_event(
+            "app.help.fallback_used",
+            level="warning",
+            message="Fallback help content was used.",
+        )
         return [
             {"type": "title", "text": self.app.i18n.t("help_window.fallback_title")},
             {"type": "paragraph", "text": self.app.i18n.t("help_window.fallback_paragraph")},
         ]
+
+    def _close(self) -> None:
+        log_app_event(
+            "app.help.window_closed",
+            message="Help window closed.",
+        )
+        self.destroy()
 
     def _resolve_help_document(self, document: object) -> list[dict[str, str]]:
         blocks: list[dict[str, str]] = []

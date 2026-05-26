@@ -13,6 +13,7 @@ env/
 # Local user files
 /Morsewurst Project Folder/
 /wiki/
+/backups/
 
 # Build and packaging output
 build/
@@ -23,9 +24,9 @@ Output/
 *.msi
 *.zip
 
-# Keep released Windows installer in the repository
-!installer/
-!installer/*.exe
+# Installer folder and its contents
+installer/
+installer/*.exe
 
 # Inno Setup temporary/output files
 *.iss~

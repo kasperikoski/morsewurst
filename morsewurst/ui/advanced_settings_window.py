@@ -8,6 +8,7 @@ import tkinter as tk
 from tkinter import ttk
 
 import morsewurst.config as config
+from morsewurst.core.app_logging import log_app_event, log_app_exception
 
 
 class AdvancedSettingsWindow(tk.Toplevel):
@@ -52,6 +53,10 @@ class AdvancedSettingsWindow(tk.Toplevel):
 
         self.update_idletasks()
         self._center_on_parent(app)
+        log_app_event(
+            "app.settings.advanced_window_opened",
+            message="Advanced settings window opened.",
+        )
 
     def _open_debug_window_from_settings(self) -> None:
         try:
@@ -59,6 +64,10 @@ class AdvancedSettingsWindow(tk.Toplevel):
         except tk.TclError:
             pass
 
+        log_app_event(
+            "app.debug.window_open_requested_from_settings",
+            message="Debug window open requested from advanced settings.",
+        )
         self.app.window_controller.open_debug_window()
 
     def close(self) -> None:
@@ -69,14 +78,23 @@ class AdvancedSettingsWindow(tk.Toplevel):
 
         try:
             self.app.settings_controller.save_ui_settings()
-        except Exception:
-            pass
+        except Exception as exc:
+            log_app_exception(
+                "app.settings.save_failed",
+                exc,
+                level="warning",
+                message="Saving settings while closing advanced settings window failed.",
+            )
 
         try:
             self.grab_release()
         except tk.TclError:
             pass
 
+        log_app_event(
+            "app.settings.advanced_window_closed",
+            message="Advanced settings window closed.",
+        )
         self.destroy()
 
         try:
@@ -202,8 +220,18 @@ class AdvancedSettingsWindow(tk.Toplevel):
             selected_label = selected_label_var.get()
             language = label_to_code.get(selected_label, "en")
 
+            previous_language = getattr(self.app.i18n, "language", "")
             self.app.language_var.set(language)
             self.app.i18n.set_language(language)
+            log_app_event(
+                "app.settings.language_changed",
+                message="Application language setting changed from advanced settings.",
+                context={
+                    "previous_language": previous_language,
+                    "selected_language": language,
+                    "active_language": self.app.i18n.language,
+                },
+            )
 
         combo.bind("<<ComboboxSelected>>", on_language_selected)
 
@@ -740,6 +768,10 @@ class AdvancedSettingsWindow(tk.Toplevel):
         )
 
     def _refresh_profile_summary(self) -> None:
+        log_app_event(
+            "app.timing_profile.refresh_requested_from_settings",
+            message="Timing profile refresh requested from advanced settings.",
+        )
         self.app.decoder_controller.refresh_timing_profiles()
 
         try:

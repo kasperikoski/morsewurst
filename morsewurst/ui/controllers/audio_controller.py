@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING
 from tkinter import messagebox
 
 import morsewurst.config as config
+from morsewurst.core.app_logging import log_app_event, log_app_exception
 from morsewurst.core.morse_preview_player import MorsePreviewPlayer
 
 if TYPE_CHECKING:
@@ -54,6 +55,12 @@ class AudioController:
 
         sound_path = getattr(config, "SOUND_FILES", {}).get(event_name)
         if sound_path is None:
+            log_app_event(
+                "app.audio.sound_file_missing",
+                level="warning",
+                message="No sound file was configured for UI sound event.",
+                context={"event_name": event_name},
+            )
             return
 
         try:
@@ -62,7 +69,21 @@ class AudioController:
                     str(sound_path),
                     winsound.SND_FILENAME | winsound.SND_ASYNC,
                 )
-        except Exception:
+            else:
+                log_app_event(
+                    "app.audio.sound_file_missing",
+                    level="warning",
+                    message="Configured UI sound file does not exist.",
+                    context={"event_name": event_name, "path": str(sound_path)},
+                )
+        except Exception as exc:
+            log_app_exception(
+                "app.audio.sound_play_failed",
+                exc,
+                level="warning",
+                message="UI sound playback failed.",
+                context={"event_name": event_name, "path": str(sound_path)},
+            )
             return
 
     def stop_sound(self) -> None:
@@ -94,9 +115,22 @@ class AudioController:
             maximum=80,
         )
 
+        log_app_event(
+            "app.audio.preview_started",
+            message="Morse speed preview start requested.",
+            context={"wpm": wpm},
+        )
+
         try:
             self.morse_preview_player.start(wpm=wpm)
         except RuntimeError as exc:
+            log_app_exception(
+                "app.audio.preview_failed",
+                exc,
+                level="warning",
+                message="Morse speed preview could not be started.",
+                context={"wpm": wpm},
+            )
             app.morse_preview_button_var.set("Äänitesti")
             messagebox.showerror(
                 config.APP_NAME,
@@ -107,6 +141,13 @@ class AudioController:
             )
             return
         except Exception as exc:
+            log_app_exception(
+                "app.audio.preview_failed",
+                exc,
+                level="warning",
+                message="Morse speed preview failed.",
+                context={"wpm": wpm},
+            )
             app.morse_preview_button_var.set("Äänitesti")
             messagebox.showerror(
                 config.APP_NAME,
@@ -121,9 +162,20 @@ class AudioController:
 
     def stop_morse_speed_preview(self) -> None:
         try:
+            was_running = bool(getattr(self.morse_preview_player, "running", False))
             self.morse_preview_player.stop()
-        except Exception:
-            pass
+            if was_running:
+                log_app_event(
+                    "app.audio.preview_stopped",
+                    message="Morse speed preview stopped.",
+                )
+        except Exception as exc:
+            log_app_exception(
+                "app.audio.preview_stop_failed",
+                exc,
+                level="warning",
+                message="Morse speed preview could not be stopped.",
+            )
 
         try:
             self.app.morse_preview_button_var.set("Äänitesti")

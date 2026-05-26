@@ -7,6 +7,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 import morsewurst.config as config
+from morsewurst.core.app_logging import log_app_event
 from morsewurst.models import ChallengeSettings
 
 if TYPE_CHECKING:
@@ -71,13 +72,38 @@ class ChallengeSettingsController:
             maximum=100,
         )
 
+        original_min_groups = min_groups
+        original_max_groups = max_groups
+        original_min_chars = min_chars
+        original_max_chars = max_chars
+        bounds_corrected = False
+
         if min_groups > max_groups:
             max_groups = min_groups
             app.max_groups_var.set(max_groups)
+            bounds_corrected = True
 
         if min_chars > max_chars:
             max_chars = min_chars
             app.max_chars_var.set(max_chars)
+            bounds_corrected = True
+
+        if bounds_corrected:
+            log_app_event(
+                "app.settings.challenge_bounds_corrected",
+                level="warning",
+                message="Invalid challenge min/max bounds were corrected.",
+                context={
+                    "old_min_groups": original_min_groups,
+                    "old_max_groups": original_max_groups,
+                    "new_min_groups": min_groups,
+                    "new_max_groups": max_groups,
+                    "old_min_chars_per_group": original_min_chars,
+                    "old_max_chars_per_group": original_max_chars,
+                    "new_min_chars_per_group": min_chars,
+                    "new_max_chars_per_group": max_chars,
+                },
+            )
 
         return ChallengeSettings(
             use_letters=app.use_letters_var.get(),

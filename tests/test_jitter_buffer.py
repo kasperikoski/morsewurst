@@ -23,6 +23,11 @@ class FakeTonePlayer:
         self.scheduled.append(kwargs)
 
 
+class FailingTonePlayer(FakeTonePlayer):
+    def start(self) -> None:
+        raise RuntimeError("audio unavailable")
+
+
 def test_round_up_ms_and_as_int_helpers_are_defensive() -> None:
     assert _round_up_ms(101, 50) == 150
     assert _round_up_ms(-10, 50) == 0
@@ -74,3 +79,127 @@ def test_jitter_buffer_ignores_disabled_playback_and_reports_invalid_messages() 
 
     assert player.scheduled == []
     assert statuses and statuses[-1][0] == "warning"
+
+
+
+def test_jitter_buffer_resets_when_sequence_goes_backwards() -> None:
+    player = FakeTonePlayer()
+    statuses: list[tuple[str, str]] = []
+    buffer = JitterBuffer(
+        player,  # type: ignore[arg-type]
+        playback_settings=PlaybackSettings(jitter_buffer_ms=10),
+        status_callback=lambda level, text: statuses.append((level, text)),
+    )
+
+    first = {
+        "type": "tone",
+        "sender_id": "client-1",
+        "stream_id": "stream-1",
+        "seq": 10,
+        "tone": {"type": "tone", "t0": 100_000, "t1": 150_000, "dur": 50_000},
+    }
+    second = {
+        "type": "tone",
+        "sender_id": "client-1",
+        "stream_id": "stream-1",
+        "seq": 2,
+        "tone": {"type": "tone", "t0": 160_000, "t1": 210_000, "dur": 50_000},
+    }
+
+    buffer.push_message(first)
+    buffer.push_message(second)
+
+    assert len(player.scheduled) == 2
+    reset_statuses = [
+        text
+        for level, text in statuses
+        if level == "info" and "Uusi vastaanottopuskuri" in text
+    ]
+    assert len(reset_statuses) == 2
+
+
+def test_jitter_buffer_drops_stale_tone_only_reports_first_stale_drop() -> None:
+    player = FakeTonePlayer()
+    statuses: list[tuple[str, str]] = []
+    buffer = JitterBuffer(
+        player,  # type: ignore[arg-type]
+        playback_settings=PlaybackSettings(jitter_buffer_ms=0),
+        drop_late_ms=1,
+        late_grace_ms=0,
+        status_callback=lambda level, text: statuses.append((level, text)),
+    )
+
+    message = {
+        "type": "tone",
+        "sender_id": "client-1",
+        "stream_id": "stream-1",
+        "seq": 1,
+        "tone": {"type": "tone", "t0": 0, "t1": 100_000, "dur": 100_000},
+    }
+    buffer.push_message(message)
+
+    state = next(iter(buffer._streams.values()))
+    state.playback_base_monotonic -= 10.0
+
+    stale_message = {
+        "type": "tone",
+        "sender_id": "client-1",
+        "stream_id": "stream-1",
+        "seq": 2,
+        "tone": {"type": "tone", "t0": 100_000, "t1": 200_000, "dur": 100_000},
+    }
+    buffer.push_message(stale_message)
+    buffer.push_message(
+        {
+            **stale_message,
+            "seq": 3,
+            "tone": {"type": "tone", "t0": 200_000, "t1": 300_000, "dur": 100_000},
+        }
+    )
+
+    warning_statuses = [text for level, text in statuses if level == "warning"]
+    stale_statuses = [text for text in warning_statuses if "Vanhat vastaanottoäänet ohitettiin" in text]
+    assert len(stale_statuses) == 1
+    assert player.clear_calls >= 2
+
+
+def test_jitter_buffer_reports_audio_start_failure_without_scheduling() -> None:
+    player = FailingTonePlayer()
+    statuses: list[tuple[str, str]] = []
+    buffer = JitterBuffer(
+        player,  # type: ignore[arg-type]
+        playback_settings=PlaybackSettings(enabled=True),
+        status_callback=lambda level, text: statuses.append((level, text)),
+    )
+
+    buffer.push_message(
+        {
+            "type": "tone",
+            "sender_id": "client-1",
+            "stream_id": "stream-1",
+            "seq": 1,
+            "tone": {"type": "tone", "t0": 0, "t1": 100_000, "dur": 100_000},
+        }
+    )
+
+    assert player.scheduled == []
+    assert statuses[-1][0] == "error"
+    assert "Audio playback could not be started" in statuses[-1][1]
+
+
+def test_jitter_buffer_ignores_zero_duration_tone_without_starting_player() -> None:
+    player = FakeTonePlayer()
+    buffer = JitterBuffer(player, playback_settings=PlaybackSettings(enabled=True))  # type: ignore[arg-type]
+
+    buffer.push_message(
+        {
+            "type": "tone",
+            "sender_id": "client-1",
+            "stream_id": "stream-1",
+            "seq": 1,
+            "tone": {"type": "tone", "t0": 0, "t1": 0, "dur": 0},
+        }
+    )
+
+    assert player.start_calls == 0
+    assert player.scheduled == []

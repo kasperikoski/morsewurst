@@ -5,7 +5,7 @@ Write-Host "=== Morsewurst Windows build ==="
 $ProjectRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
 Set-Location $ProjectRoot
 
-$IconPath = Join-Path $ProjectRoot "Assets\morse.ico"
+$IconPath = Join-Path $ProjectRoot "assets\morse.ico"
 $InstallerScript = Join-Path $ProjectRoot "installer.iss"
 
 Write-Host "Checking required files..."
@@ -17,9 +17,9 @@ $RequiredFiles = @(
     "docs\latest.json",
     "morsewurst\i18n\en.json",
     "morsewurst\i18n\fi.json",
-    "Assets\morse.ico",
-    "Assets\img\startup_screen.png",
-    "Assets\img\network_startup_screen.png",
+    "assets\morse.ico",
+    "assets\img\startup_screen.png",
+    "assets\img\network_startup_screen.png",
     "morsewurst\ui\network\__init__.py",
     "morsewurst\ui\network\lobby_window.py",
     "morsewurst\ui\network\lobby_state.py",
@@ -84,7 +84,7 @@ python -m PyInstaller `
     --hidden-import morsewurst.network.public_rooms `
     --hidden-import morsewurst.network.settings_store `
     --hidden-import morsewurst.core.morse_preview_player `
-    --add-data "Assets;Assets" `
+    --add-data "assets;assets" `
     main.py
 
 $ExePath = Join-Path $ProjectRoot "dist\Morsewurst\Morsewurst.exe"

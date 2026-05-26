@@ -14,6 +14,14 @@ from typing import Any, Dict, List, Optional
 
 import morsewurst.config as config
 from morsewurst.core.scoring import paris_wpm_for_text
+from morsewurst.core.app_logging import (
+    log_app_event,
+    log_app_exception,
+    summarize_challenge_settings,
+    summarize_rating,
+    summarize_score_summary,
+    summarize_timing_profile,
+)
 from morsewurst.core.timing_profile import TimingProfile, TimingProfileSample, build_timing_profile, normalize_source
 from morsewurst.models import ChallengeSettings, CharacterResult, ScoreSummary
 
@@ -23,6 +31,12 @@ SCHEMA_META_KEY = "schema_version"
 class Database:
     def __init__(self, path: Path) -> None:
         path.parent.mkdir(parents=True, exist_ok=True)
+
+        log_app_event(
+            "app.database.open_started",
+            message="Database open started.",
+            context={"path": str(path), "database_existed": path.exists()},
+        )
 
         self.path = path
         self.replaced_incompatible_database_path: Optional[Path] = None
@@ -34,17 +48,41 @@ class Database:
         if database_existed:
             try:
                 self._prepare_existing_database_for_current_schema()
-            except Exception:
-                pass
+            except Exception as exc:
+                log_app_exception(
+                    "app.database.schema_prepare_failed",
+                    exc,
+                    level="warning",
+                    message="Existing database schema preparation failed; compatibility check will continue.",
+                    context={"path": str(path)},
+                )
 
         if database_existed and not self._schema_is_compatible():
             self.replaced_incompatible_database_path = self._replace_incompatible_database()
+            log_app_event(
+                "app.database.incompatible_replaced",
+                level="warning",
+                message="Incompatible database was moved aside and replaced.",
+                context={
+                    "path": str(path),
+                    "replaced_path": str(self.replaced_incompatible_database_path),
+                },
+            )
 
         self.init_schema()
         self._ensure_practice_tracking_schema()
         self.ensure_practice_consistency()
         self.mark_in_progress_practices_interrupted()
         self._write_schema_version()
+        log_app_event(
+            "app.database.opened",
+            message="Database opened and schema initialized.",
+            context={
+                "path": str(self.path),
+                "database_existed": database_existed,
+                "replaced_incompatible": self.replaced_incompatible_database_path is not None,
+            },
+        )
 
     def _connect(self) -> sqlite3.Connection:
         conn = sqlite3.connect(self.path)
@@ -651,7 +689,17 @@ class Database:
         if cur.lastrowid is None:
             raise RuntimeError("Practice insert failed: SQLite did not return lastrowid.")
 
-        return int(cur.lastrowid)
+        practice_id = int(cur.lastrowid)
+        log_app_event(
+            "app.database.practice_created",
+            message="Practice row created.",
+            context={
+                "practice_id": practice_id,
+                "planned_rounds": max(1, int(planned_rounds)),
+                "settings": summarize_challenge_settings(settings),
+            },
+        )
+        return practice_id
 
     def refresh_practice_progress(self, practice_id: int) -> None:
         try:
@@ -659,9 +707,20 @@ class Database:
             cur.execute("BEGIN")
             self._refresh_practice_progress_inside_transaction(int(practice_id))
             self.conn.commit()
+            log_app_event(
+                "app.database.practice_progress_refreshed",
+                message="Practice progress refreshed.",
+                context={"practice_id": int(practice_id)},
+            )
 
-        except Exception:
+        except Exception as exc:
             self.conn.rollback()
+            log_app_exception(
+                "app.database.practice_progress_refresh_failed",
+                exc,
+                message="Practice progress refresh failed.",
+                context={"practice_id": int(practice_id)},
+            )
             raise
 
     def finish_practice(self, practice_id: int | None, status: str) -> None:
@@ -695,9 +754,20 @@ class Database:
             )
 
             self.conn.commit()
+            log_app_event(
+                "app.database.practice_finished",
+                message="Practice row finished.",
+                context={"practice_id": int(practice_id), "status": status},
+            )
 
-        except Exception:
+        except Exception as exc:
             self.conn.rollback()
+            log_app_exception(
+                "app.database.practice_finish_failed",
+                exc,
+                message="Practice finish failed.",
+                context={"practice_id": int(practice_id), "status": status},
+            )
             raise
 
     def _refresh_practice_progress_inside_transaction(self, practice_id: int) -> None:
@@ -764,6 +834,16 @@ class Database:
                     WHERE id = ?
                     """,
                     (int(practice_id),),
+                )
+                log_app_event(
+                    "app.database.practice_status_modified_after_session_change",
+                    level="warning",
+                    message="Completed practice was marked modified after related session changes.",
+                    context={
+                        "practice_id": int(practice_id),
+                        "planned_rounds": planned_rounds,
+                        "completed_rounds": completed_rounds,
+                    },
                 )
 
     def ensure_practice_consistency(self) -> int:
@@ -839,10 +919,22 @@ class Database:
                 )
 
             self.conn.commit()
-            return len(rows)
+            repaired = len(rows)
+            log_app_event(
+                "app.database.practice_consistency_repaired",
+                level="warning",
+                message="Legacy sessions without practice ids were repaired.",
+                context={"repaired_count": repaired},
+            )
+            return repaired
 
-        except Exception:
+        except Exception as exc:
             self.conn.rollback()
+            log_app_exception(
+                "app.database.practice_consistency_repair_failed",
+                exc,
+                message="Practice consistency repair failed.",
+            )
             raise
 
     def mark_in_progress_practices_interrupted(self) -> int:
@@ -888,10 +980,25 @@ class Database:
                 )
 
             self.conn.commit()
-            return len(rows)
+            interrupted = len(rows)
+            log_app_event(
+                "app.database.in_progress_marked_interrupted",
+                level="warning",
+                message="In-progress practices from a previous run were marked interrupted.",
+                context={
+                    "interrupted_count": interrupted,
+                    "finished_at": finished_at,
+                },
+            )
+            return interrupted
 
-        except Exception:
+        except Exception as exc:
             self.conn.rollback()
+            log_app_exception(
+                "app.database.in_progress_interrupt_failed",
+                exc,
+                message="Marking in-progress practices as interrupted failed.",
+            )
             raise
 
     def save_session(
@@ -906,6 +1013,19 @@ class Database:
     ) -> int:
         finished_at = datetime.now()
         cur = self.conn.cursor()
+
+        log_app_event(
+            "app.database.session_save_started",
+            message="Session save transaction started.",
+            context={
+                "practice_id": int(practice_id),
+                "round_number": max(1, int(round_number)),
+                "event_count": len(events),
+                "char_result_count": len(char_results),
+                "summary": summarize_score_summary(summary),
+                "settings": summarize_challenge_settings(settings),
+            },
+        )
 
         try:
             cur.execute(
@@ -1140,10 +1260,34 @@ class Database:
                     )
 
             self.conn.commit()
+            log_app_event(
+                "app.database.session_saved",
+                message="Session save transaction committed.",
+                context={
+                    "session_id": int(session_id),
+                    "practice_id": int(practice_id),
+                    "round_number": max(1, int(round_number)),
+                    "event_count": len(events),
+                    "char_result_count": len(char_results),
+                    "summary": summarize_score_summary(summary),
+                },
+            )
             return session_id
 
-        except Exception:
+        except Exception as exc:
             self.conn.rollback()
+            log_app_exception(
+                "app.database.session_save_failed",
+                exc,
+                message="Session save transaction failed.",
+                context={
+                    "practice_id": int(practice_id),
+                    "round_number": max(1, int(round_number)),
+                    "event_count": len(events),
+                    "char_result_count": len(char_results),
+                    "summary": summarize_score_summary(summary),
+                },
+            )
             raise
 
     def recent_sessions(self, limit: int = 10) -> List[sqlite3.Row]:
@@ -1383,6 +1527,11 @@ class Database:
         )
 
         if not session_ids:
+            log_app_event(
+                "app.database.sessions_delete_skipped_empty",
+                message="Session delete requested but no sessions matched.",
+                context={"start_at": start_at, "end_at": end_at},
+            )
             return 0
 
         placeholders = ",".join("?" for _ in session_ids)
@@ -1443,11 +1592,24 @@ class Database:
 
             self.conn.commit()
 
-        except Exception:
+        except Exception as exc:
             self.conn.rollback()
+            log_app_exception(
+                "app.database.sessions_delete_failed",
+                exc,
+                message="Session delete transaction failed.",
+                context={"start_at": start_at, "end_at": end_at, "session_count": len(session_ids)},
+            )
             raise
 
-        return len(session_ids)
+        deleted_count = len(session_ids)
+        log_app_event(
+            "app.database.sessions_deleted",
+            level="warning",
+            message="Practice sessions were deleted.",
+            context={"start_at": start_at, "end_at": end_at, "deleted_count": deleted_count},
+        )
+        return deleted_count
     
 
     def delete_session_by_id(self, session_id: int) -> int:
@@ -1470,6 +1632,12 @@ class Database:
         ).fetchone()
 
         if session_row is None:
+            log_app_event(
+                "app.database.session_delete_not_found",
+                level="warning",
+                message="Single session delete requested but session was not found.",
+                context={"session_id": session_id},
+            )
             return 0
 
         practice_id = (
@@ -1542,10 +1710,22 @@ class Database:
 
             self.conn.commit()
 
-        except Exception:
+        except Exception as exc:
             self.conn.rollback()
+            log_app_exception(
+                "app.database.session_delete_failed",
+                exc,
+                message="Single session delete transaction failed.",
+                context={"session_id": session_id},
+            )
             raise
 
+        log_app_event(
+            "app.database.session_deleted",
+            level="warning",
+            message="Single practice session was deleted.",
+            context={"session_id": session_id, "deleted": deleted, "practice_id": practice_id},
+        )
         return deleted
 
 
@@ -2601,6 +2781,11 @@ class Database:
     def save_skill_rating_snapshot(self, session_id: int | None, rating: Any) -> int:
         cur = self.conn.cursor()
         created_at = datetime.now().isoformat(timespec="seconds")
+        log_app_event(
+            "app.database.skill_rating_snapshot_save_started",
+            message="Skill rating snapshot save started.",
+            context={"session_id": session_id, "rating": summarize_rating(rating)},
+        )
 
         if is_dataclass(rating):
             details = asdict(rating)
@@ -2673,7 +2858,13 @@ class Database:
         )
 
         self.conn.commit()
-        return int(cur.lastrowid)
+        snapshot_id = int(cur.lastrowid)
+        log_app_event(
+            "app.database.skill_rating_snapshot_saved",
+            message="Skill rating snapshot saved.",
+            context={"snapshot_id": snapshot_id, "session_id": session_id, "rating": summarize_rating(rating)},
+        )
+        return snapshot_id
 
 
     def recent_skill_snapshots(self, limit: int = 200) -> List[sqlite3.Row]:
@@ -3316,6 +3507,11 @@ class Database:
 
     def _save_persisted_timing_profile(self, profile: TimingProfile) -> None:
         if not self._profile_is_usable(profile):
+            log_app_event(
+                "app.timing_profile.persistence_skipped",
+                message="Timing profile was not usable enough to persist.",
+                context={"profile": summarize_timing_profile(profile)},
+            )
             return
 
         cur = self.conn.cursor()
@@ -3387,6 +3583,11 @@ class Database:
         )
 
         self.conn.commit()
+        log_app_event(
+            "app.timing_profile.persisted",
+            message="Timing profile persisted.",
+            context={"profile": summarize_timing_profile(profile)},
+        )
 
 
     def load_timing_profile(
@@ -3489,11 +3690,31 @@ class Database:
             )
 
         if len(raw_samples) < min_rounds:
+            log_app_event(
+                "app.timing_profile.not_usable",
+                message="Timing profile does not yet have enough raw samples.",
+                context={
+                    "source": source_name,
+                    "raw_sample_count": len(raw_samples),
+                    "min_rounds": min_rounds,
+                    "recent_limit": recent_limit,
+                },
+            )
             return TimingProfile(source=source_name)
 
         filtered_samples = self._filter_timing_profile_outliers(raw_samples)
 
         if len(filtered_samples) < min_rounds:
+            log_app_event(
+                "app.timing_profile.not_usable",
+                message="Timing profile does not yet have enough filtered samples.",
+                context={
+                    "source": source_name,
+                    "raw_sample_count": len(raw_samples),
+                    "filtered_sample_count": len(filtered_samples),
+                    "min_rounds": min_rounds,
+                },
+            )
             return TimingProfile(source=source_name)
 
         candidate = build_timing_profile(
@@ -3503,6 +3724,11 @@ class Database:
         )
 
         if not self._profile_is_usable(candidate):
+            log_app_event(
+                "app.timing_profile.not_usable",
+                message="Timing profile candidate was not usable.",
+                context={"profile": summarize_timing_profile(candidate)},
+            )
             return TimingProfile(source=source_name)
 
         previous = self._load_persisted_timing_profile(source_name)
@@ -3531,12 +3757,33 @@ class Database:
             and candidate_session_id is not None
             and int(candidate_session_id) <= int(previous_session_id)
         ):
+            log_app_event(
+                "app.timing_profile.loaded",
+                message="Persisted timing profile reused without recalculation drift.",
+                context={"profile": summarize_timing_profile(previous)},
+            )
             return previous
 
         stable_profile = self._clamp_timing_profile_drift(candidate, previous)
+        if self._profile_is_usable(previous) and not self._timing_profiles_effectively_equal(candidate, stable_profile):
+            log_app_event(
+                "app.timing_profile.drift_clamped",
+                message="Timing profile drift was clamped before persistence.",
+                context={
+                    "source": source_name,
+                    "candidate": summarize_timing_profile(candidate),
+                    "previous": summarize_timing_profile(previous),
+                    "stable": summarize_timing_profile(stable_profile),
+                },
+            )
 
         self._save_persisted_timing_profile(stable_profile)
 
+        log_app_event(
+            "app.timing_profile.loaded",
+            message="Timing profile loaded from recent sessions.",
+            context={"profile": summarize_timing_profile(stable_profile)},
+        )
         return stable_profile
     
 

@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING, Any
 import tkinter as tk
 
 import morsewurst.config as config
+from morsewurst.core.app_logging import log_app_event, log_app_exception, summarize_ui_settings
 
 if TYPE_CHECKING:
     from morsewurst.ui.app import MorsewurstApp
@@ -28,23 +29,49 @@ class SettingsController:
 
     def load_ui_settings(self) -> None:
         """Load all saved UI settings into the current Tk variables."""
+        log_app_event(
+            "app.settings.load_started",
+            message="UI settings load started.",
+            context={"path": str(self.ui_settings_path())},
+        )
         data = self.read_ui_settings_file()
 
         self.load_language_setting(data)
 
         if not data:
+            log_app_event(
+                "app.settings.applied",
+                message="Default UI settings applied.",
+                context={"source": "defaults"},
+            )
             return
 
         self.load_main_training_settings(data)
         self.load_input_and_serial_settings(data)
         self.load_advanced_stat_settings(data)
         self.load_window_settings(data)
+        log_app_event(
+            "app.settings.applied",
+            message="Saved UI settings applied.",
+            context=summarize_ui_settings(data),
+        )
 
     def load_language_setting(self, data: dict[str, Any]) -> None:
         """Load the saved language setting and apply it to the i18n service."""
         language = self.language_from_data(data)
 
+        old_language = getattr(self.app.i18n, "language", "")
         self.app.i18n.set_language(language)
+        if old_language != self.app.i18n.language:
+            log_app_event(
+                "app.i18n.language_loaded",
+                message="Application language loaded.",
+                context={
+                    "requested_language": language,
+                    "active_language": self.app.i18n.language,
+                    "previous_language": old_language,
+                },
+            )
 
         try:
             self.app.language_var.set(self.app.i18n.language)
@@ -67,15 +94,41 @@ class SettingsController:
         path = self.ui_settings_path()
 
         if not path.exists():
+            log_app_event(
+                "app.settings.file_missing",
+                message="UI settings file does not exist; defaults will be used.",
+                context={"path": str(path)},
+            )
             return {}
 
         try:
             with path.open("r", encoding="utf-8") as handle:
                 data = json.load(handle)
-        except Exception:
+        except Exception as exc:
+            log_app_exception(
+                "app.settings.load_failed",
+                exc,
+                level="warning",
+                message="UI settings file could not be read.",
+                context={"path": str(path)},
+            )
             return {}
 
-        return data if isinstance(data, dict) else {}
+        if not isinstance(data, dict):
+            log_app_event(
+                "app.settings.invalid_json",
+                level="warning",
+                message="UI settings file did not contain a JSON object.",
+                context={"path": str(path), "data_type": type(data).__name__},
+            )
+            return {}
+
+        log_app_event(
+            "app.settings.load_success",
+            message="UI settings file loaded.",
+            context={"path": str(path), **summarize_ui_settings(data)},
+        )
+        return data
 
     def load_main_training_settings(self, data: dict[str, Any]) -> None:
         """Load main practice, target generation, WX-MOR and sound settings."""
@@ -369,15 +422,33 @@ class SettingsController:
         path = self.ui_settings_path()
         path.parent.mkdir(parents=True, exist_ok=True)
 
+        data = self.ui_settings_data()
+        log_app_event(
+            "app.settings.save_started",
+            message="UI settings save started.",
+            context={"path": str(path), **summarize_ui_settings(data)},
+        )
+
         try:
             with path.open("w", encoding="utf-8") as handle:
                 json.dump(
-                    self.ui_settings_data(),
+                    data,
                     handle,
                     ensure_ascii=False,
                     indent=2,
                 )
+            log_app_event(
+                "app.settings.save_success",
+                message="UI settings saved.",
+                context={"path": str(path), **summarize_ui_settings(data)},
+            )
         except Exception as exc:
+            log_app_exception(
+                "app.settings.save_failed",
+                exc,
+                message="UI settings save failed.",
+                context={"path": str(path)},
+            )
             try:
                 self.app.status_var.set(f"Asetusten tallennus epäonnistui: {exc}")
             except Exception:

@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import tkinter as tk
 
+from morsewurst.core.logging_service import log_event
 from morsewurst.ui.network_matrix_theme import (
     MatrixTheme,
     make_button,
@@ -304,6 +305,12 @@ class SettingsViewMixin:
         self.show_lobby_view()
 
     def reset_playback_defaults(self) -> None:
+        log_event(
+            "network",
+            "network.settings.playback_defaults_reset",
+            message="Network playback settings were reset to defaults from the UI.",
+            context={"server_uri": self._server_uri()},
+        )
         self.frequency_var.set("650")
         self.volume_percent_var.set(100)
         self.jitter_buffer_var.set(750)

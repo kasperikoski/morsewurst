@@ -13,6 +13,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 import morsewurst.config as config
+from morsewurst.core.app_logging import log_app_event, log_app_exception
 
 
 PROFILE_REGISTRY_VERSION = 1
@@ -96,12 +97,27 @@ class ProfileStore:
         self.backup_dir.mkdir(parents=True, exist_ok=True)
 
         registry = self.load()
+        log_app_event(
+            "app.profile.registry_loaded",
+            message="Profile registry loaded.",
+            context={
+                "registry_path": str(self.registry_path),
+                "profile_count": len(registry.profiles),
+                "active_profile_id": registry.active_profile_id,
+            },
+        )
 
         if registry.profiles:
             existing_ids = {profile.id for profile in registry.profiles}
 
             if registry.active_profile_id not in existing_ids:
                 registry.active_profile_id = registry.profiles[0].id
+                log_app_event(
+                    "app.profile.active_repaired",
+                    level="warning",
+                    message="Profile registry active profile did not exist and was repaired.",
+                    context={"active_profile_id": registry.active_profile_id},
+                )
                 self.save(registry)
 
         return registry
@@ -157,6 +173,11 @@ class ProfileStore:
         )
 
         self.save(registry)
+        log_app_event(
+            "app.profile.first_created",
+            message="First profile created in profile store.",
+            context={"profile_id": profile.id, "profile_name": profile.name, "profile_dir": str(profile_dir)},
+        )
         return profile
 
     def prepare_active_profile(self) -> UserProfile:
@@ -170,13 +191,29 @@ class ProfileStore:
         (active_dir / DEBUG_DIRNAME).mkdir(parents=True, exist_ok=True)
 
         config.set_active_data_dir(active_dir)
+        log_app_event(
+            "app.profile.active_prepared",
+            message="Active profile data directory prepared.",
+            context={
+                "profile_id": active.id,
+                "profile_name": active.name,
+                "data_dir": str(active_dir),
+            },
+        )
 
         return active
 
     def load(self) -> ProfileRegistry:
         try:
             data = json.loads(self.registry_path.read_text(encoding="utf-8"))
-        except Exception:
+        except Exception as exc:
+            log_app_exception(
+                "app.profile.registry_missing_or_invalid",
+                exc,
+                level="warning",
+                message="Profile registry could not be read; empty registry will be used.",
+                context={"registry_path": str(self.registry_path)},
+            )
             return ProfileRegistry(
                 version=PROFILE_REGISTRY_VERSION,
                 active_profile_id="",
@@ -184,6 +221,12 @@ class ProfileStore:
             )
 
         if not isinstance(data, dict):
+            log_app_event(
+                "app.profile.registry_missing_or_invalid",
+                level="warning",
+                message="Profile registry did not contain a JSON object; empty registry will be used.",
+                context={"registry_path": str(self.registry_path), "data_type": type(data).__name__},
+            )
             return ProfileRegistry(
                 version=PROFILE_REGISTRY_VERSION,
                 active_profile_id="",
@@ -230,6 +273,15 @@ class ProfileStore:
         tmp = self.registry_path.with_suffix(self.registry_path.suffix + ".tmp")
         tmp.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
         tmp.replace(self.registry_path)
+        log_app_event(
+            "app.profile.registry_saved",
+            message="Profile registry saved.",
+            context={
+                "registry_path": str(self.registry_path),
+                "profile_count": len(registry.profiles),
+                "active_profile_id": registry.active_profile_id,
+            },
+        )
 
     def active_profile(self, registry: ProfileRegistry | None = None) -> UserProfile:
         registry = registry or self.load_existing_registry()
@@ -282,6 +334,11 @@ class ProfileStore:
 
         registry.profiles.append(profile)
         self.save(registry)
+        log_app_event(
+            "app.profile.created",
+            message="Profile created in profile store.",
+            context={"profile_id": profile.id, "profile_name": profile.name, "profile_dir": str(self.profile_dir(profile.id))},
+        )
 
         return profile
 
@@ -293,6 +350,11 @@ class ProfileStore:
             if profile.id == clean_id:
                 registry.active_profile_id = profile.id
                 self.save(registry)
+                log_app_event(
+                    "app.profile.activated",
+                    message="Active profile changed in profile store.",
+                    context={"profile_id": profile.id, "profile_name": profile.name},
+                )
                 return profile
 
         raise ProfileNotFoundError("Profile was not found.")
@@ -332,6 +394,15 @@ class ProfileStore:
         profile.updated_at = utc_now_iso()
 
         self.save(registry)
+        log_app_event(
+            "app.profile.renamed",
+            message="Profile renamed in profile store.",
+            context={
+                "old_profile_id": old_id,
+                "profile_id": profile.id,
+                "profile_name": profile.name,
+            },
+        )
         return profile
 
     def delete_profile(self, profile_id: str) -> Path:
@@ -359,6 +430,15 @@ class ProfileStore:
             registry.active_profile_id = registry.profiles[0].id
 
         self.save(registry)
+        log_app_event(
+            "app.profile.backup_created",
+            message="Profile folder moved to backup during deletion.",
+            context={
+                "profile_id": profile.id,
+                "profile_name": profile.name,
+                "backup_path": str(backup_path),
+            },
+        )
         return backup_path
 
     def is_active_profile(self, profile_id: str) -> bool:

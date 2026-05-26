@@ -17,7 +17,7 @@
   "training.raw_telemetry_title": "Raakatelemetria",
   "training.decoded_title": "Telemetriasta dekoodattu syöte",
 
-  "runtime.target_placeholder": "Paina Aloita harjoitus",
+  "runtime.target_placeholder": "Paina \"Aloita harjoitus\"",
   "runtime.status_ready": "Valmis",
   "runtime.morse_preview_button": "Äänitesti",
   "runtime.serial_disconnected": "Ei yhteyttä",

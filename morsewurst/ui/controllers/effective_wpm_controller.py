@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING
 from tkinter import messagebox
 
 import morsewurst.config as config
+from morsewurst.core.app_logging import log_app_event, log_app_exception
 
 if TYPE_CHECKING:
     from morsewurst.ui.app import MorsewurstApp
@@ -44,13 +45,48 @@ class EffectiveWpmController:
             maximum=100,
         )
 
-        result = app.db.optimized_wpm_from_recent_sessions(
+        log_app_event(
+            "app.effective_wpm.suggestion_started",
+            message="Effective WPM suggestion calculation started.",
+            context={
+                "recent_rounds": recent_rounds,
+                "min_accuracy": min_accuracy,
+                "min_cleanliness": min_cleanliness,
+            },
+        )
+
+        try:
+            result = app.db.optimized_wpm_from_recent_sessions(
             recent_sessions=recent_rounds,
             min_accuracy=min_accuracy,
             min_cleanliness=min_cleanliness,
-        )
+            )
+        except Exception as exc:
+            log_app_exception(
+                "app.effective_wpm.failed",
+                exc,
+                message="Effective WPM suggestion calculation failed.",
+                context={
+                    "recent_rounds": recent_rounds,
+                    "min_accuracy": min_accuracy,
+                    "min_cleanliness": min_cleanliness,
+                },
+            )
+            raise
 
         if not result.get("ok"):
+            log_app_event(
+                "app.effective_wpm.not_enough_data",
+                level="warning",
+                message="Effective WPM suggestion could not be calculated because data is insufficient.",
+                context={
+                    "recent_rounds": recent_rounds,
+                    "min_accuracy": min_accuracy,
+                    "min_cleanliness": min_cleanliness,
+                    "reason": result.get("reason"),
+                    "used_rounds": result.get("used_rounds"),
+                },
+            )
             messagebox.showinfo(
                 config.APP_NAME,
                 app.i18n.t(
@@ -65,6 +101,16 @@ class EffectiveWpmController:
         minimum_required = int(getattr(config, "EFFECTIVE_WPM_MIN_ROUNDS_REQUIRED", 3))
 
         if used_rounds < minimum_required:
+            log_app_event(
+                "app.effective_wpm.too_few_rounds",
+                level="warning",
+                message="Effective WPM suggestion has too few qualified rounds.",
+                context={
+                    "used_rounds": used_rounds,
+                    "minimum_required": minimum_required,
+                    "recent_rounds": recent_rounds,
+                },
+            )
             messagebox.showinfo(
                 config.APP_NAME,
                 app.i18n.t(
@@ -79,6 +125,7 @@ class EffectiveWpmController:
         raw_wpm = float(result["wpm"])
         optimized_wpm = self._optimized_target_wpm(raw_wpm)
 
+        previous_wpm = app.target_wpm_var.get()
         app.target_wpm_var.set(optimized_wpm)
         app.history_controller.update_target_wpm_suggestion_indicator()
         app.settings_controller.save_ui_settings()
@@ -93,6 +140,19 @@ class EffectiveWpmController:
         )
         app.settings = app.challenge_settings_controller.settings_from_ui()
         app.timer_var.set(app.practice_controller.reference_time_label())
+        log_app_event(
+            "app.effective_wpm.applied",
+            message="Effective WPM suggestion was applied to target WPM.",
+            context={
+                "previous_wpm": previous_wpm,
+                "raw_wpm": raw_wpm,
+                "optimized_wpm": optimized_wpm,
+                "used_rounds": used_rounds,
+                "recent_rounds": recent_rounds,
+                "min_accuracy": min_accuracy,
+                "min_cleanliness": min_cleanliness,
+            },
+        )
 
         messagebox.showinfo(
             config.APP_NAME,

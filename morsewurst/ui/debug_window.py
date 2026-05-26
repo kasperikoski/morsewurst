@@ -11,6 +11,7 @@ import tkinter as tk
 from tkinter import messagebox, ttk
 
 import morsewurst.config as config
+from morsewurst.core.app_logging import log_app_event, log_app_exception
 from morsewurst.core.debug_snapshot import (
     clear_debug_files,
     debug_dir_path,
@@ -37,6 +38,10 @@ class DebugWindow(tk.Toplevel):
 
         self.load_latest()
         self._center_on_parent()
+        log_app_event(
+            "app.debug.window_opened",
+            message="Debug window opened.",
+        )
 
     def _build_ui(self) -> None:
         outer = ttk.Frame(self, padding=12)
@@ -210,6 +215,11 @@ class DebugWindow(tk.Toplevel):
         self.clipboard_clear()
         self.clipboard_append(content)
         self.status_var.set(self.app.i18n.t("debug_window.status.copied_visible"))
+        log_app_event(
+            "app.debug.visible_copied",
+            message="Visible debug window text copied to clipboard.",
+            context={"character_count": len(content), "mode": self.mode_var.get()},
+        )
 
     def copy_latest(self) -> None:
         content = read_latest_debug_text().rstrip()
@@ -221,8 +231,17 @@ class DebugWindow(tk.Toplevel):
         self.clipboard_clear()
         self.clipboard_append(content)
         self.status_var.set(self.app.i18n.t("debug_window.status.copied_latest"))
+        log_app_event(
+            "app.debug.latest_copied",
+            message="Latest debug snapshot copied from debug window.",
+            context={"character_count": len(content)},
+        )
 
     def clear_debug_data(self) -> None:
+        log_app_event(
+            "app.debug.clear_requested",
+            message="Debug data clear requested from debug window.",
+        )
         ok = messagebox.askyesno(
             config.APP_NAME,
             self.app.i18n.t("debug_window.confirm_clear"),
@@ -230,9 +249,18 @@ class DebugWindow(tk.Toplevel):
         )
 
         if not ok:
+            log_app_event(
+                "app.debug.clear_cancelled",
+                message="Debug data clear was cancelled from debug window.",
+            )
             return
 
         deleted = clear_debug_files()
+        log_app_event(
+            "app.debug.clear_completed",
+            message="Debug data cleared from debug window.",
+            context={"deleted_count": deleted},
+        )
 
         self._set_text("")
         self.status_var.set(
@@ -243,6 +271,12 @@ class DebugWindow(tk.Toplevel):
         path = debug_dir_path()
         path.mkdir(parents=True, exist_ok=True)
 
+        log_app_event(
+            "app.debug.folder_open_requested",
+            message="Debug folder open requested.",
+            context={"path": str(path)},
+        )
+
         try:
             if sys.platform.startswith("win"):
                 os.startfile(path)
@@ -252,6 +286,12 @@ class DebugWindow(tk.Toplevel):
                 subprocess.Popen(["xdg-open", str(path)])
 
         except Exception as exc:
+            log_app_exception(
+                "app.debug.folder_open_failed",
+                exc,
+                message="Debug folder could not be opened.",
+                context={"path": str(path)},
+            )
             messagebox.showerror(
                 config.APP_NAME,
                 self.app.i18n.t("debug_window.error_open_folder", error=exc),
@@ -265,4 +305,8 @@ class DebugWindow(tk.Toplevel):
         except Exception:
             pass
 
+        log_app_event(
+            "app.debug.window_closed",
+            message="Debug window closed.",
+        )
         self.destroy()

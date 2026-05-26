@@ -8,6 +8,7 @@ import tkinter as tk
 from tkinter import messagebox, ttk
 from typing import TYPE_CHECKING
 
+from morsewurst.core.app_logging import log_app_event, log_app_exception
 from morsewurst.storage.profile_store import DuplicateProfileError, ProfileError
 
 if TYPE_CHECKING:
@@ -133,6 +134,10 @@ class InitialProfileWindow(tk.Toplevel):
         self.app.app_lifecycle_controller.restart_application()
 
     def block_close(self) -> None:
+        log_app_event(
+            "app.profile.initial_setup_close_requested",
+            message="Initial profile setup window close was requested.",
+        )
         should_exit = messagebox.askyesno(
             self.app.i18n.t("profiles.initial_setup.exit_title"),
             self.app.i18n.t("profiles.initial_setup.exit_confirm"),
@@ -140,7 +145,17 @@ class InitialProfileWindow(tk.Toplevel):
         )
 
         if not should_exit:
+            log_app_event(
+                "app.profile.initial_setup_close_cancelled",
+                message="Initial profile setup close was cancelled.",
+            )
             return
+
+        log_app_event(
+            "app.profile.initial_setup_exit_confirmed",
+            level="warning",
+            message="User chose to exit before creating an initial profile.",
+        )
 
         try:
             self.grab_release()
@@ -154,7 +169,13 @@ class InitialProfileWindow(tk.Toplevel):
 
         try:
             self.app.app_lifecycle_controller.on_close()
-        except Exception:
+        except Exception as exc:
+            log_app_exception(
+                "app.profile.initial_setup_exit_close_failed",
+                exc,
+                level="warning",
+                message="Application close from initial profile setup failed; destroying root window.",
+            )
             self.app.destroy()
 
     def _center_on_parent(self) -> None:

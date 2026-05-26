@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import tkinter as tk
 
+from morsewurst.core.logging_service import log_event
 from morsewurst.ui.network_matrix_theme import (
     MatrixTheme,
     make_button,
@@ -16,6 +17,18 @@ from morsewurst.ui.network_matrix_theme import (
 
 class RoomViewMixin:
     def show_room_view(self) -> None:
+        log_event(
+            "network",
+            "network.room.view_opened",
+            message="Network room view opened.",
+            context={
+                "server_uri": self._server_uri(),
+                "room_key": self.connected_room_key,
+                "room_id": self.connected_room_id,
+                "room_title": self.connected_room_title,
+                "room_access": self.connected_room_access,
+            },
+        )
         self.current_view = "room"
         self._clear_content()
         self._render_footer()

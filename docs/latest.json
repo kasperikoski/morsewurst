@@ -1,17 +1,17 @@
 {
   "app": "Morsewurst",
-  "latest_version": "0.99.9",
-  "release_date": "2026-05-25",
-  "release_url": "https://github.com/kasperikoski/morsewurst/releases/tag/v0.99.9",
-  "download_url": "https://github.com/kasperikoski/morsewurst/releases/download/v0.99.9/MorsewurstSetup_0.99.9.exe",
+  "latest_version": "0.99.10",
+  "release_date": "2026-05-26",
+  "release_url": "https://github.com/kasperikoski/morsewurst/releases/tag/v0.99.10",
+  "download_url": "https://kasperikoski.fi/morsewurst/download",
   "release_notes": [
-    "Improved skill level progression with stricter full-character-set coverage handling.",
-    "Added a separate full charset coverage metric for level calculation without changing raw skill WPM.",
-    "Full charset coverage now requires high-quality rounds before characters count toward level progression.",
-    "Improved handling of character-set scope so punctuation practice no longer unlocks level coverage too easily.",
-    "Clarified skill panel labels by distinguishing data coverage from full charset coverage.",
-    "Rebuilt skill snapshot history support for the updated level progression model.",
-    "Fixed and refined skill rating display details.",
+    "Added application-wide structured logging for startup, shutdown, settings, profiles, practice sessions, serial connections, windows, statistics, debugging tools and update checks.",
+    "Improved diagnostics for practice lifecycle events, including round start, round finish, saving, deferred updates and skill rating snapshots.",
+    "Added safer logging helpers that avoid storing raw Morse telemetry, full target text or full entered text in normal application logs.",
+    "Improved logging around profile management, database maintenance, settings persistence and application restart/shutdown cleanup.",
+    "Added additional logging and sanitization tests for application logging and sensitive context masking.",
+    "Improved network-related tests for public room handling and client-side manager behaviour.",
+    "Fixed practice countdown and round-start logging issues.",
     "General bug fixes and stability improvements.",
     "Improved overall application behaviour and user experience."
   ]

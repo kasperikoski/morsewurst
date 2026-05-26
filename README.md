@@ -26,7 +26,7 @@ Morsewurst is a Python-based desktop training application for practising Morse c
 
 The application receives real-time keying telemetry from the keyer, decodes the signal, measures sending accuracy and timing quality, and gives detailed feedback about Morse performance. The goal is to make Morse practice measurable, visible and easier to improve over time.
 
-<img src="Assets/img/main_window.jpg" alt="Morsewurst main practice window" width="900">
+<img src="assets/img/main_window.jpg" alt="Morsewurst main practice window" width="900">
 
 ## 1. Current status
 
@@ -61,23 +61,23 @@ The network system includes relay-side room handling, client reconnect logic, pi
 
 ### 4.1. Main practice window
 
-<img src="Assets/img/main_window.jpg" alt="Morsewurst main practice window" width="900">
+<img src="assets/img/main_window.jpg" alt="Morsewurst main practice window" width="900">
 
 ### 4.2. Network lobby
 
-<img src="Assets/img/network_lobby.jpg" alt="Morsewurst Network lobby" width="900">
+<img src="assets/img/network_lobby.jpg" alt="Morsewurst Network lobby" width="900">
 
 ### 4.3. Private network room
 
-<img src="Assets/img/network_private_room.jpg" alt="Morsewurst private network room" width="900">
+<img src="assets/img/network_private_room.jpg" alt="Morsewurst private network room" width="900">
 
 ### 4.4. Statistics
 
-<img src="Assets/img/statistics.jpg" alt="Morsewurst statistics window" width="900">
+<img src="assets/img/statistics.jpg" alt="Morsewurst statistics window" width="900">
 
 ### 4.5. Settings
 
-<img src="Assets/img/settings.jpg" alt="Morsewurst settings window" width="900">
+<img src="assets/img/settings.jpg" alt="Morsewurst settings window" width="900">
 
 ## 5. Requirements
 
@@ -202,7 +202,7 @@ morsewurst/
   server/      Relay server components
   storage/     Local database handling
   ui/          Tkinter user interface, panels, windows and controllers
-Assets/        Sounds, images and application assets
+assets/        Sounds, images and application assets
 docs/          Firmware, screenshots, update manifest and documentation
 server/        Relay server deployment helpers
 tests/         Pytest regression and integration tests

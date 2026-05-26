@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING, Any, Dict, List, Optional
 import tkinter as tk
 
 import morsewurst.config as config
+from morsewurst.core.app_logging import log_app_event, log_app_exception, summarize_timing_profile
 from morsewurst.core.adaptive_decoder import decode_tone_events
 from morsewurst.core.adaptive_timing import DecoderSettings
 from morsewurst.core.live_decoder import LiveMorseDecoder
@@ -82,6 +83,10 @@ class DecoderController:
 
         if not use_profile:
             app.timing_profiles = self.default_timing_profiles()
+            log_app_event(
+                "app.timing_profile.refresh_skipped_disabled",
+                message="Timing profile refresh skipped because learned profiles are disabled.",
+            )
             return
 
         try:
@@ -106,6 +111,17 @@ class DecoderController:
 
         min_timing_score = float(getattr(config, "DECODER_PROFILE_MIN_TIMING_SCORE", 30.0))
 
+        log_app_event(
+            "app.timing_profile.refresh_started",
+            message="Timing profile refresh started.",
+            context={
+                "recent_sessions": recent_sessions,
+                "min_accuracy": min_accuracy,
+                "min_cleanliness": min_cleanliness,
+                "min_timing_score": min_timing_score,
+            },
+        )
+
         try:
             app.timing_profiles = app.db.load_timing_profiles(
                 recent_sessions=recent_sessions,
@@ -113,7 +129,21 @@ class DecoderController:
                 min_cleanliness=min_cleanliness,
                 min_timing_score=min_timing_score,
             )
-        except Exception:
+            log_app_event(
+                "app.timing_profile.refresh_completed",
+                message="Timing profile refresh completed.",
+                context={
+                    "straight": summarize_timing_profile(app.timing_profiles.get("straight")),
+                    "iambic": summarize_timing_profile(app.timing_profiles.get("iambic")),
+                },
+            )
+        except Exception as exc:
+            log_app_exception(
+                "app.timing_profile.refresh_failed",
+                exc,
+                level="warning",
+                message="Timing profile refresh failed; default profiles will be used.",
+            )
             app.timing_profiles = self.default_timing_profiles()
 
     def timing_profile_for_source(self, source: str) -> TimingProfile:

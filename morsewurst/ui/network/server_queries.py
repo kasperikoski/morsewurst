@@ -8,6 +8,7 @@ import queue
 import threading
 import time
 
+from morsewurst.core.logging_service import log_event
 from morsewurst.network.defaults import PUBLIC_ROOMS_REFRESH_SECONDS
 from morsewurst.network.public_rooms import (
     PublicRoom,
@@ -19,6 +20,13 @@ from morsewurst.network.public_rooms import (
 class NetworkServerQueriesMixin:
     def _refresh_public_rooms_async(self, *, force: bool = False, silent: bool = False) -> None:
         if self._public_rooms_loading:
+            log_event(
+                "network",
+                "network.public_rooms.refresh_skipped",
+                level="debug",
+                message="Public rooms refresh skipped because another refresh is already running.",
+                context={"server_uri": self._server_uri(), "force": force, "silent": silent},
+            )
             if force and not silent:
                 self.public_rooms_status_var.set(self.tr("network.public_rooms.refresh_already_running"))
             return
@@ -26,6 +34,19 @@ class NetworkServerQueriesMixin:
         self._public_rooms_loading = True
         self._public_rooms_request_seq += 1
         request_id = self._public_rooms_request_seq
+
+        log_event(
+            "network",
+            "network.public_rooms.refresh_started",
+            message="Public rooms refresh started.",
+            context={
+                "server_uri": self._server_uri(),
+                "request_id": request_id,
+                "force": force,
+                "silent": silent,
+                "failed_attempts": self._public_rooms_failed_attempts,
+            },
+        )
 
         if not silent:
             self.public_rooms_status_var.set(self.tr("network.public_rooms.refreshing"))
@@ -88,6 +109,18 @@ class NetworkServerQueriesMixin:
         self._public_rooms_loading = False
         self.public_rooms = new_rooms
 
+        log_event(
+            "network",
+            "network.public_rooms.refresh_success",
+            message="Public rooms refresh succeeded.",
+            context={
+                "server_uri": self._server_uri(),
+                "room_count": len(new_rooms),
+                "changed": old_signature != new_signature,
+                "previous_failed_attempts": self._public_rooms_failed_attempts,
+            },
+        )
+
         # A successful refresh clears the consecutive failure counter.
         self._public_rooms_failed_attempts = 0
 
@@ -110,6 +143,40 @@ class NetworkServerQueriesMixin:
         self._public_rooms_failed_attempts += 1
 
         formatted_message = self._format_public_rooms_error(message)
+        retry_delay_ms = self._public_rooms_retry_delay_ms()
+        recent_server_contact = self._public_rooms_has_recent_server_contact()
+        notice_key = self._public_rooms_failure_notice_key(message)
+
+        log_event(
+            "network",
+            "network.public_rooms.refresh_failed",
+            level="warning" if recent_server_contact else "error",
+            message=formatted_message,
+            context={
+                "server_uri": self._server_uri(),
+                "attempts": self._public_rooms_failed_attempts,
+                "retry_delay_ms": retry_delay_ms,
+                "control_channel_ready": bool(getattr(getattr(self.app, "network_manager", None), "control_channel_ready", False)),
+                "recent_server_contact": recent_server_contact,
+                "failure_notice_key": notice_key,
+                "raw_error": message,
+                "cached_room_count": len(self.public_rooms),
+            },
+        )
+
+        if recent_server_contact:
+            log_event(
+                "network",
+                "network.public_rooms.failed_but_server_contact_ok",
+                level="warning",
+                message="Public rooms refresh failed while server ping or server info contact is recent.",
+                context={
+                    "server_uri": self._server_uri(),
+                    "attempts": self._public_rooms_failed_attempts,
+                    "retry_delay_ms": retry_delay_ms,
+                    "raw_error": message,
+                },
+            )
 
         if self.public_rooms:
             count = len(self.public_rooms)
@@ -126,9 +193,6 @@ class NetworkServerQueriesMixin:
             self._render_public_rooms()
 
         if self._public_rooms_failed_attempts >= self._public_rooms_error_threshold:
-            recent_server_contact = self._public_rooms_has_recent_server_contact()
-            notice_key = self._public_rooms_failure_notice_key(message)
-
             if recent_server_contact and notice_key == "network.public_rooms.load_failed":
                 notice_key = "network.public_rooms.load_failed_transient"
 
@@ -150,7 +214,7 @@ class NetworkServerQueriesMixin:
             )
 
         self._schedule_public_rooms_refresh(
-            delay_ms=self._public_rooms_retry_delay_ms()
+            delay_ms=retry_delay_ms
         )
 
     def _schedule_public_rooms_refresh(self, *, delay_ms: int | None = None) -> None:
@@ -162,6 +226,13 @@ class NetworkServerQueriesMixin:
 
         if delay_ms is None:
             delay_ms = max(1, int(PUBLIC_ROOMS_REFRESH_SECONDS)) * 1000
+
+        log_event(
+            "network",
+            "network.public_rooms.refresh_scheduled",
+            message="Next public rooms refresh scheduled.",
+            context={"server_uri": self._server_uri(), "delay_ms": max(1000, int(delay_ms))},
+        )
 
         try:
             self._public_room_refresh_after_id = self.after(
@@ -270,6 +341,12 @@ class NetworkServerQueriesMixin:
 
         if manager is not None and self._server_is_connected():
             try:
+                log_event(
+                    "network",
+                    "network.server_info.request_started",
+                    message="Server info request sent through the active control channel.",
+                    context={"server_uri": self._server_uri(), "silent": silent, "source": "manager"},
+                )
                 manager.request_server_info()
                 if not silent:
                     self._show_notice(
@@ -278,6 +355,13 @@ class NetworkServerQueriesMixin:
                     )
                 return
             except Exception as exc:
+                log_event(
+                    "network",
+                    "network.server_info.request_failed",
+                    level="warning",
+                    message="Server info request through the active control channel failed.",
+                    context={"server_uri": self._server_uri(), "silent": silent, "error": str(exc)},
+                )
                 if not silent:
                     self._show_notice(
                         self.tr(
@@ -289,6 +373,13 @@ class NetworkServerQueriesMixin:
                 return
 
         if self._server_info_query_running:
+            log_event(
+                "network",
+                "network.server_info.request_skipped",
+                level="debug",
+                message="Server info request skipped because another worker request is already running.",
+                context={"server_uri": self._server_uri(), "silent": silent, "source": "worker"},
+            )
             if not silent:
                 self._show_notice(
                     self.tr("network.server_query.info_already_running"),
@@ -298,6 +389,12 @@ class NetworkServerQueriesMixin:
 
         self._server_info_query_running = True
         self.server_info_error_text = ""
+        log_event(
+            "network",
+            "network.server_info.request_started",
+            message="Server info worker request started.",
+            context={"server_uri": self._server_uri(), "silent": silent, "source": "worker"},
+        )
 
         if not self._latest_server_info():
             self._update_server_info_views()
@@ -322,6 +419,12 @@ class NetworkServerQueriesMixin:
 
         if manager is not None and self._server_is_connected():
             try:
+                log_event(
+                    "network",
+                    "network.server_ping.request_started",
+                    message="Server ping request sent through the active control channel.",
+                    context={"server_uri": self._server_uri(), "silent": silent, "source": "manager"},
+                )
                 manager.request_server_ping()
                 if not silent:
                     self._show_notice(
@@ -330,6 +433,13 @@ class NetworkServerQueriesMixin:
                     )
                 return
             except Exception as exc:
+                log_event(
+                    "network",
+                    "network.server_ping.request_failed",
+                    level="warning",
+                    message="Server ping request through the active control channel failed.",
+                    context={"server_uri": self._server_uri(), "silent": silent, "error": str(exc)},
+                )
                 if not silent:
                     self._show_notice(
                         self.tr(
@@ -341,6 +451,13 @@ class NetworkServerQueriesMixin:
                 return
 
         if self._server_ping_query_running:
+            log_event(
+                "network",
+                "network.server_ping.request_skipped",
+                level="debug",
+                message="Server ping request skipped because another worker request is already running.",
+                context={"server_uri": self._server_uri(), "silent": silent, "source": "worker"},
+            )
             if not silent:
                 self._show_notice(
                     self.tr("network.server_query.ping_already_running"),
@@ -349,6 +466,12 @@ class NetworkServerQueriesMixin:
             return
 
         self._server_ping_query_running = True
+        log_event(
+            "network",
+            "network.server_ping.request_started",
+            message="Server ping worker request started.",
+            context={"server_uri": self._server_uri(), "silent": silent, "source": "worker"},
+        )
 
         if not silent:
             self._show_notice(
@@ -435,6 +558,18 @@ class NetworkServerQueriesMixin:
 
             if not ok:
                 message = str(payload)
+                log_event(
+                    "network",
+                    f"network.{kind}.request_failed",
+                    level="warning",
+                    message=message,
+                    context={
+                        "server_uri": self._server_uri(),
+                        "kind": kind,
+                        "silent": silent,
+                        "control_channel_ready": bool(getattr(getattr(self.app, "network_manager", None), "control_channel_ready", False)),
+                    },
+                )
 
                 if kind == "server_info":
                     self.server_info_error_text = message
@@ -472,6 +607,18 @@ class NetworkServerQueriesMixin:
                 payload["client_received_time"] = time.time()
                 payload["client_received_monotonic"] = time.monotonic()
                 self.last_server_info = payload
+                log_event(
+                    "network",
+                    "network.server_info.request_success",
+                    message="Server info request succeeded.",
+                    context={
+                        "server_uri": self._server_uri(),
+                        "server_name": payload.get("server_name") or payload.get("name") or "",
+                        "rooms_total": payload.get("rooms_total") or payload.get("room_count") or 0,
+                        "clients_total": payload.get("clients_total") or payload.get("client_count") or 0,
+                        "uptime_seconds": payload.get("uptime_seconds") or 0,
+                    },
+                )
                 self._update_server_info_views()
 
                 if not silent:
@@ -485,6 +632,16 @@ class NetworkServerQueriesMixin:
                 payload["client_received_time"] = time.time()
                 payload["client_received_monotonic"] = time.monotonic()
                 self.last_server_pong = payload
+                log_event(
+                    "network",
+                    "network.server_ping.request_success",
+                    message="Server ping request succeeded.",
+                    context={
+                        "server_uri": self._server_uri(),
+                        "round_trip_ms": payload.get("round_trip_ms"),
+                        "server_time_unix_ms": payload.get("server_time_unix_ms"),
+                    },
+                )
                 self._update_server_info_views()
                 self._update_network_quality_from_server_pong()
 

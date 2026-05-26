@@ -11,6 +11,7 @@ import tkinter as tk
 from tkinter import messagebox
 
 import morsewurst.config as config
+from morsewurst.core.app_logging import log_app_event, log_app_exception
 from morsewurst.hardware.serial_reader import SerialReader
 
 if TYPE_CHECKING:
@@ -27,6 +28,10 @@ class SerialController:
         """Refresh available serial ports and update the port dropdown."""
         app = self.app
 
+        log_app_event(
+            "app.serial.refresh_started",
+            message="Serial port refresh started.",
+        )
         ports = SerialReader.available_ports()
 
         if hasattr(app, "port_combo"):
@@ -40,11 +45,21 @@ class SerialController:
             app.port_var.set("")
 
         if not SerialReader.serial_available():
+            log_app_event(
+                "app.serial.pyserial_missing",
+                level="warning",
+                message="pyserial is not available.",
+            )
             app.status_controller.set_serial_status(
                 app.i18n.t("serial.status.pyserial_missing", "pyserial missing"),
                 state="disconnected",
             )
 
+        log_app_event(
+            "app.serial.refresh_completed",
+            message="Serial port refresh completed.",
+            context={"port_count": len(ports), "selected_port": app.port_var.get()},
+        )
         self.update_serial_buttons()
 
     def is_serial_port_busy_error(self, exc: Exception) -> bool:
@@ -79,6 +94,12 @@ class SerialController:
         app = self.app
         port = str(port or "").strip()
 
+        log_app_event(
+            "app.serial.connect_requested",
+            message="Serial connection requested.",
+            context={"port": port, "automatic": bool(automatic), "baudrate": config.SERIAL_BAUDRATE},
+        )
+
         if not port:
             if not automatic:
                 messagebox.showwarning(
@@ -110,6 +131,13 @@ class SerialController:
             self.update_serial_buttons()
 
             if self.is_serial_port_busy_error(exc):
+                log_app_exception(
+                    "app.serial.port_busy",
+                    exc,
+                    level="warning",
+                    message="Serial port appears to be busy.",
+                    context={"port": port, "automatic": bool(automatic)},
+                )
                 message = self.serial_port_busy_message(port)
                 app.status_controller.set_serial_status(
                     app.i18n.t("serial.status.port_busy", "Port is busy"),
@@ -137,6 +165,12 @@ class SerialController:
                     ),
                 )
 
+            log_app_exception(
+                "app.serial.connect_failed",
+                exc,
+                message="Serial connection failed.",
+                context={"port": port, "automatic": bool(automatic)},
+            )
             app.status_controller.set_serial_status(
                 app.i18n.t("serial.status.connection_failed", "Connection failed"),
                 state="disconnected",
@@ -153,6 +187,11 @@ class SerialController:
         app.status_controller.set_main_status(
             app.i18n.t("serial.message.device_connected", "Serial device connected."),
             state="normal",
+        )
+        log_app_event(
+            "app.serial.connect_success",
+            message="Serial device connected.",
+            context={"port": port, "automatic": bool(automatic), "baudrate": config.SERIAL_BAUDRATE},
         )
         app.audio_controller.play_sound("serial_connected")
         self.update_serial_buttons()
@@ -199,6 +238,11 @@ class SerialController:
             return
 
         was_connected = app.serial_connected
+        log_app_event(
+            "app.serial.disconnect_requested",
+            message="Serial disconnect requested.",
+            context={"was_connected": bool(was_connected), "port": app.port_var.get()},
+        )
 
         app.serial_reader.disconnect()
         app.serial_connected = False
@@ -209,12 +253,23 @@ class SerialController:
         self.update_serial_buttons()
 
         if was_connected:
+            log_app_event(
+                "app.serial.disconnected",
+                message="Serial device disconnected by user.",
+                context={"port": app.port_var.get()},
+            )
             app.audio_controller.play_sound("serial_disconnected")
 
     def handle_serial_disconnect_event(self, event: dict[str, object]) -> None:
         """Handle a serial disconnect event and restart auto-connect scanning."""
         app = self.app
 
+        log_app_event(
+            "app.serial.connection_lost",
+            level="warning",
+            message="Serial connection lost.",
+            context={"event_type": event.get("type"), "port": app.port_var.get()},
+        )
         app.serial_connected = False
         app.auto_connect_running = False
 
@@ -249,6 +304,10 @@ class SerialController:
         app = self.app
 
         if app.input_controller.keyboard_morse_enabled():
+            log_app_event(
+                "app.serial.auto_scan_cancelled_keyboard_morse",
+                message="Serial auto-connect scan skipped because keyboard Morse is enabled.",
+            )
             return
 
         if (
@@ -276,6 +335,10 @@ class SerialController:
         ports = SerialReader.available_ports()
 
         if not ports:
+            log_app_event(
+                "app.serial.auto_scan_no_ports",
+                message="Serial auto-connect scan found no ports.",
+            )
             app.status_controller.set_serial_status(
                 app.i18n.t("serial.status.disconnected", "No connection"),
                 state="disconnected",
@@ -284,6 +347,11 @@ class SerialController:
             return
 
         app.auto_connect_running = True
+        log_app_event(
+            "app.serial.auto_scan_started",
+            message="Serial auto-connect scan started.",
+            context={"port_count": len(ports), "ports": ports},
+        )
         app.status_controller.set_serial_status(
             app.i18n.t("serial.status.searching_device", "Searching for device..."),
             state="busy",
@@ -301,6 +369,12 @@ class SerialController:
         """Probe serial ports in a background thread and report the first matching port."""
         app = self.app
         found_port: Optional[str] = None
+
+        log_app_event(
+            "app.serial.auto_scan_worker_started",
+            message="Serial auto-connect worker started.",
+            context={"port_count": len(ports)},
+        )
 
         for port in ports:
             if app.serial_connected:
@@ -333,6 +407,10 @@ class SerialController:
             return
 
         if port is None:
+            log_app_event(
+                "app.serial.auto_scan_not_found",
+                message="Serial auto-connect scan did not find a matching device.",
+            )
             app.status_controller.set_serial_status(
                 app.i18n.t("serial.status.disconnected", "No connection"),
                 state="disconnected",
@@ -340,6 +418,11 @@ class SerialController:
             self.update_serial_buttons()
             return
 
+        log_app_event(
+            "app.serial.auto_scan_found",
+            message="Serial auto-connect scan found a matching device.",
+            context={"port": port},
+        )
         self.connect_serial_port(port, automatic=True)
 
     def update_serial_buttons(self) -> None:

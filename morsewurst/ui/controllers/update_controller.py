@@ -17,6 +17,7 @@ from urllib.parse import urlparse
 from tkinter import messagebox
 
 import morsewurst.config as config
+from morsewurst.core.app_logging import log_app_event, log_app_exception
 
 if TYPE_CHECKING:
     from morsewurst.ui.app import MorsewurstApp
@@ -53,6 +54,11 @@ class UpdateController:
     def check_for_updates_after_startup(self) -> None:
         """Schedule an automatic update check after the main UI has started."""
         if not bool(getattr(config, "UPDATE_CHECK_ON_STARTUP", True)):
+            log_app_event(
+                "app.update.check_skipped_disabled",
+                message="Startup update check skipped because it is disabled.",
+                context={"manual": False},
+            )
             return
 
         delay_ms = _safe_int(
@@ -64,8 +70,19 @@ class UpdateController:
 
         try:
             self.app.after(delay_ms, lambda: self.check_for_updates(manual=False))
-        except Exception:
-            pass
+            log_app_event(
+                "app.update.check_scheduled",
+                message="Startup update check scheduled.",
+                context={"delay_ms": delay_ms},
+            )
+        except Exception as exc:
+            log_app_exception(
+                "app.update.check_schedule_failed",
+                exc,
+                level="warning",
+                message="Startup update check could not be scheduled.",
+                context={"delay_ms": delay_ms},
+            )
 
     def check_for_updates_manual(self) -> None:
         """Run a user-requested update check."""
@@ -73,7 +90,18 @@ class UpdateController:
 
     def check_for_updates(self, *, manual: bool = False) -> None:
         """Start an update check in a background thread."""
+        log_app_event(
+            "app.update.check_started",
+            message="Update check requested.",
+            context={"manual": bool(manual)},
+        )
+
         if not bool(getattr(config, "UPDATE_CHECK_ENABLED", True)):
+            log_app_event(
+                "app.update.check_skipped_disabled",
+                message="Update check skipped because it is disabled.",
+                context={"manual": bool(manual)},
+            )
             if manual:
                 messagebox.showinfo(
                     config.APP_NAME,
@@ -84,6 +112,12 @@ class UpdateController:
 
         manifest_url = str(getattr(config, "UPDATE_MANIFEST_URL", "") or "").strip()
         if not manifest_url:
+            log_app_event(
+                "app.update.check_skipped_invalid_url",
+                level="warning",
+                message="Update check skipped because manifest URL is empty.",
+                context={"manual": bool(manual)},
+            )
             if manual:
                 messagebox.showinfo(
                     config.APP_NAME,
@@ -96,6 +130,12 @@ class UpdateController:
             return
 
         if not _is_safe_http_url(manifest_url):
+            log_app_event(
+                "app.update.check_skipped_invalid_url",
+                level="warning",
+                message="Update check skipped because manifest URL is invalid.",
+                context={"manual": bool(manual), "manifest_url": manifest_url},
+            )
             if manual:
                 messagebox.showwarning(
                     config.APP_NAME,
@@ -108,6 +148,11 @@ class UpdateController:
             return
 
         if self._worker is not None and self._worker.is_alive():
+            log_app_event(
+                "app.update.check_already_running",
+                message="Update check skipped because a previous check is already running.",
+                context={"manual": bool(manual)},
+            )
             if manual:
                 messagebox.showinfo(
                     config.APP_NAME,
@@ -122,6 +167,11 @@ class UpdateController:
             daemon=True,
         )
         self._worker.start()
+        log_app_event(
+            "app.update.worker_started",
+            message="Update check worker started.",
+            context={"manual": bool(manual), "manifest_url": manifest_url},
+        )
         self._schedule_result_poll()
 
     # ------------------------------------------------------------
@@ -131,8 +181,24 @@ class UpdateController:
     def _run_check_worker(self, manifest_url: str, manual: bool) -> None:
         try:
             manifest = self._fetch_manifest(manifest_url)
+            log_app_event(
+                "app.update.fetch_success",
+                message="Update manifest fetched successfully.",
+                context={
+                    "manual": bool(manual),
+                    "manifest_url": manifest_url,
+                    "latest_version": manifest.latest_version,
+                },
+            )
             self._result_queue.put(("success", manifest, manual))
         except Exception as exc:
+            log_app_exception(
+                "app.update.fetch_failed",
+                exc,
+                level="warning",
+                message="Update manifest fetch failed.",
+                context={"manual": bool(manual), "manifest_url": manifest_url},
+            )
             self._result_queue.put(("error", exc, manual))
 
     def _schedule_result_poll(self) -> None:
@@ -173,8 +239,29 @@ class UpdateController:
         latest_version = manifest.latest_version.strip()
 
         if _is_newer_version(latest_version, current_version):
+            log_app_event(
+                "app.update.available",
+                message="New application version is available.",
+                context={
+                    "manual": bool(manual),
+                    "current_version": current_version,
+                    "latest_version": latest_version,
+                    "has_release_url": bool(manifest.release_url),
+                    "has_download_url": bool(manifest.download_url),
+                },
+            )
             self._show_update_available(manifest, manual=manual)
             return
+
+        log_app_event(
+            "app.update.not_available",
+            message="No newer application version was found.",
+            context={
+                "manual": bool(manual),
+                "current_version": current_version,
+                "latest_version": latest_version,
+            },
+        )
 
         if manual:
             messagebox.showinfo(
@@ -187,6 +274,13 @@ class UpdateController:
             )
 
     def _handle_error(self, exc: Any, *, manual: bool) -> None:
+        log_app_exception(
+            "app.update.check_failed",
+            exc if isinstance(exc, BaseException) else RuntimeError(str(exc)),
+            level="warning",
+            message="Update check failed.",
+            context={"manual": bool(manual)},
+        )
         if not manual:
             return
 
@@ -297,9 +391,20 @@ class UpdateController:
             )
 
             if answer:
+                log_app_event(
+                    "app.update.open_release_url_requested",
+                    message="User requested opening the update release URL.",
+                    context={"latest_version": latest_version, "url": open_url},
+                )
                 try:
                     webbrowser.open(open_url)
                 except Exception as exc:
+                    log_app_exception(
+                        "app.update.open_release_url_failed",
+                        exc,
+                        message="Update release URL could not be opened.",
+                        context={"latest_version": latest_version, "url": open_url},
+                    )
                     messagebox.showwarning(
                         config.APP_NAME,
                         (

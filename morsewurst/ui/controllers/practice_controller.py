@@ -17,6 +17,13 @@ from morsewurst.core.challenge import (
     score_text,
 )
 from morsewurst.core.scoring import estimate_paris_time_us, score_round
+from morsewurst.core.app_logging import (
+    log_app_event,
+    log_app_exception,
+    summarize_challenge_settings,
+    summarize_rating,
+    summarize_score_summary,
+)
 from morsewurst.core.skill_rating import calculate_skill_rating
 from morsewurst.models import RoundState
 from morsewurst.ui.controllers.results_controller import SOURCE_ADAPTIVE_TELEMETRY
@@ -44,6 +51,7 @@ class PracticeController:
         self.app = app
         self.current_practice_id: Optional[int] = None
         self.pending_after_round_updates_session_id: Optional[int] = None
+        self._last_round_generation_context: dict[str, Any] = {}
 
         self.inter_round_countdown_running = False
         self.inter_round_countdown_after_id: Optional[str] = None
@@ -103,6 +111,15 @@ class PracticeController:
         if app.start_countdown_running:
             self._cancel_start_countdown(restore_state_text=False)
 
+        log_app_event(
+            "app.practice.start_requested",
+            message="Practice start requested.",
+            context={
+                "start_countdown_running": bool(getattr(app, "start_countdown_running", False)),
+                "serial_connected": bool(getattr(app, "serial_connected", False)),
+            },
+        )
+
         app.serial_controller.request_auto_connect_scan()
         app.settings = app.challenge_settings_controller.settings_from_ui()
         app.decoder_controller.refresh_timing_profiles()
@@ -115,6 +132,15 @@ class PracticeController:
             datetime.now(),
             app.total_rounds,
             app.settings,
+        )
+        log_app_event(
+            "app.practice.started",
+            message="Practice series started.",
+            context={
+                "practice_id": self.current_practice_id,
+                "total_rounds": app.total_rounds,
+                "settings": summarize_challenge_settings(app.settings),
+            },
         )
 
         self.pending_after_round_updates_session_id = None
@@ -136,6 +162,10 @@ class PracticeController:
         app = self.app
 
         if app.start_countdown_running:
+            log_app_event(
+                "app.practice.start_countdown_cancelled",
+                message="Practice start countdown was cancelled by stop request.",
+            )
             self._cancel_start_countdown(restore_state_text=True)
             app.status_controller.set_main_status(
                 app.i18n.t("practice.status.start_cancelled", "Start cancelled."),
@@ -145,13 +175,30 @@ class PracticeController:
 
         self._cancel_inter_round_countdown(restore_state_text=True)
 
+        log_app_event(
+            "app.practice.stop_requested",
+            message="Practice stop requested.",
+            context={
+                "practice_id": self.current_practice_id,
+                "round_number": getattr(app.round, "round_number", 0),
+                "round_active": bool(getattr(app.round, "active", False)),
+                "round_finished": bool(getattr(app.round, "finished", False)),
+            },
+        )
+
         app.practice_running = False
 
         if app.round.active and not app.round.finished:
             self._discard_current_round(FINISH_REASON_USER_STOPPED)
 
         if self.current_practice_id is not None:
-            app.db.finish_practice(self.current_practice_id, "stopped")
+            stopped_practice_id = self.current_practice_id
+            app.db.finish_practice(stopped_practice_id, "stopped")
+            log_app_event(
+                "app.practice.stopped",
+                message="Practice series was stopped.",
+                context={"practice_id": stopped_practice_id},
+            )
             self.current_practice_id = None
 
         self._schedule_pending_after_round_updates()
@@ -182,6 +229,18 @@ class PracticeController:
 
         app.current_round_number += 1
         target = self._generate_round_target()
+        generation_context = dict(self._last_round_generation_context)
+        log_app_event(
+            "app.practice.round_target_generated",
+            message="Practice round target generated.",
+            context={
+                "practice_id": self.current_practice_id,
+                "round_number": app.current_round_number,
+                "total_rounds": app.total_rounds,
+                "target_length": len(target),
+                **generation_context,
+            },
+        )
 
         app.round = RoundState(
             target=target,
@@ -191,6 +250,18 @@ class PracticeController:
             round_number=app.current_round_number,
             total_rounds=app.total_rounds,
         )
+
+        log_app_event(
+            "app.practice.round_started",
+            message="Practice round started.",
+            context={
+                "practice_id": self.current_practice_id,
+                "round_number": app.current_round_number,
+                "total_rounds": app.total_rounds,
+                "target_length": len(target),
+            },
+        )
+
         app.live_decoder = app.decoder_controller.new_live_decoder(target)
         app.last_summary = None
         app.last_char_results = []
@@ -225,19 +296,33 @@ class PracticeController:
         helpers = app.ui_helpers_controller
 
         if app.wxmor_controller.mode_enabled():
+            wxmor_profile = app.wxmor_controller.profile()
+            self._last_round_generation_context = {
+                "wxmor": True,
+                "wxmor_profile": wxmor_profile,
+                "settings": summarize_challenge_settings(app.settings),
+            }
             return generate_wxmor_challenge(
-                profile=app.wxmor_controller.profile(),
+                profile=wxmor_profile,
             )
 
+        problem_recent_rounds = helpers.safe_int_var(
+            app.problem_recent_rounds_var,
+            default=config.DEFAULT_PROBLEM_RECENT_ROUNDS,
+            minimum=1,
+            maximum=100000,
+        )
         problem_chars = app.db.problem_chars_for_practice(
             getattr(config, "DEFAULT_PROBLEM_CHAR_CANDIDATE_LIMIT", 50),
-            helpers.safe_int_var(
-                app.problem_recent_rounds_var,
-                default=config.DEFAULT_PROBLEM_RECENT_ROUNDS,
-                minimum=1,
-                maximum=100000,
-            ),
+            problem_recent_rounds,
         )
+        self._last_round_generation_context = {
+            "wxmor": False,
+            "problem_chars_enabled": bool(getattr(app.settings, "practice_problem_chars", False)),
+            "problem_recent_rounds": problem_recent_rounds,
+            "problem_char_candidates_count": len(problem_chars),
+            "settings": summarize_challenge_settings(app.settings),
+        }
 
         return generate_challenge(app.settings, problem_chars)
 
@@ -248,7 +333,13 @@ class PracticeController:
         app.practice_running = False
 
         if self.current_practice_id is not None:
-            app.db.finish_practice(self.current_practice_id, "completed")
+            completed_practice_id = self.current_practice_id
+            app.db.finish_practice(completed_practice_id, "completed")
+            log_app_event(
+                "app.practice.series_completed",
+                message="Practice series completed.",
+                context={"practice_id": completed_practice_id, "total_rounds": app.total_rounds},
+            )
             self.current_practice_id = None
 
         self._schedule_pending_after_round_updates()
@@ -286,6 +377,15 @@ class PracticeController:
 
         app.decoder_controller.clear_raw_telemetry()
         app.live_decoder = None
+        log_app_event(
+            "app.practice.round_discarded",
+            message="Unfinished practice round discarded.",
+            context={
+                "practice_id": self.current_practice_id,
+                "round_number": app.round.round_number,
+                "finish_reason": reason,
+            },
+        )
 
     def finish_round(self, reason: str, auto_continue: bool = True) -> None:
         """Finalize the current round and schedule automatic saving."""
@@ -294,10 +394,35 @@ class PracticeController:
         if not app.round.target or app.round.finished:
             return
 
+        log_app_event(
+            "app.practice.round_finish_requested",
+            message="Practice round finish requested.",
+            context={
+                "practice_id": self.current_practice_id,
+                "round_number": app.round.round_number,
+                "finish_reason": reason,
+                "auto_continue": bool(auto_continue),
+                "target_length": len(app.round.target),
+                "event_count": len(app.round.events),
+            },
+        )
+
         self._mark_round_finished(reason)
         self._finalize_round_decoding_and_score()
 
         if app.last_summary is not None:
+            log_app_event(
+                "app.practice.round_finished",
+                message="Practice round finalized and scored.",
+                context={
+                    "practice_id": self.current_practice_id,
+                    "round_number": app.round.round_number,
+                    "finish_reason": reason,
+                    "event_count": len(app.round.events),
+                    "char_result_count": len(app.last_char_results),
+                    "summary": summarize_score_summary(app.last_summary),
+                },
+            )
             app.practice_summaries.append(app.last_summary)
             app.results_controller.update_practice_series_summary()
             reason_label = self.finish_reason_label(reason)
@@ -396,7 +521,13 @@ class PracticeController:
         app.practice_running = False
 
         if self.current_practice_id is not None:
-            app.db.finish_practice(self.current_practice_id, "completed")
+            completed_practice_id = self.current_practice_id
+            app.db.finish_practice(completed_practice_id, "completed")
+            log_app_event(
+                "app.practice.series_completed",
+                message="Practice series completed after final round.",
+                context={"practice_id": completed_practice_id, "total_rounds": app.total_rounds},
+            )
             self.current_practice_id = None
 
         self._schedule_pending_after_round_updates()
@@ -430,7 +561,13 @@ class PracticeController:
             return
 
         try:
-            app.db.finish_practice(self.current_practice_id, "interrupted")
+            interrupted_practice_id = self.current_practice_id
+            app.db.finish_practice(interrupted_practice_id, "interrupted")
+            log_app_event(
+                "app.practice.interrupted_on_shutdown",
+                message="Active practice was marked interrupted during shutdown.",
+                context={"practice_id": interrupted_practice_id},
+            )
         finally:
             self.current_practice_id = None
             app.practice_running = False
@@ -482,22 +619,68 @@ class PracticeController:
         if round_number is None:
             round_number = int(app.round.round_number)
 
-        session_id = app.db.save_session(
-            started_at,
-            summary,
-            app.settings,
-            events,
-            char_results,
-            practice_id=int(practice_id),
-            round_number=int(round_number),
+        log_app_event(
+            "app.practice.round_save_started",
+            message="Finished practice round save started.",
+            context={
+                "practice_id": practice_id,
+                "round_number": round_number,
+                "event_count": len(events),
+                "char_result_count": len(char_results),
+                "summary": summarize_score_summary(summary),
+            },
+        )
+
+        try:
+            session_id = app.db.save_session(
+                started_at,
+                summary,
+                app.settings,
+                events,
+                char_results,
+                practice_id=int(practice_id),
+                round_number=int(round_number),
+            )
+        except Exception as exc:
+            log_app_exception(
+                "app.practice.round_save_failed",
+                exc,
+                message="Finished practice round save failed.",
+                context={
+                    "practice_id": practice_id,
+                    "round_number": round_number,
+                    "event_count": len(events),
+                    "char_result_count": len(char_results),
+                    "summary": summarize_score_summary(summary),
+                },
+            )
+            raise
+
+        log_app_event(
+            "app.practice.round_saved",
+            message="Finished practice round saved.",
+            context={
+                "session_id": session_id,
+                "practice_id": practice_id,
+                "round_number": round_number,
+                "event_count": len(events),
+                "char_result_count": len(char_results),
+                "summary": summarize_score_summary(summary),
+            },
         )
 
         app.db.refresh_practice_progress(int(practice_id))
 
         try:
             app.history_controller.increment_keying_event_summary_from_round(events, char_results)
-        except Exception:
-            pass
+        except Exception as exc:
+            log_app_exception(
+                "app.history.keying_summary_increment_failed",
+                exc,
+                level="warning",
+                message="Keying event summary increment failed after saving a round.",
+                context={"session_id": session_id},
+            )
 
         self.pending_after_round_updates_session_id = session_id
 
@@ -538,9 +721,25 @@ class PracticeController:
         app = self.app
 
         try:
+            log_app_event(
+                "app.timing_profile.refresh_started",
+                message="Timing profile refresh started after round save.",
+                context={"session_id": session_id},
+            )
             app.decoder_controller.refresh_timing_profiles()
-        except Exception:
-            pass
+            log_app_event(
+                "app.timing_profile.refresh_completed",
+                message="Timing profile refresh completed after round save.",
+                context={"session_id": session_id},
+            )
+        except Exception as exc:
+            log_app_exception(
+                "app.timing_profile.refresh_failed",
+                exc,
+                level="warning",
+                message="Timing profile refresh failed after round save.",
+                context={"session_id": session_id},
+            )
 
         self._deferred_after_round_updates(session_id)
         
@@ -550,6 +749,12 @@ class PracticeController:
         app = self.app
         helpers = app.ui_helpers_controller
         rating = None
+
+        log_app_event(
+            "app.practice.after_round_updates_started",
+            message="Deferred after-round updates started.",
+            context={"session_id": session_id},
+        )
 
         try:
             recent_rounds = helpers.safe_int_var(
@@ -565,8 +770,23 @@ class PracticeController:
             )
 
             app.db.save_skill_rating_snapshot(session_id, rating)
+            log_app_event(
+                "app.skill_rating.snapshot_saved",
+                message="Skill rating snapshot saved after round.",
+                context={
+                    "session_id": session_id,
+                    "recent_rounds": recent_rounds,
+                    "rating": summarize_rating(rating),
+                },
+            )
 
         except Exception as exc:
+            log_app_exception(
+                "app.skill_rating.failed",
+                exc,
+                message="Skill rating calculation or snapshot save failed after round.",
+                context={"session_id": session_id},
+            )
             app.status_var.set(
                 app.i18n.t(
                     "practice.status.saved_round_skill_failed",
@@ -577,6 +797,11 @@ class PracticeController:
             )
 
         try:
+            log_app_event(
+                "app.history.refresh_after_round_started",
+                message="History and summary refresh started after round.",
+                context={"session_id": session_id},
+            )
             app.history_controller.load_history_table()
             app.history_controller.load_problem_table()
             app.history_controller.update_stats_summary()
@@ -587,8 +812,19 @@ class PracticeController:
             if not bool(getattr(app, "practice_running", False)):
                 app.history_controller.update_target_wpm_suggestion_indicator()
             app.history_controller.refresh_stats_window_if_open()
+            log_app_event(
+                "app.history.refresh_after_round_completed",
+                message="History and summary refresh completed after round.",
+                context={"session_id": session_id},
+            )
 
         except Exception as exc:
+            log_app_exception(
+                "app.history.refresh_after_round_failed",
+                exc,
+                message="History and summary refresh failed after round.",
+                context={"session_id": session_id},
+            )
             app.status_var.set(
                 app.i18n.t(
                     "practice.status.saved_round_summary_failed",
@@ -619,6 +855,14 @@ class PracticeController:
         app.input_var.set("")
         app.decoder_controller.clear_telemetry_display()
         app.timer_var.set(self._reference_time_label())
+        log_app_event(
+            "app.practice.input_cleared",
+            message="Current round input and telemetry were cleared.",
+            context={
+                "round_accepting_input": bool(app.round.accepting_input),
+                "round_number": getattr(app.round, "round_number", 0),
+            },
+        )
         app.status_var.set(
             app.i18n.t("practice.status.input_cleared", "Input cleared.")
         )
@@ -665,6 +909,16 @@ class PracticeController:
         self._cancel_inter_round_countdown(restore_state_text=False)
 
         self.inter_round_countdown_running = True
+        log_app_event(
+            "app.practice.inter_round_countdown_started",
+            message="Inter-round countdown started.",
+            context={
+                "practice_id": self.current_practice_id,
+                "current_round": app.current_round_number,
+                "next_round": app.current_round_number + 1,
+                "total_rounds": app.total_rounds,
+            },
+        )
         self.inter_round_countdown_generation += 1
         self.inter_round_countdown_started_at = time.monotonic()
 
@@ -774,6 +1028,14 @@ class PracticeController:
         self._cancel_pending_countdown_callback()
         app.start_trigger_timestamps.clear()
         app.start_countdown_running = True
+        log_app_event(
+            "app.practice.start_countdown_started",
+            message="Practice start countdown started.",
+            context={
+                "trigger_count": len(app.start_trigger_timestamps),
+                "duration_seconds": getattr(app, "start_countdown_duration_seconds", None),
+            },
+        )
         app.start_countdown_generation += 1
         app.start_countdown_started_at = time.monotonic()
 
@@ -909,6 +1171,11 @@ class PracticeController:
             return
 
         app.start_countdown_running = False
+        log_app_event(
+            "app.practice.start_countdown_completed",
+            message="Practice start countdown completed.",
+            context={"generation": generation},
+        )
         app.start_countdown_after_id = None
         app.start_countdown_started_at = None
 
@@ -1011,6 +1278,17 @@ class PracticeController:
         actual_idle_us = max(0, int(current_time_us) - last_t1)
 
         if actual_idle_us >= self._auto_finish_idle_required_us(gap_unit_us):
+            log_app_event(
+                "app.practice.auto_finish_triggered",
+                message="Automatic idle finish triggered for telemetry round.",
+                context={
+                    "round_number": app.round.round_number,
+                    "source": source,
+                    "actual_idle_us": actual_idle_us,
+                    "gap_unit_us": gap_unit_us,
+                    "event_count": len(app.round.events),
+                },
+            )
             self.finish_round(FINISH_REASON_LONG_PAUSE, auto_continue=True)
 
     def _start_round_clock_from_host_input(self) -> None:
@@ -1023,6 +1301,15 @@ class PracticeController:
         app.results_controller.reset_latest_result_values_when_round_starts()
         app.round.started_at = datetime.now()
         app.round.host_start_time = time.monotonic()
+        log_app_event(
+            "app.practice.round_clock_started",
+            message="Round clock started from HID input.",
+            context={
+                "round_number": app.current_round_number,
+                "source": "hid",
+                "target_length": len(app.round.target),
+            },
+        )
         app.round_state_var.set(
             app.i18n.t(
                 "practice.round_state.running",
@@ -1051,6 +1338,15 @@ class PracticeController:
             else datetime.now()
         )
         app.round.host_start_time = time.monotonic()
+        log_app_event(
+            "app.practice.round_clock_started",
+            message="Round clock started from tone event.",
+            context={
+                "round_number": app.current_round_number,
+                "source": str(event.get("src", "")),
+                "target_length": len(app.round.target),
+            },
+        )
         app.round_state_var.set(
             app.i18n.t(
                 "practice.round_state.running",

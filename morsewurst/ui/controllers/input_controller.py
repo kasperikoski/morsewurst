@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING, Any, Dict, Optional
 import tkinter as tk
 
 import morsewurst.config as config
+from morsewurst.core.app_logging import log_app_event
 
 KEYBOARD_MORSE_KEY_LABEL_KEYS = {
     "space": ("input.keyboard_key.space", "Space"),
@@ -106,8 +107,15 @@ class InputController:
         selected_label = str(app.keyboard_morse_key_label_var.get() or "").strip()
         selected_key = self.keyboard_morse_key_from_label(selected_label)
 
+        old_key = str(app.keyboard_morse_key_var.get() or "")
         app.keyboard_morse_key_var.set(selected_key)
         self.cancel_keyboard_morse_press()
+        if old_key != selected_key:
+            log_app_event(
+                "app.input.keyboard_morse_key_changed",
+                message="Keyboard Morse key changed.",
+                context={"old_key": old_key, "new_key": selected_key, "label": selected_label},
+            )
 
         if self.keyboard_morse_enabled():
             app.status_controller.set_main_status(
@@ -293,6 +301,14 @@ class InputController:
             changed = True
 
         if changed:
+            log_app_event(
+                "app.input.keyboard_morse_constraints_applied",
+                message="Keyboard Morse constraints were applied.",
+                context={
+                    "use_telemetry_as_truth": bool(app.use_telemetry_as_truth_var.get()),
+                    "auto_connect_serial": bool(app.auto_connect_serial_var.get()),
+                },
+            )
             app.serial_controller.update_serial_buttons()
 
         if show_status and changed:
@@ -311,7 +327,14 @@ class InputController:
         self.cancel_keyboard_morse_press()
         self.apply_keyboard_morse_setting_constraints(show_status=True)
 
-        if self.keyboard_morse_enabled():
+        enabled = self.keyboard_morse_enabled()
+        log_app_event(
+            "app.input.keyboard_morse_enabled" if enabled else "app.input.keyboard_morse_disabled",
+            message="Keyboard Morse setting changed.",
+            context={"enabled": bool(enabled), "key": self.keyboard_morse_expected_key()},
+        )
+
+        if enabled:
             selected_label = self.keyboard_morse_label_from_key(
                 self.keyboard_morse_expected_key()
             )
@@ -340,6 +363,11 @@ class InputController:
         app = self.app
 
         if self.keyboard_morse_enabled() and not app.use_telemetry_as_truth_var.get():
+            log_app_event(
+                "app.input.telemetry_as_truth_forced",
+                level="warning",
+                message="Telemetry-as-truth was forced because Keyboard Morse is enabled.",
+            )
             app.use_telemetry_as_truth_var.set(True)
             app.status_controller.set_main_status(
                 app.i18n.t(
@@ -357,6 +385,11 @@ class InputController:
         app = self.app
 
         if self.keyboard_morse_enabled() and app.auto_connect_serial_var.get():
+            log_app_event(
+                "app.input.serial_auto_connect_blocked_by_keyboard_morse",
+                level="warning",
+                message="Serial auto-connect was blocked because Keyboard Morse is enabled.",
+            )
             app.auto_connect_serial_var.set(False)
             app.status_controller.set_main_status(
                 app.i18n.t(
@@ -503,6 +536,12 @@ class InputController:
             return True
 
         if event_type in {"serial_non_json", "serial_non_object"}:
+            log_app_event(
+                "app.input.invalid_serial_message",
+                level="warning",
+                message="Invalid serial message was ignored.",
+                context={"event_type": event_type},
+            )
             app.status_controller.set_main_status(
                 app.i18n.t(
                     "input.serial.invalid_message",
@@ -513,6 +552,16 @@ class InputController:
             return True
 
         if event_type == "hello":
+            log_app_event(
+                "app.input.device_hello_received",
+                message="Serial device hello received.",
+                context={
+                    "device": event.get("device"),
+                    "app": event.get("app"),
+                    "fw": event.get("fw"),
+                    "mode": event.get("mode"),
+                },
+            )
             app.status_var.set(
                 app.i18n.t(
                     "input.serial.device_detected",
@@ -576,6 +625,16 @@ class InputController:
         app.start_trigger_timestamps.append(now)
 
         if len(app.start_trigger_timestamps) >= app.start_trigger_count:
+            log_app_event(
+                "app.input.practice_auto_start_triggered",
+                message="Practice start countdown triggered by incoming tone events.",
+                context={
+                    "trigger_count": len(app.start_trigger_timestamps),
+                    "required_count": app.start_trigger_count,
+                    "window_seconds": app.start_trigger_window_seconds,
+                    "source": event.get("src"),
+                },
+            )
             app.practice_controller.begin_start_countdown()
 
     def tone_event_key(self, event: Dict[str, Any]) -> Optional[tuple[str, int, int]]:

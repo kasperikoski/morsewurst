@@ -12,6 +12,7 @@ import tkinter as tk
 from tkinter import messagebox, ttk
 
 import morsewurst.config as config
+from morsewurst.core.app_logging import log_app_event, log_app_exception
 
 if TYPE_CHECKING:
     from morsewurst.ui.app import MorsewurstApp
@@ -49,8 +50,19 @@ class WindowController:
         try:
             window.lift()
             window.focus_force()
-        except Exception:
-            pass
+            log_app_event(
+                "app.window.reused_existing",
+                message="Existing window focused.",
+                context={"window": attribute},
+            )
+        except Exception as exc:
+            log_app_exception(
+                "app.window.focus_failed",
+                exc,
+                level="warning",
+                message="Existing window could not be focused.",
+                context={"window": attribute},
+            )
 
         return True
 
@@ -91,11 +103,21 @@ class WindowController:
 
         self.app.debug_window = DebugWindow(self.app)
         self.apply_window_icon(self.app.debug_window)
+        log_app_event(
+            "app.window.opened",
+            message="Debug window opened.",
+            context={"window": "debug_window"},
+        )
 
     def open_delete_sessions_window(self) -> None:
         """Open the database cleanup window for deleting saved practice sessions."""
         window = DeleteSessionsWindow(self.app)
         self.apply_window_icon(window)
+        log_app_event(
+            "app.window.opened",
+            message="Delete sessions window opened.",
+            context={"window": "delete_sessions_window"},
+        )
 
     def open_advanced_settings(self) -> None:
         """Open the advanced settings window."""
@@ -103,6 +125,11 @@ class WindowController:
 
         window = AdvancedSettingsWindow(self.app)
         self.apply_window_icon(window)
+        log_app_event(
+            "app.window.opened",
+            message="Advanced settings window opened.",
+            context={"window": "advanced_settings_window"},
+        )
 
     def open_profile_window(self) -> None:
         """Open the local user profile window, or focus it if it is already open."""
@@ -113,6 +140,11 @@ class WindowController:
 
         self.app.profile_window = ProfileWindow(self.app)
         self.apply_window_icon(self.app.profile_window)
+        log_app_event(
+            "app.window.opened",
+            message="Profile window opened.",
+            context={"window": "profile_window"},
+        )
 
     def open_help(self) -> None:
         """Open the help window."""
@@ -120,6 +152,11 @@ class WindowController:
 
         window = HelpWindow(self.app)
         self.apply_window_icon(window)
+        log_app_event(
+            "app.window.opened",
+            message="Help window opened.",
+            context={"window": "help_window"},
+        )
 
     def open_stats_window(self) -> None:
         """Open the statistics window, or focus it if it is already open."""
@@ -130,6 +167,11 @@ class WindowController:
 
         self.app.stats_window = StatsWindow(self.app)
         self.apply_window_icon(self.app.stats_window)
+        log_app_event(
+            "app.window.opened",
+            message="Statistics window opened.",
+            context={"window": "stats_window"},
+        )
 
     def open_network_window(self) -> None:
         """Open the network lobby window, or focus it if it is already open."""
@@ -143,6 +185,11 @@ class WindowController:
 
     def close_known_windows(self) -> None:
         """Best-effort close for known secondary windows."""
+        log_app_event(
+            "app.window.close_known_windows_started",
+            message="Known secondary windows are being closed.",
+        )
+
         for attribute in (
             "debug_window",
             "stats_window",
@@ -156,8 +203,19 @@ class WindowController:
 
             try:
                 window.destroy()
-            except Exception:
-                pass
+                log_app_event(
+                    "app.window.closed",
+                    message="Secondary window closed.",
+                    context={"window": attribute},
+                )
+            except Exception as exc:
+                log_app_exception(
+                    "app.window.close_failed",
+                    exc,
+                    level="warning",
+                    message="Secondary window close failed.",
+                    context={"window": attribute},
+                )
 
             setattr(self.app, attribute, None)
 
@@ -184,6 +242,10 @@ class DeleteSessionsWindow(tk.Toplevel):
         self._center_on_parent()
 
         self.deiconify()
+        log_app_event(
+            "app.sessions.delete_window_opened",
+            message="Delete sessions window opened.",
+        )
         self.lift()
         self.focus_force()
 
@@ -383,6 +445,11 @@ class DeleteSessionsWindow(tk.Toplevel):
         try:
             rows = self.app.db.sessions_for_management(1000)
         except Exception as exc:
+            log_app_exception(
+                "app.sessions.management_list_failed",
+                exc,
+                message="Delete sessions management list load failed.",
+            )
             self.status_var.set(
                 self.tr(
                     "delete_sessions.status.load_failed",
@@ -396,6 +463,11 @@ class DeleteSessionsWindow(tk.Toplevel):
             self.tree.insert("", tk.END, values=self._row_values(row))
 
         total = self.app.db.count_sessions_for_delete()
+        log_app_event(
+            "app.sessions.management_list_loaded",
+            message="Delete sessions management list loaded.",
+            context={"row_count": len(rows), "total": total},
+        )
         self.status_var.set(
             self.tr(
                 "delete_sessions.status.total",
@@ -457,6 +529,12 @@ class DeleteSessionsWindow(tk.Toplevel):
             )
             return
 
+        log_app_event(
+            "app.sessions.delete_selected_requested",
+            level="warning",
+            message="Single session delete requested.",
+            context={"session_id": session_id},
+        )
         ok = messagebox.askyesno(
             config.APP_NAME,
             self.tr(
@@ -468,11 +546,22 @@ class DeleteSessionsWindow(tk.Toplevel):
         )
 
         if not ok:
+            log_app_event(
+                "app.sessions.delete_selected_cancelled",
+                message="Single session delete was cancelled.",
+                context={"session_id": session_id},
+            )
             return
 
         try:
             deleted = self.app.db.delete_session_by_id(session_id)
         except Exception as exc:
+            log_app_exception(
+                "app.sessions.delete_failed",
+                exc,
+                message="Single session delete failed.",
+                context={"session_id": session_id},
+            )
             messagebox.showerror(
                 config.APP_NAME,
                 self.tr(
@@ -488,6 +577,12 @@ class DeleteSessionsWindow(tk.Toplevel):
         self.app.decoder_controller.refresh_timing_profiles()
         self.app.history_controller.load_tables()
 
+        log_app_event(
+            "app.sessions.delete_selected_completed",
+            level="warning",
+            message="Single session delete completed.",
+            context={"session_id": session_id, "deleted": deleted},
+        )
         self.status_var.set(
             self.tr(
                 "delete_sessions.status.deleted_selected",
@@ -561,6 +656,12 @@ class DeleteSessionsWindow(tk.Toplevel):
             )
             return
 
+        log_app_event(
+            "app.sessions.delete_all_requested",
+            level="warning",
+            message="Delete all practice sessions requested.",
+            context={"count": count},
+        )
         ok = messagebox.askyesno(
             config.APP_NAME,
             self.tr(
@@ -572,11 +673,22 @@ class DeleteSessionsWindow(tk.Toplevel):
         )
 
         if not ok:
+            log_app_event(
+                "app.sessions.delete_all_cancelled",
+                message="Delete all practice sessions was cancelled.",
+                context={"count": count},
+            )
             return
 
         try:
             deleted = self.app.db.delete_sessions()
         except Exception as exc:
+            log_app_exception(
+                "app.sessions.delete_failed",
+                exc,
+                message="Delete all practice sessions failed.",
+                context={"count": count},
+            )
             messagebox.showerror(
                 config.APP_NAME,
                 self.tr(
@@ -591,6 +703,12 @@ class DeleteSessionsWindow(tk.Toplevel):
         self.refresh_list()
         self.app.decoder_controller.refresh_timing_profiles()
         self.app.history_controller.load_tables()
+        log_app_event(
+            "app.sessions.delete_all_completed",
+            level="warning",
+            message="Delete all practice sessions completed.",
+            context={"requested_count": count, "deleted": deleted},
+        )
         self.status_var.set(
             self.tr(
                 "delete_sessions.status.deleted_all",
@@ -641,6 +759,12 @@ class DeleteSessionsWindow(tk.Toplevel):
         start_label = start_dt.strftime("%d.%m.%Y %H:%M")
         end_label = end_dt.strftime("%d.%m.%Y %H:%M")
 
+        log_app_event(
+            "app.sessions.delete_range_requested",
+            level="warning",
+            message="Delete practice sessions by range requested.",
+            context={"start_at": start_iso, "end_at": end_iso, "count": count},
+        )
         ok = messagebox.askyesno(
             config.APP_NAME,
             self.tr(
@@ -654,6 +778,11 @@ class DeleteSessionsWindow(tk.Toplevel):
         )
 
         if not ok:
+            log_app_event(
+                "app.sessions.delete_range_cancelled",
+                message="Delete practice sessions by range was cancelled.",
+                context={"start_at": start_iso, "end_at": end_iso, "count": count},
+            )
             return
 
         try:
@@ -662,6 +791,12 @@ class DeleteSessionsWindow(tk.Toplevel):
                 end_at=end_iso,
             )
         except Exception as exc:
+            log_app_exception(
+                "app.sessions.delete_failed",
+                exc,
+                message="Delete practice sessions by range failed.",
+                context={"start_at": start_iso, "end_at": end_iso, "count": count},
+            )
             messagebox.showerror(
                 config.APP_NAME,
                 self.tr(
@@ -676,6 +811,12 @@ class DeleteSessionsWindow(tk.Toplevel):
         self.refresh_list()
         self.app.decoder_controller.refresh_timing_profiles()
         self.app.history_controller.load_tables()
+        log_app_event(
+            "app.sessions.delete_range_completed",
+            level="warning",
+            message="Delete practice sessions by range completed.",
+            context={"start_at": start_iso, "end_at": end_iso, "requested_count": count, "deleted": deleted},
+        )
         self.status_var.set(
             self.tr(
                 "delete_sessions.status.deleted_range",
@@ -710,6 +851,15 @@ class DeleteSessionsWindow(tk.Toplevel):
             )
             return
 
+        log_app_event(
+            "app.sessions.delete_range_counted",
+            message="Delete sessions range count updated.",
+            context={
+                "start_at": start_dt.isoformat(timespec="seconds"),
+                "end_at": end_dt.isoformat(timespec="seconds"),
+                "count": count,
+            },
+        )
         self.status_var.set(
             self.tr(
                 "delete_sessions.status.range_count",

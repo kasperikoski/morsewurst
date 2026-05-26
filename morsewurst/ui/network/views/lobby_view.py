@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import tkinter as tk
 
+from morsewurst.core.logging_service import log_event, log_exception
 from morsewurst.network.public_rooms import PublicRoom
 from morsewurst.network.settings_store import (
     RememberedPrivateRoom,
@@ -116,8 +117,22 @@ class LobbyViewMixin:
 
         try:
             settings = self._network_settings(room_name="", password="")
+            log_event(
+                "network",
+                "network.lobby.presence_requested",
+                message="Lobby presence connection requested from lobby view.",
+                context={"server_uri": self._server_uri()},
+            )
             manager.connect_lobby_presence(settings)
         except Exception as exc:
+            log_exception(
+                "network",
+                "network.lobby.presence_request_failed",
+                exc,
+                level="warning",
+                message="Lobby presence could not be started.",
+                context={"server_uri": self._server_uri()},
+            )
             self._append_log("warning", f"Lobby presence could not be started: {exc}")
 
     def _build_connection_panel(self, parent: tk.Misc) -> tk.Frame:
@@ -393,6 +408,12 @@ class LobbyViewMixin:
             child.destroy()
 
         rooms = self._remembered_private_rooms()
+        log_event(
+            "network",
+            "network.remembered_private_rooms.loaded",
+            message="Remembered private rooms loaded for lobby view.",
+            context={"server_uri": self._server_uri(), "count": len(rooms)},
+        )
 
         if not rooms:
             self.remembered_rooms_status_var.set(self.tr("network.remembered_rooms.none"))
@@ -463,18 +484,42 @@ class LobbyViewMixin:
         self.private_room_var.set(display_name)
         self.private_password_var.set(room.saved_password or "")
         self.server_uri_var.set(room.server_uri or self._server_uri())
+        log_event(
+            "network",
+            "network.remembered_private_room.selected",
+            message="Remembered private room selected.",
+            context={"server_uri": room.server_uri or self._server_uri(), "room_id": room.room_id, "display_name": display_name},
+        )
         self._show_notice(self.tr("network.room.loaded_remembered", room=display_name), "info")
 
     def _join_remembered_private_room(self, room: RememberedPrivateRoom) -> None:
+        log_event(
+            "network",
+            "network.remembered_private_room.join_started",
+            message="Joining remembered private room.",
+            context={"server_uri": room.server_uri or self._server_uri(), "room_id": room.room_id, "display_name": room.display_name},
+        )
         self._select_remembered_private_room(room)
         self.join_private_room()
 
     def _forget_remembered_private_room(self, room: RememberedPrivateRoom) -> None:
         display_name = room.display_name or room.room_id
+        server_uri = room.server_uri or self._server_uri()
+
+        log_event(
+            "network",
+            "network.remembered_private_room.forget_started",
+            message="Forgetting remembered private room.",
+            context={
+                "server_uri": server_uri,
+                "room_id": room.room_id,
+                "display_name": display_name,
+            },
+        )
 
         self.settings = forget_private_room(
             self.settings,
-            server_uri=room.server_uri or self._server_uri(),
+            server_uri=server_uri,
             room_id=room.room_id,
         )
         save_network_settings(self.settings)

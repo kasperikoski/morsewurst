@@ -11,6 +11,7 @@ from typing import Any, Iterable
 from collections import defaultdict
 
 import morsewurst.config as config
+from morsewurst.core.app_logging import log_app_event, log_app_exception
 
 try:
     from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
@@ -41,6 +42,7 @@ class StatsWindow(tk.Toplevel):
 
         self.current_start_dt: datetime | None = None
         self.current_end_dt: datetime | None = None
+        self._matplotlib_missing_logged = False
 
         self.summary_vars: dict[str, tk.StringVar] = {
             "rounds": tk.StringVar(value="-"),
@@ -65,6 +67,11 @@ class StatsWindow(tk.Toplevel):
 
         self.update_idletasks()
         self._center_on_parent()
+        log_app_event(
+            "app.stats.window_opened",
+            message="Statistics window opened.",
+            context={"start_date": self.start_date_var.get(), "end_date": self.end_date_var.get()},
+        )
 
     def _build_ui(self) -> None:
         outer = ttk.Frame(self, padding=12)
@@ -217,6 +224,14 @@ class StatsWindow(tk.Toplevel):
 
     def _create_plot(self, parent: ttk.Frame, key: str) -> None:
         if Figure is None or FigureCanvasTkAgg is None:
+            if not self._matplotlib_missing_logged:
+                self._matplotlib_missing_logged = True
+                log_app_event(
+                    "app.stats.matplotlib_missing",
+                    level="warning",
+                    message="Matplotlib is not available; statistics charts cannot be drawn.",
+                    context={"plot": key},
+                )
             ttk.Label(
                 parent,
                 text=self.app.i18n.t("stats_window.matplotlib_missing"),
@@ -245,9 +260,19 @@ class StatsWindow(tk.Toplevel):
 
     def _set_quick_range_and_refresh(self, days: int) -> None:
         self._set_quick_range(days)
+        log_app_event(
+            "app.stats.quick_range_selected",
+            message="Statistics quick range selected.",
+            context={"days": days},
+        )
         self.refresh()
 
     def _set_all_range_and_refresh(self) -> None:
+        log_app_event(
+            "app.stats.quick_range_selected",
+            message="Statistics all-time range selected.",
+            context={"days": "all"},
+        )
         try:
             bounds = self.db.stats_date_bounds()
         except Exception:
@@ -278,6 +303,12 @@ class StatsWindow(tk.Toplevel):
             start = datetime.strptime(start_text, "%d.%m.%Y")
             end = datetime.strptime(end_text, "%d.%m.%Y")
         except ValueError:
+            log_app_event(
+                "app.stats.invalid_date_range",
+                level="warning",
+                message="Statistics date range could not be parsed.",
+                context={"start_text": start_text, "end_text": end_text},
+            )
             messagebox.showerror(
                 config.APP_NAME,
                 self.app.i18n.t("stats_window.error_invalid_date_range"),
@@ -288,6 +319,12 @@ class StatsWindow(tk.Toplevel):
         end = end.replace(hour=23, minute=59, second=59)
 
         if end < start:
+            log_app_event(
+                "app.stats.invalid_date_range",
+                level="warning",
+                message="Statistics end date was before start date.",
+                context={"start_text": start_text, "end_text": end_text},
+            )
             messagebox.showerror(
                 config.APP_NAME,
                 self.app.i18n.t("stats_window.error_end_before_start"),
@@ -307,6 +344,13 @@ class StatsWindow(tk.Toplevel):
             return
 
         start_iso, end_iso = parsed
+        bucket = self._current_bucket_label()
+
+        log_app_event(
+            "app.stats.refresh_started",
+            message="Statistics refresh started.",
+            context={"start_at": start_iso, "end_at": end_iso, "bucket": bucket},
+        )
 
         try:
             sessions = self.db.stats_sessions_between(start_iso, end_iso)
@@ -315,6 +359,12 @@ class StatsWindow(tk.Toplevel):
             skill_snapshots = self.db.stats_skill_snapshots_between(start_iso, end_iso)
             problems = self.db.stats_problem_characters_between(start_iso, end_iso, 100)
         except Exception as exc:
+            log_app_exception(
+                "app.stats.refresh_failed",
+                exc,
+                message="Statistics refresh failed.",
+                context={"start_at": start_iso, "end_at": end_iso, "bucket": bucket},
+            )
             self.status_var.set(self.app.i18n.t("stats_window.error_loading", error=exc))
             return
 
@@ -326,6 +376,20 @@ class StatsWindow(tk.Toplevel):
 
         self.status_var.set(
             self.app.i18n.t("stats_window.refreshed_status", time=datetime.now().strftime("%H:%M:%S"), bucket=self._current_bucket_label())
+        )
+        log_app_event(
+            "app.stats.refresh_completed",
+            message="Statistics refresh completed.",
+            context={
+                "start_at": start_iso,
+                "end_at": end_iso,
+                "bucket": bucket,
+                "session_count": len(sessions),
+                "key_source_count": len(key_sources),
+                "skill_snapshot_count": len(skill_snapshots),
+                "problem_count": len(problems),
+                "summary_rounds": summary.get("rounds"),
+            },
         )
 
     def _update_summary(self, summary: dict[str, Any]) -> None:
@@ -752,8 +816,13 @@ class StatsWindow(tk.Toplevel):
             return
         try:
             self.refresh()
-        except Exception:
-            pass
+        except Exception as exc:
+            log_app_exception(
+                "app.stats.refresh_failed",
+                exc,
+                level="warning",
+                message="Automatic statistics refresh failed.",
+            )
         self.after(5000, self._auto_refresh)
 
     def _center_on_parent(self) -> None:
@@ -768,4 +837,8 @@ class StatsWindow(tk.Toplevel):
                 self.app.stats_window = None
         except Exception:
             pass
+        log_app_event(
+            "app.stats.window_closed",
+            message="Statistics window closed.",
+        )
         self.destroy()
