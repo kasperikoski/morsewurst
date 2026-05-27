@@ -24,25 +24,134 @@ class SerialController:
     def __init__(self, app: "MorsewurstApp") -> None:
         self.app = app
 
+    def serial_queue_size(self) -> int:
+        """Return the pending serial event count when available."""
+        try:
+            return int(self.app.event_queue.qsize())
+        except Exception:
+            return -1
+
+    def drain_serial_queue_with_log(self, reason: str, *, port: str = "") -> None:
+        """Discard queued serial events and log if anything was removed."""
+        app = self.app
+
+        input_controller = getattr(app, "input_controller", None)
+        if input_controller is None or not hasattr(input_controller, "drain_serial_queue"):
+            return
+
+        before = self.serial_queue_size()
+        try:
+            discarded = int(input_controller.drain_serial_queue())
+        except Exception:
+            discarded = -1
+
+        if discarded:
+            log_app_event(
+                "app.serial.event_queue_drained",
+                level="warning",
+                message="Pending serial events were discarded during serial lifecycle change.",
+                context={
+                    "reason": reason,
+                    "port": port,
+                    "discarded": discarded,
+                    "queue_size_before": before,
+                    "queue_size_after": self.serial_queue_size(),
+                    "connection_id": getattr(app, "serial_connection_id", None),
+                },
+            )
+
+    def sync_app_serial_connection_id(self, reason: str) -> int:
+        """Copy the SerialReader connection id into the UI app state."""
+        app = self.app
+        connection_id = int(getattr(app.serial_reader, "connection_id", 0) or 0)
+        old_connection_id = int(getattr(app, "serial_connection_id", 0) or 0)
+        app.serial_connection_id = connection_id
+
+        if old_connection_id != connection_id:
+            log_app_event(
+                "app.serial.connection_id_updated",
+                message="Serial connection id updated.",
+                context={
+                    "reason": reason,
+                    "old_connection_id": old_connection_id,
+                    "new_connection_id": connection_id,
+                    "port": getattr(app.serial_reader, "port_name", None),
+                },
+            )
+
+        return connection_id
+
+    def compact_probe_result(self, result: object) -> dict[str, object]:
+        """Return a log-safe summary of a serial probe result."""
+        if not isinstance(result, dict):
+            return {"status": "invalid_result"}
+
+        event = result.get("event")
+        if isinstance(event, dict):
+            event_summary = {
+                "type": event.get("type"),
+                "app": event.get("app"),
+                "device": event.get("device"),
+                "fw": event.get("fw"),
+                "mode": event.get("mode"),
+                "src": event.get("src"),
+            }
+        else:
+            event_summary = None
+
+        return {
+            "port": result.get("port"),
+            "status": result.get("status"),
+            "match_reason": result.get("match_reason"),
+            "lines_seen": result.get("lines_seen"),
+            "json_events_seen": result.get("json_events_seen"),
+            "candidate_events_seen": result.get("candidate_events_seen"),
+            "last_event_type": result.get("last_event_type"),
+            "error": result.get("error"),
+            "exception_type": result.get("exception_type"),
+            "event": event_summary,
+        }
+
     def refresh_ports(self) -> None:
         """Refresh available serial ports and update the port dropdown."""
         app = self.app
 
+        previous_port = app.port_var.get().strip()
+
         log_app_event(
             "app.serial.refresh_started",
             message="Serial port refresh started.",
+            context={"previous_selected_port": previous_port},
         )
         ports = SerialReader.available_ports()
+        port_details = (
+            SerialReader.available_port_details()
+            if hasattr(SerialReader, "available_port_details")
+            else []
+        )
 
         if hasattr(app, "port_combo"):
             app.port_combo["values"] = ports
 
-        current_port = app.port_var.get().strip()
-
         if ports:
-            app.port_var.set(current_port if current_port in ports else current_port or ports[0])
+            selected_port = previous_port if previous_port in ports else ports[0]
+            app.port_var.set(selected_port)
         else:
+            selected_port = ""
             app.port_var.set("")
+
+        if previous_port and previous_port not in ports:
+            log_app_event(
+                "app.serial.selected_port_missing",
+                level="warning",
+                message="Previously selected serial port is no longer available.",
+                context={
+                    "previous_selected_port": previous_port,
+                    "new_selected_port": selected_port,
+                    "ports": ports,
+                    "port_details": port_details,
+                },
+            )
 
         if not SerialReader.serial_available():
             log_app_event(
@@ -58,7 +167,13 @@ class SerialController:
         log_app_event(
             "app.serial.refresh_completed",
             message="Serial port refresh completed.",
-            context={"port_count": len(ports), "selected_port": app.port_var.get()},
+            context={
+                "port_count": len(ports),
+                "ports": ports,
+                "port_details": port_details,
+                "previous_selected_port": previous_port,
+                "selected_port": app.port_var.get(),
+            },
         )
         self.update_serial_buttons()
 
@@ -123,6 +238,8 @@ class SerialController:
             self.update_serial_buttons()
             return
 
+        self.drain_serial_queue_with_log("connect_attempt", port=port)
+
         try:
             app.serial_reader.connect(port, config.SERIAL_BAUDRATE)
 
@@ -179,6 +296,7 @@ class SerialController:
 
         app.serial_connected = True
         app.auto_connect_running = False
+        connection_id = self.sync_app_serial_connection_id("connect_success")
         app.port_var.set(port)
         app.status_controller.set_serial_status(
             f"{port} @ {config.SERIAL_BAUDRATE}",
@@ -191,7 +309,13 @@ class SerialController:
         log_app_event(
             "app.serial.connect_success",
             message="Serial device connected.",
-            context={"port": port, "automatic": bool(automatic), "baudrate": config.SERIAL_BAUDRATE},
+            context={
+                "port": port,
+                "automatic": bool(automatic),
+                "baudrate": config.SERIAL_BAUDRATE,
+                "connection_id": connection_id,
+                "queue_size": self.serial_queue_size(),
+            },
         )
         app.audio_controller.play_sound("serial_connected")
         self.update_serial_buttons()
@@ -245,6 +369,8 @@ class SerialController:
         )
 
         app.serial_reader.disconnect()
+        self.sync_app_serial_connection_id("manual_disconnect")
+        self.drain_serial_queue_with_log("manual_disconnect", port=app.port_var.get())
         app.serial_connected = False
         app.status_controller.set_serial_status(
             app.i18n.t("serial.status.disconnected", "No connection"),
@@ -268,7 +394,14 @@ class SerialController:
             "app.serial.connection_lost",
             level="warning",
             message="Serial connection lost.",
-            context={"event_type": event.get("type"), "port": app.port_var.get()},
+            context={
+                "event_type": event.get("type"),
+                "port": app.port_var.get(),
+                "event_port": event.get("_serial_port"),
+                "event_connection_id": event.get("_serial_connection_id"),
+                "current_connection_id": getattr(app, "serial_connection_id", None),
+                "message": event.get("message"),
+            },
         )
         app.serial_connected = False
         app.auto_connect_running = False
@@ -277,6 +410,9 @@ class SerialController:
             app.serial_reader.disconnect()
         except Exception:
             pass
+
+        self.sync_app_serial_connection_id("connection_lost")
+        self.drain_serial_queue_with_log("connection_lost", port=app.port_var.get())
 
         app.status_controller.set_serial_status(
             app.i18n.t("serial.status.disconnected", "No connection"),
@@ -347,10 +483,22 @@ class SerialController:
             return
 
         app.auto_connect_running = True
+        port_details = (
+            SerialReader.available_port_details()
+            if hasattr(SerialReader, "available_port_details")
+            else []
+        )
+
         log_app_event(
             "app.serial.auto_scan_started",
             message="Serial auto-connect scan started.",
-            context={"port_count": len(ports), "ports": ports},
+            context={
+                "port_count": len(ports),
+                "ports": ports,
+                "port_details": port_details,
+                "current_selected_port": app.port_var.get(),
+                "connection_id": getattr(app, "serial_connection_id", None),
+            },
         )
         app.status_controller.set_serial_status(
             app.i18n.t("serial.status.searching_device", "Searching for device..."),
@@ -369,30 +517,67 @@ class SerialController:
         """Probe serial ports in a background thread and report the first matching port."""
         app = self.app
         found_port: Optional[str] = None
+        found_result: dict[str, object] | None = None
+        probe_results: list[dict[str, object]] = []
 
         log_app_event(
             "app.serial.auto_scan_worker_started",
             message="Serial auto-connect worker started.",
-            context={"port_count": len(ports)},
+            context={"port_count": len(ports), "ports": ports},
         )
 
         for port in ports:
             if app.serial_connected:
                 break
 
-            result = SerialReader.probe_port(
-                port,
-                config.SERIAL_BAUDRATE,
-                timeout_seconds=getattr(config, "SERIAL_AUTO_CONNECT_PROBE_SECONDS", 1.5),
+            if hasattr(SerialReader, "probe_port_detailed"):
+                raw_result = SerialReader.probe_port_detailed(
+                    port,
+                    config.SERIAL_BAUDRATE,
+                    timeout_seconds=getattr(config, "SERIAL_AUTO_CONNECT_PROBE_SECONDS", 1.5),
+                )
+            else:
+                event = SerialReader.probe_port(
+                    port,
+                    config.SERIAL_BAUDRATE,
+                    timeout_seconds=getattr(config, "SERIAL_AUTO_CONNECT_PROBE_SECONDS", 1.5),
+                )
+                raw_result = {
+                    "port": port,
+                    "status": "matched" if event is not None else "not_found",
+                    "event": event,
+                }
+
+            probe_summary = self.compact_probe_result(raw_result)
+            probe_results.append(probe_summary)
+
+            log_app_event(
+                "app.serial.auto_scan_probe_result",
+                message="Serial auto-connect probe completed.",
+                context=probe_summary,
             )
 
-            if result is not None:
+            if raw_result.get("status") == "matched":
                 found_port = port
+                found_result = probe_summary
                 break
 
-        app.after(0, lambda: self.finish_auto_connect_scan(found_port))
+        app.after(
+            0,
+            lambda: self.finish_auto_connect_scan(
+                found_port,
+                found_result=found_result,
+                probe_results=probe_results,
+            ),
+        )
 
-    def finish_auto_connect_scan(self, port: Optional[str]) -> None:
+    def finish_auto_connect_scan(
+        self,
+        port: Optional[str],
+        *,
+        found_result: dict[str, object] | None = None,
+        probe_results: list[dict[str, object]] | None = None,
+    ) -> None:
         """Finish an automatic scan and connect to the detected port when available."""
         app = self.app
 
@@ -410,6 +595,7 @@ class SerialController:
             log_app_event(
                 "app.serial.auto_scan_not_found",
                 message="Serial auto-connect scan did not find a matching device.",
+                context={"probe_results": probe_results or []},
             )
             app.status_controller.set_serial_status(
                 app.i18n.t("serial.status.disconnected", "No connection"),
@@ -421,7 +607,7 @@ class SerialController:
         log_app_event(
             "app.serial.auto_scan_found",
             message="Serial auto-connect scan found a matching device.",
-            context={"port": port},
+            context={"port": port, "probe_result": found_result},
         )
         self.connect_serial_port(port, automatic=True)
 

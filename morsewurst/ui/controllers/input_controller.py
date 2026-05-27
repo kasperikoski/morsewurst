@@ -433,6 +433,24 @@ class InputController:
         max_events = int(getattr(config, "UI_MAX_SERIAL_EVENTS_PER_POLL", 8))
         max_events = max(1, max_events)
 
+        queued_before = self.serial_queue_size()
+        warning_threshold = int(getattr(config, "UI_SERIAL_QUEUE_WARNING_THRESHOLD", 64))
+        if queued_before >= warning_threshold:
+            now = time.monotonic()
+            last_warning = float(getattr(app, "_last_serial_queue_warning_time", 0.0) or 0.0)
+            if now - last_warning >= 2.0:
+                setattr(app, "_last_serial_queue_warning_time", now)
+                log_app_event(
+                    "app.input.serial_queue_backlog",
+                    level="warning",
+                    message="Serial event queue backlog detected.",
+                    context={
+                        "queue_size": queued_before,
+                        "warning_threshold": warning_threshold,
+                        "max_events_per_poll": max_events,
+                    },
+                )
+
         processed = 0
         queue_empty = False
 
@@ -453,15 +471,120 @@ class InputController:
 
         app.after(delay_ms, self.poll_serial_events)
 
-    def drain_serial_queue(self) -> None:
-        """Discard all currently queued serial events."""
+    def serial_queue_size(self) -> int:
+        """Return the pending serial event count when the queue implementation supports it."""
+        try:
+            return int(self.app.event_queue.qsize())
+        except Exception:
+            return -1
+
+    def drain_serial_queue(self) -> int:
+        """Discard all currently queued serial events and return the number discarded."""
         app = self.app
 
+        discarded = 0
         while True:
             try:
                 app.event_queue.get_nowait()
             except queue.Empty:
-                return
+                return discarded
+            else:
+                discarded += 1
+
+    def serial_event_connection_id(self, event: Dict[str, Any]) -> Optional[int]:
+        """Return the serial connection id attached by SerialReader, when available."""
+        raw_connection_id = event.get("_serial_connection_id")
+
+        if raw_connection_id is None:
+            return None
+
+        try:
+            return int(raw_connection_id)
+        except Exception:
+            return None
+
+    def should_drop_stale_serial_event(
+        self,
+        event: Dict[str, Any],
+        event_type: str,
+    ) -> bool:
+        """Return True if an event belongs to an older serial connection."""
+        if self.is_keyboard_morse_tone_event(event):
+            return False
+
+        event_connection_id = self.serial_event_connection_id(event)
+        if event_connection_id is None:
+            return False
+
+        current_connection_id = int(getattr(self.app, "serial_connection_id", 0) or 0)
+
+        if current_connection_id and event_connection_id != current_connection_id:
+            log_app_event(
+                "app.input.serial_event_dropped_stale_connection",
+                level="warning",
+                message="Serial event from an older connection was dropped.",
+                context={
+                    "event_type": event_type,
+                    "event_connection_id": event_connection_id,
+                    "current_connection_id": current_connection_id,
+                    "event_port": event.get("_serial_port"),
+                },
+            )
+            return True
+
+        return False
+
+    def should_drop_stale_tone_event(self, event: Dict[str, Any]) -> bool:
+        """Return True if a queued tone event is too old to be trusted."""
+        if self.is_keyboard_morse_tone_event(event):
+            return False
+
+        received_time = event.get("_host_received_time")
+        if received_time is None:
+            return False
+
+        try:
+            lag_seconds = time.time() - float(received_time)
+        except Exception:
+            return False
+
+        stale_drop_seconds = float(getattr(config, "UI_SERIAL_STALE_TONE_DROP_SECONDS", 5.0))
+        lag_log_seconds = float(getattr(config, "UI_SERIAL_EVENT_LAG_LOG_SECONDS", 1.0))
+
+        if lag_seconds >= stale_drop_seconds:
+            log_app_event(
+                "app.input.serial_tone_dropped_stale",
+                level="warning",
+                message="Stale serial tone event was dropped before practice handling.",
+                context={
+                    "lag_seconds": round(lag_seconds, 3),
+                    "stale_drop_seconds": stale_drop_seconds,
+                    "event_connection_id": event.get("_serial_connection_id"),
+                    "event_port": event.get("_serial_port"),
+                    "src": event.get("src"),
+                    "t0": event.get("t0"),
+                    "t1": event.get("t1"),
+                },
+            )
+            return True
+
+        if lag_seconds >= lag_log_seconds:
+            log_app_event(
+                "app.input.serial_tone_lag_detected",
+                level="warning",
+                message="Serial tone event was processed with noticeable delay.",
+                context={
+                    "lag_seconds": round(lag_seconds, 3),
+                    "lag_log_seconds": lag_log_seconds,
+                    "event_connection_id": event.get("_serial_connection_id"),
+                    "event_port": event.get("_serial_port"),
+                    "src": event.get("src"),
+                    "t0": event.get("t0"),
+                    "t1": event.get("t1"),
+                },
+            )
+
+        return False
 
     def handle_serial_event(self, event: Dict[str, Any]) -> None:
         """Handle one incoming serial, virtual keyboard or local tone event."""
@@ -472,6 +595,9 @@ class InputController:
                 app.i18n.t("input.event.unknown", "unknown"),
             )
         )
+
+        if self.should_drop_stale_serial_event(event, event_type):
+            return
 
         app.last_event_var.set(
             app.i18n.t(
@@ -506,6 +632,9 @@ class InputController:
 
             if bool(getattr(app, "network_modal_active", False)):
                 return
+
+        if event_type == "tone" and self.should_drop_stale_tone_event(event):
+            return
 
         self.maybe_start_practice_from_key(event)
 
@@ -595,7 +724,9 @@ class InputController:
         """Append an accepted tone event to the current round and live decoder."""
         app = self.app
 
-        event["_host_received_time"] = time.time()
+        now = time.time()
+        event.setdefault("_host_received_time", now)
+        event["_host_processed_time"] = now
         app.round.events.append(event)
 
         if app.live_decoder is not None:

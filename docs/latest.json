@@ -1,16 +1,15 @@
 {
   "app": "Morsewurst",
-  "latest_version": "0.99.11",
-  "release_date": "2026-05-27",
-  "release_url": "https://github.com/kasperikoski/morsewurst/releases/tag/v0.99.11",
+  "latest_version": "0.99.11.1",
+  "release_date": "2026-05-28",
+  "release_url": "https://github.com/kasperikoski/morsewurst/releases/tag/v0.99.11.1",
   "download_url": "https://kasperikoski.fi/morsewurst/download",
   "release_notes": [
-    "Added application language support for Japanese, German and Swedish.",
-    "Improved language selection so Morsewurst can restart automatically after the application language is changed.",
-    "Added adjustable character mix ratios for letters, numbers and punctuation.",
-    "Improved multilingual UI behaviour across the settings window and language restart messages.",
-    "Improved skill level panel structure and display reliability across different UI languages.",
-    "Fixed and refined several UI, settings and layout issues.",
+    "Improved serial telemetry resilience, including better handling of disappearing, busy or temporarily unavailable COM ports.",
+    "Improved serial auto-connect diagnostics with more detailed probe results for debugging connection issues.",
+    "Improved handling of stale or queued serial tone events after reconnects.",
+    "Added regression tests for serial controller behaviour, including an optional live Morsewurst hardware probe.",
+    "Fixed and refined several Finnish translation strings.",
     "General bug fixes, stability improvements and user experience refinements."
   ]
 }
