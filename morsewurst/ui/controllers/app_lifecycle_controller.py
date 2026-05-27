@@ -36,7 +36,7 @@ class AppLifecycleController:
         app.geometry(getattr(config, "UI_WINDOW_GEOMETRY", "1280x830"))
         app.minsize(
             getattr(config, "UI_MIN_WIDTH", 1280),
-            getattr(config, "UI_MIN_HEIGHT", 740),
+            getattr(config, "UI_MIN_HEIGHT", 830),
         )
         app.protocol("WM_DELETE_WINDOW", self.on_close)
         app.window_controller.apply_window_icon(app)

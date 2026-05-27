@@ -9,7 +9,7 @@ import sys
 from pathlib import Path
 
 APP_NAME = "Morsewurst"
-APP_VERSION = "0.99.10"
+APP_VERSION = "0.99.11"
 
 # ============================================================
 # Update check
@@ -20,7 +20,7 @@ UPDATE_CHECK_ON_STARTUP = True
 UPDATE_CHECK_STARTUP_DELAY_MS = 1500
 UPDATE_CHECK_TIMEOUT_SECONDS = 5.0
 UPDATE_MANIFEST_URL = "https://kasperikoski.github.io/morsewurst/latest.json"
-UPDATE_DOWNLOAD_PAGE_URL = "https://github.com/kasperikoski/morsewurst/releases"
+UPDATE_DOWNLOAD_PAGE_URL = "https://kasperikoski.fi/morsewurst"
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -41,6 +41,10 @@ STARTUP_SCREEN_MIN_MS = 3000
 NETWORK_STARTUP_SCREEN_IMAGE = resource_path("assets/img/network_startup_screen.png")
 NETWORK_STARTUP_SCREEN_MIN_MS = 3000
 NETWORK_STARTUP_READY_TIMEOUT_SECONDS = 12.0
+
+LANGUAGE_FLAG_DIR = resource_path("assets/img/flags")
+LANGUAGE_FLAG_ICON_SUBSAMPLE = 1
+LANGUAGE_FLAG_SPACING_PX = 8
 
 APP_DATA_DIR = Path(os.environ.get("APPDATA", str(Path.home()))) / "Morsewurst"
 
@@ -183,6 +187,11 @@ UI_RAW_TELEMETRY_HEIGHT = 72
 UI_SUMMARY_ROW_HEIGHT = 330
 UI_GENERAL_INFO_WIDTH = 360
 
+# Settings window.
+UI_SETTINGS_WINDOW_GEOMETRY = "880x780"
+UI_SETTINGS_WINDOW_MIN_WIDTH = 880
+UI_SETTINGS_WINDOW_MIN_HEIGHT = 780
+
 UI_MAX_SERIAL_EVENTS_PER_POLL = 8
 UI_SERIAL_POLL_BACKLOG_DELAY_MS = 1
 
@@ -205,6 +214,20 @@ DEFAULT_TARGET_WPM = 15
 LETTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
 NUMBERS = "0123456789"
 PUNCTUATION = ".,?!/()&:;=+-_\"@$'"
+
+# Default long-term target distribution for generated practice characters.
+# The values are weights used by the character mix bar. Active groups are
+# scaled visually to fill the bar, and inactive groups are ignored by the
+# challenge generator.
+DEFAULT_CHARACTER_MIX_LETTERS_PERCENT = 70
+DEFAULT_CHARACTER_MIX_NUMBERS_PERCENT = 25
+DEFAULT_CHARACTER_MIX_PUNCTUATION_PERCENT = 5
+
+CHARACTER_MIX_COLORS = {
+    "letters": "#f2b8b5",
+    "numbers": "#f7df8e",
+    "punctuation": "#a7c7e7",
+}
 
 
 # ============================================================

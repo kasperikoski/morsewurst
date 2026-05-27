@@ -931,11 +931,6 @@ class HistoryController:
                 },
             )
 
-    def skill_two_col(self, left_label: str, left_value: str, right_label: str = "", right_value: str = "") -> str:
-        left = f"{left_label:<18}{left_value:<10}"
-        right = f"{right_label:<14}{right_value}" if right_label else ""
-        return left + right
-
     def reset_skill_metric_values(self) -> None:
         app = self.app
 
@@ -951,14 +946,20 @@ class HistoryController:
         app.skill_charset_coverage_value_var.set("-")
         app.skill_charset_scope_value_var.set("-")
 
+    def reset_skill_summary_values(self) -> None:
+        app = self.app
+
+        app.skill_overall_wpm_value_var.set("-")
+        app.skill_both_wpm_value_var.set("-")
+        app.skill_next_level_value_var.set("-")
+        app.skill_straight_wpm_value_var.set("-")
+        app.skill_iambic_wpm_value_var.set("-")
+
     def set_skill_error(self, message: str) -> None:
         app = self.app
 
         app.skill_title_var.set("-")
-        app.skill_rating_var.set(
-            app.i18n.t("skill.status.calculation_failed", "Calculation failed")
-        )
-        app.skill_key_wpm_var.set("-")
+        self.reset_skill_summary_values()
         self.reset_skill_metric_values()
         app.skill_warning_var.set(message)
 
@@ -969,29 +970,7 @@ class HistoryController:
             app.i18n.t("skill.status.not_enough_data", "Not enough data yet")
         )
 
-        rounds_text = (
-            f"{getattr(rating, 'total_rounds', 0)}/{recent_rounds}"
-            if rating is not None
-            else f"0/{recent_rounds}"
-        )
-
-        app.skill_rating_var.set(
-            "\n".join([
-                self.skill_two_col(
-                    app.i18n.t("skill.rounds", "Rounds"),
-                    rounds_text,
-                    app.i18n.t("skill.straight_wpm", "Straight WPM"),
-                    "-",
-                ),
-                self.skill_two_col(
-                    app.i18n.t("skill.effective_wpm", "Effective WPM"),
-                    "-",
-                    app.i18n.t("skill.iambic_wpm", "Iambic WPM"),
-                    "-",
-                ),
-            ])
-        )
-        app.skill_key_wpm_var.set("")
+        self.reset_skill_summary_values()
         self.reset_skill_metric_values()
         app.skill_warning_var.set("" if rating is None else rating.reason)
 
@@ -1018,8 +997,18 @@ class HistoryController:
         straight_rounds = int(getattr(rating, "straight_used_rounds", 0) or 0)
         total_key_rounds = straight_rounds + iambic_rounds
 
-        iambic_text = "-" if iambic_wpm is None else f"{float(iambic_wpm):.1f} ({iambic_rounds})"
-        straight_text = "-" if straight_wpm is None else f"{float(straight_wpm):.1f} ({straight_rounds})"
+        iambic_text = "-" if iambic_wpm is None else f"{float(iambic_wpm):.1f}"
+        straight_text = "-" if straight_wpm is None else f"{float(straight_wpm):.1f}"
+
+        overall_wpm_text = f"{rating.raw_skill:.2f}"
+        both_wpm_text = "-" if rating.effective_wpm is None else f"{rating.effective_wpm:.1f}"
+        next_level_text = f"{progress_percent:.0f} %"
+
+        app.skill_overall_wpm_value_var.set(overall_wpm_text)
+        app.skill_both_wpm_value_var.set(both_wpm_text)
+        app.skill_next_level_value_var.set(next_level_text)
+        app.skill_straight_wpm_value_var.set(straight_text)
+        app.skill_iambic_wpm_value_var.set(iambic_text)
 
         title_suffix = (
             app.i18n.t("skill.title_suffix.preliminary", " (preliminary)")
@@ -1041,26 +1030,6 @@ class HistoryController:
             )
         )
 
-        app.skill_rating_var.set("\n".join([
-            self.skill_two_col(
-                app.i18n.t("skill.overall_wpm", "Overall skill WPM"),
-                f"{rating.raw_skill:.2f}",
-                app.i18n.t("skill.straight_wpm", "Straight WPM"),
-                straight_text,
-            ),
-            self.skill_two_col(
-                app.i18n.t("skill.both_wpm", "Both keys WPM"),
-                "-" if rating.effective_wpm is None else f"{rating.effective_wpm:.1f}",
-                app.i18n.t("skill.iambic_wpm", "Iambic WPM"),
-                iambic_text,
-            ),
-            self.skill_two_col(
-                app.i18n.t("skill.next_level", "Next level"),
-                f"{progress_percent:.0f} %",
-            ),
-        ]))
-
-        app.skill_key_wpm_var.set("")
         app.skill_accuracy_value_var.set("-" if rating.avg_accuracy is None else f"{rating.avg_accuracy:.1f} %")
         app.skill_cleanliness_value_var.set("-" if rating.avg_cleanliness is None else f"{rating.avg_cleanliness:.1f} %")
         app.skill_timing_value_var.set(self.skill_timing_text(rating))

@@ -35,11 +35,14 @@ HELP_DOCUMENT_SPEC: list[dict[str, str]] = [
     {"type": "heading", "key": "help.content.practice_settings.heading"},
     {"type": "paragraph", "key": "help.content.practice_settings.intro"},
     {"type": "paragraph", "key": "help.content.practice_settings.characters"},
+    {"type": "paragraph", "key": "help.content.practice_settings.character_mix"},
+    {"type": "note", "key": "help.content.practice_settings.character_mix_note"},
     {"type": "paragraph", "key": "help.content.practice_settings.groups"},
     {"type": "paragraph", "key": "help.content.practice_settings.wpm"},
     {"type": "paragraph", "key": "help.content.practice_settings.rounds"},
     {"type": "paragraph", "key": "help.content.practice_settings.wxmor"},
     {"type": "paragraph", "key": "help.content.practice_settings.problem_chars"},
+    {"type": "paragraph", "key": "help.content.practice_settings.problem_chars_mix"},
     {"type": "paragraph", "key": "help.content.practice_settings.suggest_speed"},
 
     {"type": "heading", "key": "help.content.round.heading"},
@@ -103,6 +106,7 @@ HELP_DOCUMENT_SPEC: list[dict[str, str]] = [
     {"type": "paragraph", "key": "help.content.advanced.skill"},
     {"type": "paragraph", "key": "help.content.advanced.stats"},
     {"type": "paragraph", "key": "help.content.advanced.debug"},
+    {"type": "paragraph", "key": "help.content.advanced.logging"},
 
     {"type": "heading", "key": "help.content.network.heading"},
     {"type": "paragraph", "key": "help.content.network.intro"},
@@ -131,6 +135,7 @@ HELP_DOCUMENT_SPEC: list[dict[str, str]] = [
     {"type": "paragraph", "key": "help.content.troubleshooting.network"},
     {"type": "paragraph", "key": "help.content.troubleshooting.audio"},
     {"type": "paragraph", "key": "help.content.troubleshooting.debug"},
+    {"type": "paragraph", "key": "help.content.troubleshooting.logs"},
     {"type": "paragraph", "key": "help.content.troubleshooting.updates"},
 
     {"type": "heading", "key": "help.content.tips.heading"},
@@ -138,6 +143,7 @@ HELP_DOCUMENT_SPEC: list[dict[str, str]] = [
     {"type": "paragraph", "key": "help.content.tips.clean_rounds"},
     {"type": "paragraph", "key": "help.content.tips.wpm"},
     {"type": "paragraph", "key": "help.content.tips.problem_chars"},
+    {"type": "paragraph", "key": "help.content.tips.character_mix"},
     {"type": "paragraph", "key": "help.content.tips.network"},
 
     {"type": "paragraph", "key": "help.content.closing"},

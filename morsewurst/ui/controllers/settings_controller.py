@@ -144,6 +144,27 @@ class SettingsController:
         self.set_bool_from_data(data, "use_letters", app.use_letters_var)
         self.set_bool_from_data(data, "use_numbers", app.use_numbers_var)
         self.set_bool_from_data(data, "use_punctuation", app.use_punctuation_var)
+        self.set_int_from_data(
+            data,
+            "character_mix_letters_percent",
+            app.character_mix_letters_var,
+            0,
+            100,
+        )
+        self.set_int_from_data(
+            data,
+            "character_mix_numbers_percent",
+            app.character_mix_numbers_var,
+            0,
+            100,
+        )
+        self.set_int_from_data(
+            data,
+            "character_mix_punctuation_percent",
+            app.character_mix_punctuation_var,
+            0,
+            100,
+        )
         self.set_bool_from_data(
             data,
             "practice_problem_chars",
@@ -500,6 +521,24 @@ class SettingsController:
             "use_letters": bool(app.use_letters_var.get()),
             "use_numbers": bool(app.use_numbers_var.get()),
             "use_punctuation": bool(app.use_punctuation_var.get()),
+            "character_mix_letters_percent": helpers.safe_int_var(
+                app.character_mix_letters_var,
+                default=int(getattr(config, "DEFAULT_CHARACTER_MIX_LETTERS_PERCENT", 70)),
+                minimum=0,
+                maximum=100,
+            ),
+            "character_mix_numbers_percent": helpers.safe_int_var(
+                app.character_mix_numbers_var,
+                default=int(getattr(config, "DEFAULT_CHARACTER_MIX_NUMBERS_PERCENT", 25)),
+                minimum=0,
+                maximum=100,
+            ),
+            "character_mix_punctuation_percent": helpers.safe_int_var(
+                app.character_mix_punctuation_var,
+                default=int(getattr(config, "DEFAULT_CHARACTER_MIX_PUNCTUATION_PERCENT", 5)),
+                minimum=0,
+                maximum=100,
+            ),
             "practice_problem_chars": bool(app.practice_problem_chars_var.get()),
             "practice_wxmor": bool(app.practice_wxmor_var.get()),
             "wxmor_profile": app.wxmor_controller.profile(),

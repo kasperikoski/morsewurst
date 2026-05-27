@@ -1,18 +1,16 @@
 {
   "app": "Morsewurst",
-  "latest_version": "0.99.10",
-  "release_date": "2026-05-26",
-  "release_url": "https://github.com/kasperikoski/morsewurst/releases/tag/v0.99.10",
+  "latest_version": "0.99.11",
+  "release_date": "2026-05-27",
+  "release_url": "https://github.com/kasperikoski/morsewurst/releases/tag/v0.99.11",
   "download_url": "https://kasperikoski.fi/morsewurst/download",
   "release_notes": [
-    "Added application-wide structured logging for startup, shutdown, settings, profiles, practice sessions, serial connections, windows, statistics, debugging tools and update checks.",
-    "Improved diagnostics for practice lifecycle events, including round start, round finish, saving, deferred updates and skill rating snapshots.",
-    "Added safer logging helpers that avoid storing raw Morse telemetry, full target text or full entered text in normal application logs.",
-    "Improved logging around profile management, database maintenance, settings persistence and application restart/shutdown cleanup.",
-    "Added additional logging and sanitization tests for application logging and sensitive context masking.",
-    "Improved network-related tests for public room handling and client-side manager behaviour.",
-    "Fixed practice countdown and round-start logging issues.",
-    "General bug fixes and stability improvements.",
-    "Improved overall application behaviour and user experience."
+    "Added application language support for Japanese, German and Swedish.",
+    "Improved language selection so Morsewurst can restart automatically after the application language is changed.",
+    "Added adjustable character mix ratios for letters, numbers and punctuation.",
+    "Improved multilingual UI behaviour across the settings window and language restart messages.",
+    "Improved skill level panel structure and display reliability across different UI languages.",
+    "Fixed and refined several UI, settings and layout issues.",
+    "General bug fixes, stability improvements and user experience refinements."
   ]
 }

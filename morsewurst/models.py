@@ -14,6 +14,9 @@ class ChallengeSettings:
     use_letters: bool = True
     use_numbers: bool = True
     use_punctuation: bool = False
+    character_mix_letters_percent: int = 70
+    character_mix_numbers_percent: int = 25
+    character_mix_punctuation_percent: int = 5
     min_groups: int = 1
     max_groups: int = 1
     min_chars_per_group: int = 3

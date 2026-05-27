@@ -17,6 +17,9 @@ FALLBACK_LANGUAGE = "en"
 SUPPORTED_LANGUAGES = {
     "en": "English",
     "fi": "Suomi",
+    "sv": "Svenska",
+    "de": "Deutsch",
+    "ja": "日本語",
 }
 
 

@@ -30,6 +30,15 @@ class ChallengeSettingsController:
             practice_rounds=config.DEFAULT_PRACTICE_ROUNDS,
             countdown_seconds=0,
             sound_enabled=config.DEFAULT_SOUND_ENABLED,
+            character_mix_letters_percent=int(
+                getattr(config, "DEFAULT_CHARACTER_MIX_LETTERS_PERCENT", 70)
+            ),
+            character_mix_numbers_percent=int(
+                getattr(config, "DEFAULT_CHARACTER_MIX_NUMBERS_PERCENT", 25)
+            ),
+            character_mix_punctuation_percent=int(
+                getattr(config, "DEFAULT_CHARACTER_MIX_PUNCTUATION_PERCENT", 5)
+            ),
             problem_recent_rounds=config.DEFAULT_PROBLEM_RECENT_ROUNDS,
             problem_char_weight_percent=getattr(
                 config,
@@ -109,6 +118,24 @@ class ChallengeSettingsController:
             use_letters=app.use_letters_var.get(),
             use_numbers=app.use_numbers_var.get(),
             use_punctuation=app.use_punctuation_var.get(),
+            character_mix_letters_percent=helpers.safe_int_var(
+                app.character_mix_letters_var,
+                default=int(getattr(config, "DEFAULT_CHARACTER_MIX_LETTERS_PERCENT", 70)),
+                minimum=0,
+                maximum=100,
+            ),
+            character_mix_numbers_percent=helpers.safe_int_var(
+                app.character_mix_numbers_var,
+                default=int(getattr(config, "DEFAULT_CHARACTER_MIX_NUMBERS_PERCENT", 25)),
+                minimum=0,
+                maximum=100,
+            ),
+            character_mix_punctuation_percent=helpers.safe_int_var(
+                app.character_mix_punctuation_var,
+                default=int(getattr(config, "DEFAULT_CHARACTER_MIX_PUNCTUATION_PERCENT", 5)),
+                minimum=0,
+                maximum=100,
+            ),
             min_groups=min_groups,
             max_groups=max_groups,
             min_chars_per_group=min_chars,

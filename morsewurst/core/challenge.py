@@ -51,6 +51,130 @@ def base_charset_from_settings(settings: ChallengeSettings) -> str:
     return chars or (config.LETTERS + config.NUMBERS)
 
 
+def character_groups_from_settings(settings: ChallengeSettings) -> list[tuple[str, str, int]]:
+    """Return active character groups with their long-term selection weights."""
+
+    groups: list[tuple[str, str, int]] = []
+
+    if settings.use_letters:
+        groups.append((
+            "letters",
+            config.LETTERS,
+            int(getattr(settings, "character_mix_letters_percent", 70)),
+        ))
+
+    if settings.use_numbers:
+        groups.append((
+            "numbers",
+            config.NUMBERS,
+            int(getattr(settings, "character_mix_numbers_percent", 25)),
+        ))
+
+    if settings.use_punctuation:
+        groups.append((
+            "punctuation",
+            config.PUNCTUATION,
+            int(getattr(settings, "character_mix_punctuation_percent", 5)),
+        ))
+
+    if groups:
+        return groups
+
+    # Keep the old safety fallback: if all groups are disabled, generate
+    # from letters and numbers instead of producing an empty target.
+    return [
+        (
+            "letters",
+            config.LETTERS,
+            int(getattr(settings, "character_mix_letters_percent", 70)),
+        ),
+        (
+            "numbers",
+            config.NUMBERS,
+            int(getattr(settings, "character_mix_numbers_percent", 25)),
+        ),
+    ]
+
+
+def choose_character_group(settings: ChallengeSettings) -> tuple[str, str]:
+    """Choose a character group according to the configured mix weights."""
+
+    groups = character_groups_from_settings(settings)
+    weighted_groups = [
+        (name, chars, max(0, int(weight)))
+        for name, chars, weight in groups
+        if chars
+    ]
+
+    if not weighted_groups:
+        return "letters", config.LETTERS
+
+    total_weight = sum(weight for _name, _chars, weight in weighted_groups)
+
+    if total_weight <= 0:
+        name, chars, _weight = random.choice(weighted_groups)
+        return name, chars
+
+    pick = random.uniform(0.0, float(total_weight))
+    cumulative = 0.0
+
+    for name, chars, weight in weighted_groups:
+        cumulative += float(weight)
+        if pick <= cumulative:
+            return name, chars
+
+    name, chars, _weight = weighted_groups[-1]
+    return name, chars
+
+
+def filtered_problem_chars_for_charset(
+    settings: ChallengeSettings,
+    allowed_chars: str,
+    problem_chars: Iterable[str] | None = None,
+) -> str:
+    """Return problem characters limited to a specific generated character group."""
+
+    if not problem_chars or not allowed_chars:
+        return ""
+
+    allowed = set(allowed_chars)
+
+    limit = max(
+        1,
+        int(
+            getattr(
+                settings,
+                "problem_char_limit",
+                getattr(config, "DEFAULT_PROBLEM_CHAR_LIMIT", 12),
+            )
+        ),
+    )
+
+    chars: list[str] = []
+
+    for ch in problem_chars:
+        if not ch:
+            continue
+
+        ch = str(ch).upper()
+
+        if ch.isspace():
+            continue
+
+        if ch not in allowed:
+            continue
+
+        if ch in chars:
+            continue
+
+        chars.append(ch)
+
+        if len(chars) >= limit:
+            break
+
+    return "".join(chars)
+
+
 def filtered_problem_chars(
     settings: ChallengeSettings,
     problem_chars: Iterable[str] | None = None,
@@ -148,8 +272,10 @@ def generate_challenge(
     min_chars = min(settings.min_chars_per_group, settings.max_chars_per_group)
     max_chars = max(settings.min_chars_per_group, settings.max_chars_per_group)
 
-    base_chars = base_charset_from_settings(settings)
-    weighted_problem_chars = filtered_problem_chars(settings, problem_chars)
+    problem_chars_by_group = {
+        name: filtered_problem_chars_for_charset(settings, chars, problem_chars)
+        for name, chars, _weight in character_groups_from_settings(settings)
+    }
 
     group_count = random.randint(min_groups, max_groups)
     groups: List[str] = []
@@ -157,19 +283,22 @@ def generate_challenge(
     for _ in range(group_count):
         length = random.randint(min_chars, max_chars)
 
-        group = "".join(
-            choose_weighted_character(
-                settings,
-                base_chars,
-                weighted_problem_chars,
-            )
-            for _ in range(length)
-        )
+        generated_chars: list[str] = []
 
-        groups.append(group)
+        for _index in range(length):
+            group_name, base_chars = choose_character_group(settings)
+            weighted_problem_chars = problem_chars_by_group.get(group_name, "")
+            generated_chars.append(
+                choose_weighted_character(
+                    settings,
+                    base_chars,
+                    weighted_problem_chars,
+                )
+            )
+
+        groups.append("".join(generated_chars))
 
     return " ".join(groups).upper()
-
 
 def score_text(text: str, *, keep_spaces: bool = True) -> str:
     """Return the text used by scoring and completion logic.

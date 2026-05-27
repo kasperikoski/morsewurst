@@ -205,8 +205,13 @@ class RuntimeController:
         app = self.app
 
         app.skill_title_var = tk.StringVar(value="-")
-        app.skill_rating_var = tk.StringVar(value="-")
-        app.skill_key_wpm_var = tk.StringVar(value="-")
+
+        app.skill_overall_wpm_value_var = tk.StringVar(value="-")
+        app.skill_both_wpm_value_var = tk.StringVar(value="-")
+        app.skill_next_level_value_var = tk.StringVar(value="-")
+        app.skill_straight_wpm_value_var = tk.StringVar(value="-")
+        app.skill_iambic_wpm_value_var = tk.StringVar(value="-")
+
         app.skill_accuracy_value_var = tk.StringVar(value="-")
         app.skill_cleanliness_value_var = tk.StringVar(value="-")
         app.skill_timing_value_var = tk.StringVar(value="-")
@@ -230,6 +235,15 @@ class RuntimeController:
         app.use_letters_var = tk.BooleanVar(value=True)
         app.use_numbers_var = tk.BooleanVar(value=True)
         app.use_punctuation_var = tk.BooleanVar(value=False)
+        app.character_mix_letters_var = tk.IntVar(
+            value=int(getattr(config, "DEFAULT_CHARACTER_MIX_LETTERS_PERCENT", 70))
+        )
+        app.character_mix_numbers_var = tk.IntVar(
+            value=int(getattr(config, "DEFAULT_CHARACTER_MIX_NUMBERS_PERCENT", 25))
+        )
+        app.character_mix_punctuation_var = tk.IntVar(
+            value=int(getattr(config, "DEFAULT_CHARACTER_MIX_PUNCTUATION_PERCENT", 5))
+        )
         app.use_telemetry_as_truth_var = tk.BooleanVar(value=True)
         app.keep_focus_var = tk.BooleanVar(value=True)
         app.auto_connect_serial_var = tk.BooleanVar(

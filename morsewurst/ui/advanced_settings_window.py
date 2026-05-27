@@ -9,6 +9,7 @@ from tkinter import ttk
 
 import morsewurst.config as config
 from morsewurst.core.app_logging import log_app_event, log_app_exception
+from morsewurst.i18n import I18nService
 
 
 class AdvancedSettingsWindow(tk.Toplevel):
@@ -16,12 +17,16 @@ class AdvancedSettingsWindow(tk.Toplevel):
         super().__init__(app)
 
         self.app = app
+        self._language_flag_images: list[tk.PhotoImage] = []
 
         self.title(self.app.i18n.t("settings.window.title"))
         self.transient(app)
         self.grab_set()
-        self.geometry("780x680")
-        self.minsize(780, 680)
+        self.geometry(getattr(config, "UI_SETTINGS_WINDOW_GEOMETRY", "880x780"))
+        self.minsize(
+            getattr(config, "UI_SETTINGS_WINDOW_MIN_WIDTH", 880),
+            getattr(config, "UI_SETTINGS_WINDOW_MIN_HEIGHT", 780),
+        )
 
         outer = ttk.Frame(self, padding=12)
         outer.pack(fill=tk.BOTH, expand=True)
@@ -168,6 +173,170 @@ class AdvancedSettingsWindow(tk.Toplevel):
 
         return content
 
+    def _build_language_flag_row(
+        self,
+        parent: ttk.Frame,
+        language_options: dict[str, str],
+    ) -> None:
+        """Show available language flags in the configured language order."""
+
+        self._language_flag_images.clear()
+        loaded_flags: list[tuple[str, tk.PhotoImage]] = []
+
+        for language_code in language_options:
+            flag_path = config.LANGUAGE_FLAG_DIR / f"{language_code}.png"
+
+            if not flag_path.exists():
+                continue
+
+            try:
+                image = tk.PhotoImage(file=str(flag_path))
+
+                subsample = max(
+                    1,
+                    int(getattr(config, "LANGUAGE_FLAG_ICON_SUBSAMPLE", 1)),
+                )
+                if subsample > 1:
+                    image = image.subsample(subsample, subsample)
+
+                loaded_flags.append((language_code, image))
+            except Exception as exc:
+                log_app_exception(
+                    "app.settings.language_flag_load_failed",
+                    exc,
+                    level="warning",
+                    message="Loading language flag image failed.",
+                    context={
+                        "language_code": language_code,
+                        "path": str(flag_path),
+                    },
+                )
+
+        if not loaded_flags:
+            return
+
+        flag_frame = ttk.Frame(parent)
+        flag_frame.pack(anchor=tk.W, pady=(0, 12))
+
+        spacing = max(0, int(getattr(config, "LANGUAGE_FLAG_SPACING_PX", 8)))
+
+        for index, (_language_code, image) in enumerate(loaded_flags):
+            self._language_flag_images.append(image)
+
+            padx = (0, spacing)
+            if index == len(loaded_flags) - 1:
+                padx = (0, 0)
+
+            ttk.Label(
+                flag_frame,
+                image=image,
+            ).pack(side=tk.LEFT, padx=padx)
+
+
+
+    def _language_display_name(
+        self,
+        language: str,
+        *,
+        i18n: I18nService | None = None,
+    ) -> str:
+        try:
+            normalized = self.app.i18n.normalize_language(language)
+        except Exception:
+            normalized = str(language or "en")
+
+        try:
+            fallback_name = self.app.i18n.language_options().get(normalized, normalized)
+        except Exception:
+            fallback_name = normalized
+
+        service = i18n if i18n is not None else self.app.i18n
+
+        try:
+            return service.t(
+                f"settings.language.name.{normalized}",
+                fallback_name,
+            )
+        except Exception:
+            return fallback_name
+
+    def _language_restart_message(self, i18n: I18nService, language: str) -> str:
+        language_name = self._language_display_name(language, i18n=i18n)
+
+        return i18n.t(
+            "settings.language.restart_dialog_message",
+            "The application language has been changed to {language}.\n\n"
+            "Morsewurst will now restart automatically so the change can take effect.",
+            language=language_name,
+        )
+
+    def _show_language_restart_now_dialog(
+        self,
+        *,
+        previous_language: str,
+        selected_language: str,
+    ) -> None:
+        new_i18n = I18nService(selected_language)
+        old_i18n = I18nService(previous_language)
+
+        new_message = self._language_restart_message(new_i18n, selected_language)
+        old_message = self._language_restart_message(old_i18n, selected_language)
+
+        message = new_message
+        if previous_language != selected_language:
+            message = f"{new_message}\n\n{old_message}"
+
+        dialog = tk.Toplevel(self)
+        dialog.withdraw()
+
+        dialog.title(
+            new_i18n.t(
+                "settings.language.restart_dialog_title",
+                "Restart Morsewurst",
+            )
+        )
+        self.app.window_controller.apply_window_icon(dialog)
+
+        dialog.resizable(False, False)
+        dialog.transient(self)
+        dialog.grab_set()
+
+        frame = ttk.Frame(dialog, padding=18)
+        frame.pack(fill=tk.BOTH, expand=True)
+
+        ttk.Label(
+            frame,
+            text=message,
+            wraplength=460,
+            justify=tk.CENTER,
+        ).pack(fill=tk.X, pady=(0, 16))
+
+        ok_button = ttk.Button(
+            frame,
+            text=new_i18n.t("settings.language.restart_dialog_ok", "OK"),
+            command=dialog.destroy,
+        )
+        ok_button.pack(anchor=tk.CENTER)
+
+        dialog.update_idletasks()
+
+        width = dialog.winfo_reqwidth()
+        height = dialog.winfo_reqheight()
+
+        self.update_idletasks()
+
+        x = self.winfo_rootx() + max(0, (self.winfo_width() - width) // 2)
+        y = self.winfo_rooty() + max(0, (self.winfo_height() - height) // 2)
+
+        dialog.geometry(f"{width}x{height}+{x}+{y}")
+
+        dialog.deiconify()
+        dialog.lift()
+        dialog.focus_force()
+        ok_button.focus_set()
+
+        dialog.wait_window()
+
     def _build_language_tab(self, notebook: ttk.Notebook) -> None:
         frame = self._make_scrollable_tab(
             notebook,
@@ -184,9 +353,11 @@ class AdvancedSettingsWindow(tk.Toplevel):
             frame,
             text=self.app.i18n.t("settings.language.description"),
             wraplength=620,
-        ).pack(anchor=tk.W, pady=(4, 12))
+        ).pack(anchor=tk.W, pady=(4, 8))
 
         language_options = self.app.i18n.language_options()
+        self._build_language_flag_row(frame, language_options)
+
         code_to_label = {
             code: label
             for code, label in language_options.items()
@@ -218,11 +389,20 @@ class AdvancedSettingsWindow(tk.Toplevel):
 
         def on_language_selected(_event: tk.Event | None = None) -> None:
             selected_label = selected_label_var.get()
-            language = label_to_code.get(selected_label, "en")
+            language = self.app.i18n.normalize_language(
+                label_to_code.get(selected_label, "en")
+            )
+            previous_language = self.app.i18n.normalize_language(
+                getattr(self.app.i18n, "language", "")
+            )
 
-            previous_language = getattr(self.app.i18n, "language", "")
+            if language == previous_language:
+                self.app.language_var.set(language)
+                return
+
             self.app.language_var.set(language)
             self.app.i18n.set_language(language)
+
             log_app_event(
                 "app.settings.language_changed",
                 message="Application language setting changed from advanced settings.",
@@ -230,8 +410,15 @@ class AdvancedSettingsWindow(tk.Toplevel):
                     "previous_language": previous_language,
                     "selected_language": language,
                     "active_language": self.app.i18n.language,
+                    "restart_requested": True,
                 },
             )
+
+            self._show_language_restart_now_dialog(
+                previous_language=previous_language,
+                selected_language=language,
+            )
+            self.app.app_lifecycle_controller.restart_application()
 
         combo.bind("<<ComboboxSelected>>", on_language_selected)
 
