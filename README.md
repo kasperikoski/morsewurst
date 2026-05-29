@@ -1,24 +1,22 @@
-- [Morsewurst](#morsewurst)
-  - [1. Current status](#1-current-status)
-  - [2. Main features](#2-main-features)
-  - [3. Network features](#3-network-features)
-  - [4. Screenshots](#4-screenshots)
-    - [4.1. Main practice window](#41-main-practice-window)
-    - [4.2. Network lobby](#42-network-lobby)
-    - [4.3. Private network room](#43-private-network-room)
-    - [4.4. Statistics](#44-statistics)
-    - [4.5. Settings](#45-settings)
-  - [5. Requirements](#5-requirements)
-  - [6. Running the application](#6-running-the-application)
-  - [7. Development setup](#7-development-setup)
-  - [8. Testing](#8-testing)
-  - [9. Building on Windows](#9-building-on-windows)
-  - [10. Morsewurst Keyer firmware and build documentation](#10-morsewurst-keyer-firmware-and-build-documentation)
-  - [11. Project structure](#11-project-structure)
-  - [12. Updates](#12-updates)
-  - [13. Data and privacy](#13-data-and-privacy)
-  - [14. Coming next](#14-coming-next)
-  - [15. License](#15-license)
+- [1. Current status](#1-current-status)
+- [2. Main features](#2-main-features)
+- [3. Network features](#3-network-features)
+- [4. Screenshots](#4-screenshots)
+  - [4.1. Main practice window](#41-main-practice-window)
+  - [4.2. Network lobby](#42-network-lobby)
+  - [4.3. Statistics](#43-statistics)
+  - [4.4. Settings](#44-settings)
+- [5. Requirements](#5-requirements)
+- [6. Running the application](#6-running-the-application)
+- [7. Development setup](#7-development-setup)
+- [8. Testing](#8-testing)
+- [9. Building on Windows](#9-building-on-windows)
+- [10. Morsewurst Keyer firmware and build documentation](#10-morsewurst-keyer-firmware-and-build-documentation)
+- [11. Project structure](#11-project-structure)
+- [12. Updates](#12-updates)
+- [13. Data and privacy](#13-data-and-privacy)
+- [14. Coming next](#14-coming-next)
+- [15. License](#15-license)
 
 # Morsewurst
 
@@ -26,7 +24,7 @@ Morsewurst is a Python-based desktop training application for practising Morse c
 
 The application receives real-time keying telemetry from the keyer, decodes the signal, measures sending accuracy and timing quality, and gives detailed feedback about Morse performance. The goal is to make Morse practice measurable, visible and easier to improve over time.
 
-<img src="assets/img/main_window.jpg" alt="Morsewurst main practice window" width="900">
+<img src="assets/img/practice.gif" alt="Morsewurst main practice window" width="800">
 
 ## 1. Current status
 
@@ -65,17 +63,13 @@ The network system includes relay-side room handling, client reconnect logic, pi
 
 ### 4.2. Network lobby
 
-<img src="assets/img/network_lobby.jpg" alt="Morsewurst Network lobby" width="900">
+<img src="assets/img/network.gif" alt="Morsewurst Network lobby" width="800">
 
-### 4.3. Private network room
-
-<img src="assets/img/network_private_room.jpg" alt="Morsewurst private network room" width="900">
-
-### 4.4. Statistics
+### 4.3. Statistics
 
 <img src="assets/img/statistics.jpg" alt="Morsewurst statistics window" width="900">
 
-### 4.5. Settings
+### 4.4. Settings
 
 <img src="assets/img/settings.jpg" alt="Morsewurst settings window" width="900">
 
