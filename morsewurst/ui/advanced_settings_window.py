@@ -82,13 +82,13 @@ class AdvancedSettingsWindow(tk.Toplevel):
             pass
 
         try:
-            self.app.settings_controller.save_ui_settings()
+            self.app.settings_controller.save_ui_settings_async()
         except Exception as exc:
             log_app_exception(
                 "app.settings.save_failed",
                 exc,
                 level="warning",
-                message="Saving settings while closing advanced settings window failed.",
+                message="Starting async settings save while closing advanced settings window failed.",
             )
 
         try:
@@ -101,11 +101,6 @@ class AdvancedSettingsWindow(tk.Toplevel):
             message="Advanced settings window closed.",
         )
         self.destroy()
-
-        try:
-            self.app.after_idle(self.app.history_controller.load_tables)
-        except Exception:
-            pass
 
     def _center_on_parent(self, app: tk.Misc) -> None:
         x = app.winfo_rootx() + max(0, (app.winfo_width() - self.winfo_width()) // 2)

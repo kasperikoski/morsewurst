@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 import json
+import threading
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -441,9 +442,43 @@ class SettingsController:
     def save_ui_settings(self) -> None:
         """Persist current UI settings to ui_settings.json."""
         path = self.ui_settings_path()
-        path.parent.mkdir(parents=True, exist_ok=True)
-
         data = self.ui_settings_data()
+        self._write_ui_settings_file(path, data)
+
+    def save_ui_settings_async(self) -> None:
+        """Persist current UI settings without blocking the Tk event loop.
+
+        Tk variables must be read on the UI thread. Only the disk write runs in
+        the background thread.
+        """
+        path = self.ui_settings_path()
+
+        try:
+            data = self.ui_settings_data()
+        except Exception as exc:
+            log_app_exception(
+                "app.settings.save_collect_failed",
+                exc,
+                level="warning",
+                message="Collecting UI settings before async save failed.",
+                context={"path": str(path)},
+            )
+            self._show_save_failed_status(exc)
+            return
+
+        worker = threading.Thread(
+            target=self._write_ui_settings_file,
+            args=(path, data),
+            daemon=True,
+        )
+        worker.start()
+
+    def _write_ui_settings_file(self, path: Path, data: dict[str, Any]) -> None:
+        """Write already collected UI settings to disk.
+
+        This method must not read Tk variables. It is safe to run in a worker
+        thread because all UI data has already been collected.
+        """
         log_app_event(
             "app.settings.save_started",
             message="UI settings save started.",
@@ -451,6 +486,8 @@ class SettingsController:
         )
 
         try:
+            path.parent.mkdir(parents=True, exist_ok=True)
+
             with path.open("w", encoding="utf-8") as handle:
                 json.dump(
                     data,
@@ -458,6 +495,7 @@ class SettingsController:
                     ensure_ascii=False,
                     indent=2,
                 )
+
             log_app_event(
                 "app.settings.save_success",
                 message="UI settings saved.",
@@ -470,10 +508,20 @@ class SettingsController:
                 message="UI settings save failed.",
                 context={"path": str(path)},
             )
+            self._show_save_failed_status(exc)
+
+    def _show_save_failed_status(self, exc: Exception) -> None:
+        """Show a save error in the UI from either the UI thread or a worker."""
+        def update_status() -> None:
             try:
                 self.app.status_var.set(f"Asetusten tallennus epäonnistui: {exc}")
             except Exception:
                 pass
+
+        try:
+            self.app.after(0, update_status)
+        except Exception:
+            pass
 
     def ui_settings_data(self) -> dict[str, Any]:
         """Build the serializable dictionary stored in ui_settings.json."""

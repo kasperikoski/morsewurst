@@ -45,34 +45,90 @@ class UiHelpersController:
 
         validate_command = app.register(self.validate_positive_integer_text)
 
+        try:
+            initial_value = int(textvariable.get())
+        except Exception:
+            initial_value = from_
+
+        initial_value = max(from_, min(to, initial_value))
+        editing_var = tk.StringVar(master=app, value=str(initial_value))
+        syncing = {"active": False}
+
+        def commit_text_value() -> None:
+            """Validate, clamp and copy the editable text back to the IntVar."""
+            raw_value = editing_var.get().strip()
+
+            try:
+                value = int(raw_value)
+            except Exception:
+                value = from_
+
+            value = max(from_, min(to, value))
+            normalized = str(value)
+
+            syncing["active"] = True
+            try:
+                if editing_var.get() != normalized:
+                    editing_var.set(normalized)
+
+                try:
+                    current_value = int(textvariable.get())
+                except Exception:
+                    current_value = None
+
+                if current_value != value:
+                    textvariable.set(value)
+            finally:
+                syncing["active"] = False
+
+        def sync_from_model(*_args: object) -> None:
+            """Keep the visible spinbox text in sync with external IntVar changes."""
+            if syncing["active"]:
+                return
+
+            try:
+                value = int(textvariable.get())
+            except Exception:
+                return
+
+            value = max(from_, min(to, value))
+            normalized = str(value)
+
+            if editing_var.get() == normalized:
+                return
+
+            syncing["active"] = True
+            try:
+                editing_var.set(normalized)
+            finally:
+                syncing["active"] = False
+
         spinbox = ttk.Spinbox(
             parent,
             from_=from_,
             to=to,
-            textvariable=textvariable,
+            textvariable=editing_var,
             width=width,
             validate="key",
             validatecommand=(validate_command, "%P"),
+            command=commit_text_value,
         )
 
-        spinbox.bind(
-            "<FocusOut>",
-            lambda _event: self.safe_int_var(
-                textvariable,
-                default=from_,
-                minimum=from_,
-                maximum=to,
-            ),
-        )
-        spinbox.bind(
-            "<Return>",
-            lambda _event: self.safe_int_var(
-                textvariable,
-                default=from_,
-                minimum=from_,
-                maximum=to,
-            ),
-        )
+        trace_id = textvariable.trace_add("write", sync_from_model)
+
+        def remove_trace(event: tk.Event) -> None:
+            """Remove the model trace when the widget is destroyed."""
+            if event.widget is not spinbox:
+                return
+
+            try:
+                textvariable.trace_remove("write", trace_id)
+            except Exception:
+                pass
+
+        spinbox.bind("<Destroy>", remove_trace, add="+")
+        spinbox.bind("<FocusOut>", lambda _event: commit_text_value(), add="+")
+        spinbox.bind("<Return>", lambda _event: (commit_text_value(), "break")[-1], add="+")
 
         return spinbox
 
@@ -138,9 +194,15 @@ class UiHelpersController:
         value = max(minimum, min(maximum, value))
 
         try:
-            variable.set(value)
+            current_value = int(variable.get())
         except Exception:
-            pass
+            current_value = None
+
+        if current_value != value:
+            try:
+                variable.set(value)
+            except Exception:
+                pass
 
         return value
 
@@ -160,8 +222,14 @@ class UiHelpersController:
         value = max(minimum, min(maximum, value))
 
         try:
-            variable.set(value)
+            current_value = float(variable.get())
         except Exception:
-            pass
+            current_value = None
+
+        if current_value is None or abs(current_value - value) > 0.000001:
+            try:
+                variable.set(value)
+            except Exception:
+                pass
 
         return value

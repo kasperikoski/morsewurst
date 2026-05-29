@@ -88,6 +88,14 @@ class PracticeController:
         """Decode tone telemetry and update the visible adaptive telemetry text."""
         self._update_adaptive_decoded_text(flush_final=flush_final)
 
+    def mark_live_ui_dirty(self) -> None:
+        """Request a throttled live telemetry and score refresh."""
+        self._mark_live_ui_dirty()
+
+    def refresh_live_ui(self, *, force: bool = False) -> None:
+        """Refresh live telemetry and score panels when a throttled update is due."""
+        self._refresh_live_ui(force=force)
+
     def check_round_completion(self) -> None:
         """Check whether the current round should be finished."""
         self._maybe_finish_completed()
@@ -263,6 +271,10 @@ class PracticeController:
         )
 
         app.live_decoder = app.decoder_controller.new_live_decoder(target)
+        app.live_ui_dirty = False
+        app.live_result_dirty = False
+        app.last_live_ui_refresh_monotonic = 0.0
+        app.last_live_score_refresh_monotonic = 0.0
         app.last_summary = None
         app.last_char_results = []
         app.last_tone_event_key = None
@@ -377,6 +389,8 @@ class PracticeController:
 
         app.decoder_controller.clear_raw_telemetry()
         app.live_decoder = None
+        app.live_ui_dirty = False
+        app.live_result_dirty = False
         log_app_event(
             "app.practice.round_discarded",
             message="Unfinished practice round discarded.",
@@ -509,6 +523,8 @@ class PracticeController:
         self._update_adaptive_decoded_text(flush_final=True)
         app.decoder_controller.draw_raw_telemetry()
         self.evaluate_live()
+        app.live_ui_dirty = False
+        app.live_result_dirty = False
 
     def _advance_after_finished_round(self) -> None:
         """Continue to the next round or finish the whole practice series."""
@@ -851,6 +867,11 @@ class PracticeController:
                     target_text=app.round.target,
                     seed_unit_us=app.decoder_controller.adaptive_seed_unit_us(),
                 )
+
+            app.live_ui_dirty = False
+            app.live_result_dirty = False
+            app.last_live_ui_refresh_monotonic = 0.0
+            app.last_live_score_refresh_monotonic = 0.0
 
             app.round.started_at = None
             app.round.host_start_time = None
@@ -1362,6 +1383,76 @@ class PracticeController:
             app.i18n.t("practice.status.clock_running", "Clock running.")
         )
 
+    def _mark_live_ui_dirty(self) -> None:
+        """Mark live telemetry and live result panels as needing a refresh."""
+        app = self.app
+        app.live_ui_dirty = True
+        app.live_result_dirty = True
+
+    def _live_refresh_due(self, *, last_attr: str, interval_ms: int, now: float) -> bool:
+        """Return True when a throttled live refresh interval has elapsed."""
+        app = self.app
+
+        try:
+            last_refresh = float(getattr(app, last_attr, 0.0) or 0.0)
+        except Exception:
+            last_refresh = 0.0
+
+        interval_seconds = max(0.0, float(interval_ms) / 1000.0)
+        return now - last_refresh >= interval_seconds
+
+    def _live_decoder_has_pending_symbol(self) -> bool:
+        """Return True while the live decoder still has an unflushed symbol."""
+        app = self.app
+
+        try:
+            live_decoder = getattr(app, "live_decoder", None)
+            if live_decoder is None:
+                return False
+            return bool(live_decoder.current_state().pending_symbol)
+        except Exception:
+            return False
+
+    def _refresh_live_ui(self, *, force: bool = False) -> None:
+        """Run throttled live telemetry redraw and live score refreshes."""
+        app = self.app
+
+        if not app.round.accepting_input or app.round.finished:
+            return
+
+        now = time.monotonic()
+
+        telemetry_interval_ms = int(
+            getattr(config, "LIVE_TELEMETRY_REFRESH_MS", config.TIMER_TICK_MS)
+        )
+        telemetry_due = self._live_refresh_due(
+            last_attr="last_live_ui_refresh_monotonic",
+            interval_ms=telemetry_interval_ms,
+            now=now,
+        )
+
+        telemetry_dirty = bool(getattr(app, "live_ui_dirty", False))
+        telemetry_pending = self._live_decoder_has_pending_symbol()
+
+        if force or ((telemetry_dirty or telemetry_pending) and telemetry_due):
+            decoded = self._update_adaptive_decoded_text(flush_final=False)
+            app.decoder_controller.draw_raw_telemetry()
+            app.live_ui_dirty = bool(getattr(decoded, "pending_symbol", ""))
+            app.last_live_ui_refresh_monotonic = now
+            app.app_lifecycle_controller.focus_input()
+
+        result_interval_ms = int(getattr(config, "LIVE_RESULT_REFRESH_MS", 300))
+        result_due = self._live_refresh_due(
+            last_attr="last_live_score_refresh_monotonic",
+            interval_ms=result_interval_ms,
+            now=now,
+        )
+
+        if force or (bool(getattr(app, "live_result_dirty", False)) and result_due):
+            self.evaluate_live()
+            app.live_result_dirty = False
+            app.last_live_score_refresh_monotonic = now
+
     def _live_elapsed_us(self) -> Optional[int]:
         """Return the current round elapsed time in microseconds."""
         app = self.app
@@ -1396,8 +1487,7 @@ class PracticeController:
         """Update live timer, telemetry and automatic finish checks."""
         app = self.app
 
-        self._update_adaptive_decoded_text(flush_final=False)
-        app.decoder_controller.draw_raw_telemetry()
+        self._refresh_live_ui(force=False)
 
         elapsed_us = self._live_elapsed_us()
 
@@ -1525,8 +1615,8 @@ class PracticeController:
 
         return actual_idle_us >= required_idle_us
 
-    def _update_adaptive_decoded_text(self, flush_final: bool = False) -> None:
-        """Decode tone telemetry and update the visible adaptive telemetry text."""
+    def _update_adaptive_decoded_text(self, flush_final: bool = False) -> Any:
+        """Decode tone telemetry, update the visible text and return the decoded state."""
         app = self.app
 
         decoded = app.decoder_controller.decode_tone_events(
@@ -1536,6 +1626,7 @@ class PracticeController:
             seed_unit_us=app.decoder_controller.adaptive_seed_unit_us(),
         )
         app.decoder_controller.update_telemetry_display_from_decoded(decoded)
+        return decoded
 
     def evaluate_live(self) -> None:
         """Score the current live round and update latest result values."""

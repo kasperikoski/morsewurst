@@ -9,7 +9,7 @@ import sys
 from pathlib import Path
 
 APP_NAME = "Morsewurst"
-APP_VERSION = "0.99.11.1"
+APP_VERSION = "0.99.11.2"
 
 # ============================================================
 # Update check
@@ -173,6 +173,12 @@ KEYBOARD_MORSE_MIN_TONE_US = 1_000
 TELEMETRY_DISPLAY_MAX_CHARS = 60
 RAW_TELEMETRY_PIXELS_PER_UNIT = 8.0
 RAW_TELEMETRY_MAX_CANVAS_WIDTH = 20000
+
+# Live telemetry throttling.
+# These values affect only how often the UI redraws live information.
+# They do not change adaptive decoding thresholds or final round scoring.
+LIVE_TELEMETRY_REFRESH_MS = 100
+LIVE_RESULT_REFRESH_MS = 300
 
 UI_POLL_INTERVAL_MS = 40
 TIMER_TICK_MS = 100

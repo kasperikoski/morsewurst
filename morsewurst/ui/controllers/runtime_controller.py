@@ -44,6 +44,10 @@ class RuntimeController:
         app.stats_window: tk.Toplevel | None = None
         app.debug_window: tk.Toplevel | None = None
         app.live_decoder: Any | None = None
+        app.live_ui_dirty = False
+        app.live_result_dirty = False
+        app.last_live_ui_refresh_monotonic = 0.0
+        app.last_live_score_refresh_monotonic = 0.0
 
         app.network_manager = NetworkManager()
         app.network_window: tk.Toplevel | None = None

@@ -274,7 +274,9 @@ class DecoderController:
         settings = self.decoder_settings_from_ui()
 
         if app.live_decoder is not None and events is app.round.events:
-            app.live_decoder.replace_events(app.round.events)
+            # The current round feeds accepted tone events into LiveMorseDecoder
+            # incrementally in InputController.record_tone_event(). Avoid copying
+            # the whole growing round event list on every live refresh.
             return app.live_decoder.decode(
                 current_time_us=current_time_us,
                 flush_final=flush_final,
@@ -468,7 +470,13 @@ class DecoderController:
             and isinstance(event.get("t1"), int)
             and isinstance(event.get("dur"), (int, float))
         ]
-        tones.sort(key=lambda event: int(event["t0"]))
+
+        # Live serial/keyboard telemetry is appended in arrival order. Avoid an
+        # unnecessary full-list sort during every live redraw. Historical or
+        # externally supplied events are still sorted defensively.
+        if events is not None:
+            tones.sort(key=lambda event: int(event["t0"]))
+
         return tones
 
     def raw_telemetry_unit_us(
@@ -481,6 +489,13 @@ class DecoderController:
         source_events = self.app.round.events if events is None else events
 
         try:
+            if events is None:
+                live_decoder = getattr(self.app, "live_decoder", None)
+                if live_decoder is not None:
+                    live_state = live_decoder.current_state()
+                    if live_state.decoded is not None:
+                        return max(20_000.0, float(live_state.decoded.visual_unit_us))
+
             decoded_for_scale = self.decode_tone_events(
                 source_events,
                 current_time_us=current_time_us,

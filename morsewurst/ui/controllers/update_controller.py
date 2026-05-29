@@ -338,8 +338,8 @@ class UpdateController:
             limit=500,
         )
 
-        if not release_url and fallback_url:
-            release_url = fallback_url
+        if not download_url and fallback_url:
+            download_url = fallback_url
 
         if download_url and not _is_safe_http_url(download_url):
             download_url = ""
@@ -369,7 +369,7 @@ class UpdateController:
         self._last_notified_version = latest_version
 
         current_version = str(getattr(config, "APP_VERSION", "") or "").strip()
-        open_url = manifest.release_url or manifest.download_url
+        open_url = manifest.download_url or manifest.release_url
 
         text_parts = [
             f"Uusi {config.APP_NAME}-versio on saatavilla.",
@@ -392,17 +392,17 @@ class UpdateController:
 
             if answer:
                 log_app_event(
-                    "app.update.open_release_url_requested",
-                    message="User requested opening the update release URL.",
+                    "app.update.open_download_url_requested",
+                    message="User requested opening the update download URL.",
                     context={"latest_version": latest_version, "url": open_url},
                 )
                 try:
                     webbrowser.open(open_url)
                 except Exception as exc:
                     log_app_exception(
-                        "app.update.open_release_url_failed",
+                        "app.update.open_download_url_failed",
                         exc,
-                        message="Update release URL could not be opened.",
+                        message="Update download URL could not be opened.",
                         context={"latest_version": latest_version, "url": open_url},
                     )
                     messagebox.showwarning(

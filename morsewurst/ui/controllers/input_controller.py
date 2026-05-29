@@ -646,11 +646,7 @@ class InputController:
 
         self.record_tone_event(event)
         app.practice_controller.start_round_clock_from_tone_event(event)
-        app.decoder_controller.draw_raw_telemetry()
-        app.practice_controller.update_adaptive_decoded_text(flush_final=False)
-        app.practice_controller.evaluate_live()
-        app.practice_controller.check_round_completion()
-        app.app_lifecycle_controller.focus_input()
+        app.practice_controller.mark_live_ui_dirty()
 
     def handle_non_tone_serial_event(
         self,

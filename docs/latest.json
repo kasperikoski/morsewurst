@@ -1,15 +1,14 @@
 {
   "app": "Morsewurst",
-  "latest_version": "0.99.11.1",
-  "release_date": "2026-05-28",
-  "release_url": "https://github.com/kasperikoski/morsewurst/releases/tag/v0.99.11.1",
-  "download_url": "https://kasperikoski.fi/morsewurst/download",
+  "latest_version": "0.99.11.2",
+  "release_date": "2026-05-29",
+  "release_url": "https://github.com/kasperikoski/morsewurst/releases/tag/v0.99.11.2",
+  "download_url": "https://kasperikoski.fi/morsewurst",
   "release_notes": [
-    "Improved serial telemetry resilience, including better handling of disappearing, busy or temporarily unavailable COM ports.",
-    "Improved serial auto-connect diagnostics with more detailed probe results for debugging connection issues.",
-    "Improved handling of stale or queued serial tone events after reconnects.",
-    "Added regression tests for serial controller behaviour, including an optional live Morsewurst hardware probe.",
-    "Fixed and refined several Finnish translation strings.",
+    "Fixed editable Target WPM spinboxes so values can be selected, cleared and typed normally.",
+    "Improved settings window closing by saving UI settings asynchronously and avoiding heavy history refresh work during close.",
+    "Changed the update prompt to open the configured download page before falling back to the GitHub release page.",
+    "Improved update manifest handling for download URL fallback behaviour.",
     "General bug fixes, stability improvements and user experience refinements."
   ]
 }
