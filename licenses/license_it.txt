@@ -1,0 +1,61 @@
+MORSEWURST
+
+TERMINI DI UTILIZZO E DICHIARAZIONE DI ESCLUSIONE DI RESPONSABILITÀ
+
+Leggere attentamente questi termini prima di installare e utilizzare il programma. Installando o utilizzando questo programma, l'utente accetta questi termini.
+
+1. Software non completato
+
+Questo programma è un software non completato e ancora in fase di sviluppo. Il programma potrebbe non funzionare correttamente, completamente, senza interruzioni o senza errori.
+
+Il programma può contenere errori, malfunzionamenti, carenze, problemi di compatibilità, gestione errata dei dati, comportamenti imprevisti o altri problemi. Il programma non deve essere utilizzato in situazioni in cui un funzionamento errato potrebbe causare danni, perdite economiche, perdita di dati, rischi per la sicurezza o altri pregiudizi.
+
+2. Utilizzo a proprio rischio
+
+L'utente installa e utilizza il programma interamente a proprio rischio.
+
+Lo sviluppatore del programma, il titolare del diritto d'autore o qualsiasi altra parte coinvolta nella distribuzione del programma non è responsabile per alcun danno derivante dall'uso, dall'installazione, dalla rimozione, dal mancato funzionamento, dal funzionamento errato o da qualsiasi altro aspetto relativo al programma.
+
+Questa esclusione di responsabilità riguarda, tra l'altro, danni diretti e indiretti, danni consequenziali, perdite economiche, mancato profitto, perdita di dati, danni a hardware o software, interruzioni di servizio, risultati errati, danni causati a terzi e qualsiasi altra possibile conseguenza.
+
+Lo sviluppatore del programma non è responsabile dell'idoneità del programma allo scopo dell'utente né del suo funzionamento sull'hardware, sul sistema operativo o su altro ambiente software dell'utente.
+
+3. Nessuna garanzia
+
+Il programma è fornito così com'è, senza alcuna garanzia espressa o implicita.
+
+Lo sviluppatore del programma non fornisce alcuna garanzia riguardo al funzionamento, all'assenza di errori, alla sicurezza, alla disponibilità continua, alla compatibilità, all'accuratezza o all'idoneità del programma per qualsiasi scopo particolare.
+
+4. Nessun obbligo di manutenzione
+
+Lo sviluppatore del programma non ha alcun obbligo di mantenere, aggiornare, correggere, sviluppare, supportare o continuare a rendere disponibile il software.
+
+Lo sviluppatore del programma si riserva il diritto di apportare modifiche al programma, rimuovere funzionalità, aggiungere funzionalità, modificare il funzionamento del programma o interromperne lo sviluppo e la distribuzione senza preavviso separato.
+
+5. Diritto d'autore e altri diritti
+
+Questo programma, il suo nome, il codice sorgente, l'interfaccia utente, le funzionalità, la documentazione, i testi, le soluzioni tecniche, gli elementi visivi e altro materiale relativo al programma sono protetti dal diritto d'autore e da altri diritti di proprietà intellettuale, salvo diversa indicazione separata.
+
+Tutti i diritti sono riservati all'autore del programma o ad altro titolare dei diritti.
+
+6. Diritto di utilizzo
+
+All'utente viene concesso un diritto limitato, personale e non esclusivo di installare e utilizzare il programma.
+
+Questo diritto di utilizzo non trasferisce all'utente alcuna proprietà sul programma, sul suo codice sorgente, sul nome, sulla documentazione, sulle soluzioni tecniche o su altro materiale relativo al programma.
+
+7. Rivendita e distribuzione
+
+Il programma non può essere venduto, rivenduto, noleggiato, concesso in licenza, sfruttato commercialmente, incluso in un prodotto o servizio a pagamento, né altrimenti trasferito a fini commerciali senza il previo consenso scritto del titolare del diritto d'autore.
+
+La modifica, la copia, la ridistribuzione o la pubblicazione del programma in altra forma è consentita solo se è stata ottenuta l'autorizzazione del titolare del diritto d'autore o se una licenza scritta separata lo consente espressamente.
+
+8. Modifiche ai termini
+
+Lo sviluppatore del programma si riserva il diritto di modificare questi termini di utilizzo e questa dichiarazione di esclusione di responsabilità. I nuovi termini si applicano alle versioni e distribuzioni successive del programma.
+
+9. Limitazioni previste dalla legge applicabile
+
+Questa dichiarazione di esclusione di responsabilità si applica nella misura massima consentita dalla legge applicabile. Se una parte di questo testo viene ritenuta invalida o non eseguibile, le altre parti rimangono in vigore nella misura massima consentita dalla legge.
+
+Accettando questi termini, l'utente conferma di comprendere che il programma è incompleto, che viene utilizzato a proprio rischio e che lo sviluppatore del programma non è responsabile per errori, difetti, danni, perdite o altre conseguenze derivanti dall'uso del programma.

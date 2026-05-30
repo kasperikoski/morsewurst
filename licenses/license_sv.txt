@@ -1,0 +1,61 @@
+MORSEWURST
+
+ANVÄNDARVILLKOR OCH ANSVARSFRISKRIVNING
+
+Läs dessa villkor noggrant innan du installerar och använder programmet. Genom att installera eller använda detta program godkänner du dessa villkor.
+
+1. Programvaran är ofärdig
+
+Detta program är ofärdig programvara som fortfarande är under utveckling. Programmet fungerar inte nödvändigtvis korrekt, fullständigt, utan avbrott eller utan fel.
+
+Programmet kan innehålla fel, funktionsstörningar, brister, kompatibilitetsproblem, felaktig behandling av data, oväntat beteende eller andra problem. Programmet bör inte användas i situationer där felaktig funktion kan orsaka skada, ekonomisk förlust, dataförlust, säkerhetsrisker eller annan olägenhet.
+
+2. Användning på egen risk
+
+Användaren installerar och använder programmet helt på egen risk.
+
+Programmets utvecklare, upphovsrättsinnehavaren eller någon annan part som medverkar i distributionen av programmet ansvarar inte för någon skada som orsakas av användning, installation, borttagning, utebliven funktion, felaktig funktion eller någon annan omständighet som rör programmet.
+
+Denna ansvarsfriskrivning omfattar bland annat direkta och indirekta skador, följdskador, ekonomiska förluster, utebliven vinst, dataförlust, skador på hårdvara eller programvara, driftavbrott, felaktiga resultat, skador som orsakas tredje part samt andra möjliga följder.
+
+Programmets utvecklare ansvarar inte för om programmet är lämpligt för användarens ändamål eller om det fungerar på användarens hårdvara, operativsystem eller annan programvarumiljö.
+
+3. Ingen garanti
+
+Programmet tillhandahålls i befintligt skick utan någon uttrycklig eller underförstådd garanti.
+
+Programmets utvecklare lämnar ingen garanti för programmets funktion, felfrihet, säkerhet, fortlöpande tillgänglighet, kompatibilitet, noggrannhet eller lämplighet för något särskilt ändamål.
+
+4. Ingen underhållsskyldighet
+
+Programmets utvecklare har ingen skyldighet att underhålla, uppdatera, korrigera, utveckla, stödja eller fortsätta hålla programvaran tillgänglig.
+
+Programmets utvecklare förbehåller sig rätten att göra ändringar i programmet, ta bort funktioner, lägga till funktioner, ändra programmets funktion eller upphöra med utvecklingen och distributionen av programmet utan särskilt meddelande.
+
+5. Upphovsrätt och andra rättigheter
+
+Detta program, dess namn, källkod, användargränssnitt, funktioner, dokumentation, texter, tekniska lösningar, visuella element och annat material som hör till programmet skyddas av upphovsrätt och andra immateriella rättigheter, om inte annat särskilt anges.
+
+Alla rättigheter förbehålls programmets upphovsman eller annan rättighetsinnehavare.
+
+6. Användningsrätt
+
+Användaren beviljas en begränsad, personlig och icke-exklusiv rätt att installera och använda programmet.
+
+Denna användningsrätt överför inte äganderätt till programmet, dess källkod, namn, dokumentation, tekniska lösningar eller annat material som hör till programmet till användaren.
+
+7. Återförsäljning och distribution
+
+Programmet får inte säljas, återförsäljas, hyras ut, licensieras, utnyttjas kommersiellt, ingå i en avgiftsbelagd produkt eller tjänst, eller på annat sätt överlåtas vidare i kommersiellt syfte utan upphovsrättsinnehavarens skriftliga förhandstillstånd.
+
+Ändring, kopiering, vidare distribution eller publicering av programmet i annan form är tillåten endast om tillstånd har erhållits från upphovsrättsinnehavaren eller om en separat skriftlig licens uttryckligen tillåter det.
+
+8. Ändringar av villkoren
+
+Programmets utvecklare förbehåller sig rätten att ändra dessa användarvillkor och denna ansvarsfriskrivning. Nya villkor gäller för senare versioner och distributioner av programmet.
+
+9. Begränsningar enligt tillämplig lag
+
+Denna ansvarsfriskrivning tillämpas i den största utsträckning som tillämplig lag tillåter. Om någon del av denna text anses ogiltig eller inte verkställbar, ska övriga delar fortsätta att gälla i största möjliga utsträckning enligt lag.
+
+Genom att godkänna dessa villkor bekräftar användaren att de förstår att programmet är ofärdigt, att det används på egen risk och att programmets utvecklare inte ansvarar för fel, brister, skador, förluster eller andra följder som orsakas av användningen av programmet.

@@ -1,0 +1,61 @@
+MORSEWURST
+
+CONDITIONS D'UTILISATION ET CLAUSE DE NON-RESPONSABILITÉ
+
+Veuillez lire attentivement ces conditions avant d'installer et d'utiliser le programme. En installant ou en utilisant ce programme, vous acceptez ces conditions.
+
+1. Logiciel inachevé
+
+Ce programme est un logiciel inachevé et encore en cours de développement. Il peut ne pas fonctionner correctement, complètement, de manière continue ou sans erreur.
+
+Le programme peut contenir des erreurs, dysfonctionnements, lacunes, problèmes de compatibilité, traitements incorrects de données, comportements inattendus ou autres problèmes. Le programme ne doit pas être utilisé dans des situations où un fonctionnement incorrect pourrait causer un dommage, une perte financière, une perte de données, des risques de sécurité ou tout autre préjudice.
+
+2. Utilisation à vos propres risques
+
+L'utilisateur installe et utilise le programme entièrement à ses propres risques.
+
+Le développeur du programme, le titulaire des droits d'auteur ou toute autre partie participant à la distribution du programme ne répond d'aucun dommage résultant de l'utilisation, de l'installation, de la suppression, du non-fonctionnement, du fonctionnement incorrect ou de tout autre élément lié au programme.
+
+Cette clause de non-responsabilité couvre notamment les dommages directs et indirects, les dommages consécutifs, les pertes financières, la perte de bénéfices, la perte de données, les dommages matériels ou logiciels, les interruptions de service, les résultats incorrects, les dommages causés à des tiers ainsi que toute autre conséquence possible.
+
+Le développeur du programme ne garantit pas que le programme convient à l'usage prévu par l'utilisateur ni qu'il fonctionne sur son matériel, son système d'exploitation ou tout autre environnement logiciel.
+
+3. Aucune garantie
+
+Le programme est fourni tel quel, sans aucune garantie expresse ou implicite.
+
+Le développeur du programme ne donne aucune garantie quant au fonctionnement, à l'absence d'erreurs, à la sécurité, à la disponibilité continue, à la compatibilité, à l'exactitude ou à l'adéquation du programme à un usage particulier.
+
+4. Aucune obligation de maintenance
+
+Le développeur du programme n'a aucune obligation de maintenir, mettre à jour, corriger, développer, prendre en charge ou continuer à rendre le logiciel disponible.
+
+Le développeur du programme se réserve le droit de modifier le programme, de supprimer des fonctionnalités, d'en ajouter, de modifier son fonctionnement ou de cesser son développement et sa distribution sans avis distinct.
+
+5. Droits d'auteur et autres droits
+
+Ce programme, son nom, son code source, son interface utilisateur, ses fonctionnalités, sa documentation, ses textes, ses solutions techniques, ses éléments visuels et tout autre matériel lié au programme sont protégés par le droit d'auteur et d'autres droits de propriété intellectuelle, sauf indication contraire distincte.
+
+Tous les droits sont réservés à l'auteur du programme ou à tout autre titulaire des droits.
+
+6. Droit d'utilisation
+
+L'utilisateur reçoit un droit limité, personnel et non exclusif d'installer et d'utiliser le programme.
+
+Ce droit d'utilisation ne transfère à l'utilisateur aucun droit de propriété sur le programme, son code source, son nom, sa documentation, ses solutions techniques ou tout autre matériel lié au programme.
+
+7. Revente et distribution
+
+Le programme ne peut pas être vendu, revendu, loué, concédé sous licence, exploité commercialement, intégré dans un produit ou service payant, ni autrement transféré à des fins commerciales sans l'autorisation écrite préalable du titulaire des droits d'auteur.
+
+La modification, la copie, la redistribution ou la publication du programme sous une autre forme n'est autorisée que si l'autorisation du titulaire des droits d'auteur a été obtenue ou si une licence écrite distincte l'autorise expressément.
+
+8. Modifications des conditions
+
+Le développeur du programme se réserve le droit de modifier ces conditions d'utilisation et cette clause de non-responsabilité. Les nouvelles conditions s'appliquent aux versions et distributions ultérieures du programme.
+
+9. Limites prévues par la loi applicable
+
+Cette clause de non-responsabilité s'applique dans toute la mesure permise par la loi applicable. Si une partie de ce texte est jugée invalide ou inapplicable, les autres parties restent en vigueur dans toute la mesure permise par la loi.
+
+En acceptant ces conditions, l'utilisateur confirme comprendre que le programme est inachevé, qu'il est utilisé à ses propres risques et que le développeur du programme n'est pas responsable des erreurs, défauts, dommages, pertes ou autres conséquences résultant de l'utilisation du programme.

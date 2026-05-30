@@ -1,14 +1,10 @@
 {
   "app": "Morsewurst",
-  "latest_version": "0.99.11.2",
-  "release_date": "2026-05-29",
-  "release_url": "https://github.com/kasperikoski/morsewurst/releases/tag/v0.99.11.2",
+  "latest_version": "0.99.11.3",
+  "release_date": "2026-05-31",
+  "release_url": "https://github.com/kasperikoski/morsewurst/releases/tag/v0.99.11.3",
   "download_url": "https://kasperikoski.fi/morsewurst",
   "release_notes": [
-    "Fixed editable Target WPM spinboxes so values can be selected, cleared and typed normally.",
-    "Improved settings window closing by saving UI settings asynchronously and avoiding heavy history refresh work during close.",
-    "Changed the update prompt to open the configured download page before falling back to the GitHub release page.",
-    "Improved update manifest handling for download URL fallback behaviour.",
     "General bug fixes, stability improvements and user experience refinements."
   ]
 }

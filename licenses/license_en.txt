@@ -1,0 +1,61 @@
+MORSEWURST
+
+TERMS OF USE AND DISCLAIMER
+
+Read these terms carefully before installing and using the program. By installing or using this program, you accept these terms.
+
+1. Unfinished software
+
+This program is unfinished software that is still under development. The program may not work correctly, completely, continuously or without errors.
+
+The program may contain errors, malfunctions, omissions, compatibility problems, incorrect handling of data, unexpected behavior or other issues. The program should not be used in situations where incorrect operation could cause damage, financial loss, loss of data, security risks or other harm.
+
+2. Use at your own risk
+
+The user installs and uses the program entirely at their own risk.
+
+The developer of the program, the copyright holder or any other party involved in distributing the program is not liable for any damage arising from the use, installation, removal, non-functioning, incorrect functioning or any other matter related to the program.
+
+This disclaimer applies, among other things, to direct and indirect damage, consequential damage, financial losses, lost profit, loss of data, hardware or software damage, downtime, incorrect results, damage caused to third parties and any other possible consequences.
+
+The developer of the program is not responsible for whether the program is suitable for the user's purpose or whether it works on the user's hardware, operating system or other software environment.
+
+3. No warranty
+
+The program is provided as is, without any express or implied warranty.
+
+The developer of the program gives no warranty regarding the program's functionality, correctness, security, continuous availability, compatibility, accuracy or suitability for any particular purpose.
+
+4. No maintenance obligation
+
+The developer of the program has no obligation to maintain, update, fix, develop, support or continue making the software available.
+
+The developer of the program reserves the right to make changes to the program, remove features, add features, change the operation of the program or stop developing and distributing the program without separate notice.
+
+5. Copyright and other rights
+
+This program, its name, source code, user interface, functionality, documentation, texts, technical solutions, visual elements and other material related to the program are protected by copyright and other intellectual property rights, unless separately stated otherwise.
+
+All rights are reserved to the author of the program or another rights holder.
+
+6. Right of use
+
+The user is granted a limited, personal and non-exclusive right to install and use the program.
+
+This right of use does not transfer to the user any ownership of the program, its source code, name, documentation, technical solutions or other material related to the program.
+
+7. Resale and distribution
+
+The program may not be sold, resold, rented, licensed, commercially exploited, included in a paid product or service, or otherwise transferred onward for a commercial purpose without the prior written permission of the copyright holder.
+
+Modifying, copying, redistributing or publishing the program in another form is permitted only if permission has been obtained from the copyright holder or if a separate written license expressly permits it.
+
+8. Changes to the terms
+
+The developer of the program reserves the right to change these terms of use and this disclaimer. New terms apply to later versions and distributions of the program.
+
+9. Limitations under applicable law
+
+This disclaimer applies to the fullest extent permitted by applicable law. If any part of this text is found to be invalid or unenforceable, the remaining parts remain in force to the fullest extent permitted by law.
+
+By accepting these terms, the user confirms that they understand that the program is unfinished, that it is used at their own risk, and that the developer of the program is not liable for errors, defects, damage, losses or other consequences arising from the use of the program.

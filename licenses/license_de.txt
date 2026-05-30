@@ -1,0 +1,61 @@
+MORSEWURST
+
+NUTZUNGSBEDINGUNGEN UND HAFTUNGSAUSSCHLUSS
+
+Lesen Sie diese Bedingungen sorgfältig, bevor Sie das Programm installieren und verwenden. Durch die Installation oder Nutzung dieses Programms akzeptieren Sie diese Bedingungen.
+
+1. Unfertige Software
+
+Dieses Programm ist unfertige Software und befindet sich noch in der Entwicklung. Das Programm funktioniert möglicherweise nicht korrekt, vollständig, ohne Unterbrechungen oder fehlerfrei.
+
+Das Programm kann Fehler, Funktionsstörungen, Mängel, Kompatibilitätsprobleme, fehlerhafte Datenverarbeitung, unerwartetes Verhalten oder andere Probleme enthalten. Das Programm sollte nicht in Situationen verwendet werden, in denen eine fehlerhafte Funktion Schäden, finanzielle Verluste, Datenverlust, Sicherheitsrisiken oder andere Nachteile verursachen könnte.
+
+2. Nutzung auf eigene Gefahr
+
+Der Benutzer installiert und verwendet das Programm vollständig auf eigene Gefahr.
+
+Der Entwickler des Programms, der Urheberrechtsinhaber oder eine andere an der Verbreitung des Programms beteiligte Partei haftet nicht für Schäden, die durch die Nutzung, Installation, Entfernung, Nichtfunktion, fehlerhafte Funktion oder sonstige Umstände im Zusammenhang mit dem Programm entstehen.
+
+Dieser Haftungsausschluss umfasst unter anderem direkte und indirekte Schäden, Folgeschäden, finanzielle Verluste, entgangenen Gewinn, Datenverlust, Schäden an Hardware oder Software, Betriebsunterbrechungen, fehlerhafte Ergebnisse, Schäden bei Dritten sowie andere mögliche Folgen.
+
+Der Entwickler des Programms haftet nicht dafür, ob das Programm für den Zweck des Benutzers geeignet ist oder ob es auf der Hardware, dem Betriebssystem oder in einer anderen Softwareumgebung des Benutzers funktioniert.
+
+3. Keine Gewährleistung
+
+Das Programm wird wie besehen ohne ausdrückliche oder stillschweigende Gewährleistung bereitgestellt.
+
+Der Entwickler des Programms übernimmt keine Gewähr für die Funktionsfähigkeit, Fehlerfreiheit, Sicherheit, ständige Verfügbarkeit, Kompatibilität, Genauigkeit oder Eignung des Programms für einen bestimmten Zweck.
+
+4. Keine Wartungspflicht
+
+Der Entwickler des Programms ist nicht verpflichtet, die Software zu warten, zu aktualisieren, zu korrigieren, weiterzuentwickeln, zu unterstützen oder weiterhin verfügbar zu machen.
+
+Der Entwickler des Programms behält sich das Recht vor, Änderungen am Programm vorzunehmen, Funktionen zu entfernen, Funktionen hinzuzufügen, die Funktionsweise des Programms zu ändern oder die Entwicklung und Verbreitung des Programms ohne gesonderte Mitteilung einzustellen.
+
+5. Urheberrechte und andere Rechte
+
+Dieses Programm, sein Name, Quellcode, seine Benutzeroberfläche, Funktionen, Dokumentation, Texte, technischen Lösungen, visuellen Elemente und sonstiges Material im Zusammenhang mit dem Programm sind urheberrechtlich und durch andere Rechte des geistigen Eigentums geschützt, sofern nicht ausdrücklich etwas anderes angegeben ist.
+
+Alle Rechte bleiben dem Autor des Programms oder einem anderen Rechteinhaber vorbehalten.
+
+6. Nutzungsrecht
+
+Dem Benutzer wird ein beschränktes, persönliches und nicht ausschließliches Recht eingeräumt, das Programm zu installieren und zu verwenden.
+
+Dieses Nutzungsrecht überträgt dem Benutzer kein Eigentum am Programm, seinem Quellcode, Namen, seiner Dokumentation, seinen technischen Lösungen oder sonstigem Material im Zusammenhang mit dem Programm.
+
+7. Weiterverkauf und Verbreitung
+
+Das Programm darf ohne vorherige schriftliche Genehmigung des Urheberrechtsinhabers nicht verkauft, weiterverkauft, vermietet, lizenziert, kommerziell genutzt, in ein kostenpflichtiges Produkt oder einen kostenpflichtigen Dienst aufgenommen oder anderweitig zu kommerziellen Zwecken weitergegeben werden.
+
+Das Ändern, Kopieren, Weiterverbreiten oder Veröffentlichen des Programms in anderer Form ist nur zulässig, wenn die Genehmigung des Urheberrechtsinhabers eingeholt wurde oder wenn eine gesonderte schriftliche Lizenz dies ausdrücklich erlaubt.
+
+8. Änderungen der Bedingungen
+
+Der Entwickler des Programms behält sich das Recht vor, diese Nutzungsbedingungen und diesen Haftungsausschluss zu ändern. Neue Bedingungen gelten für spätere Versionen und Verbreitungen des Programms.
+
+9. Einschränkungen nach geltendem Recht
+
+Dieser Haftungsausschluss gilt im größtmöglichen nach geltendem Recht zulässigen Umfang. Sollte ein Teil dieses Textes als ungültig oder nicht durchsetzbar angesehen werden, bleiben die übrigen Teile im größtmöglichen gesetzlich zulässigen Umfang in Kraft.
+
+Mit der Annahme dieser Bedingungen bestätigt der Benutzer, dass er versteht, dass das Programm unfertig ist, auf eigene Gefahr verwendet wird und der Entwickler des Programms nicht für Fehler, Mängel, Schäden, Verluste oder andere Folgen haftet, die sich aus der Nutzung des Programms ergeben.

@@ -1,0 +1,61 @@
+MORSEWURST
+
+TERMOS DE UTILIZAÇÃO E EXCLUSÃO DE RESPONSABILIDADE
+
+Leia atentamente estes termos antes de instalar e utilizar o programa. Ao instalar ou utilizar este programa, aceita estes termos.
+
+1. Software inacabado
+
+Este programa é software inacabado e ainda se encontra em fase de desenvolvimento. O programa pode não funcionar corretamente, de forma completa, sem interrupções ou sem erros.
+
+O programa pode conter erros, avarias, omissões, problemas de compatibilidade, tratamento incorreto de dados, comportamento inesperado ou outros problemas. O programa não deve ser utilizado em situações em que o funcionamento incorreto possa causar danos, perdas financeiras, perda de dados, riscos de segurança ou outro prejuízo.
+
+2. Utilização por sua conta e risco
+
+O utilizador instala e utiliza o programa inteiramente por sua conta e risco.
+
+O programador do programa, o titular dos direitos de autor ou qualquer outra parte envolvida na distribuição do programa não é responsável por quaisquer danos resultantes da utilização, instalação, remoção, falta de funcionamento, funcionamento incorreto ou qualquer outro aspeto relacionado com o programa.
+
+Esta exclusão de responsabilidade abrange, entre outros, danos diretos e indiretos, danos consequenciais, perdas financeiras, lucros cessantes, perda de dados, danos em hardware ou software, interrupções de utilização, resultados incorretos, danos causados a terceiros e quaisquer outras consequências possíveis.
+
+O programador do programa não é responsável por saber se o programa é adequado ao propósito do utilizador ou se funciona no hardware, sistema operativo ou outro ambiente de software do utilizador.
+
+3. Sem garantia
+
+O programa é fornecido tal como está, sem qualquer garantia expressa ou implícita.
+
+O programador do programa não dá qualquer garantia quanto ao funcionamento, ausência de erros, segurança, disponibilidade contínua, compatibilidade, exatidão ou adequação do programa a qualquer finalidade específica.
+
+4. Sem obrigação de manutenção
+
+O programador do programa não tem obrigação de manter, atualizar, corrigir, desenvolver, apoiar ou continuar a disponibilizar o software.
+
+O programador do programa reserva-se o direito de alterar o programa, remover funcionalidades, adicionar funcionalidades, alterar o funcionamento do programa ou cessar o desenvolvimento e a distribuição do programa sem aviso separado.
+
+5. Direitos de autor e outros direitos
+
+Este programa, o seu nome, código-fonte, interface de utilizador, funcionalidades, documentação, textos, soluções técnicas, elementos visuais e outro material relacionado com o programa estão protegidos por direitos de autor e outros direitos de propriedade intelectual, salvo indicação separada em contrário.
+
+Todos os direitos são reservados ao autor do programa ou a outro titular de direitos.
+
+6. Direito de utilização
+
+É concedido ao utilizador um direito limitado, pessoal e não exclusivo de instalar e utilizar o programa.
+
+Este direito de utilização não transfere para o utilizador qualquer propriedade sobre o programa, o seu código-fonte, nome, documentação, soluções técnicas ou outro material relacionado com o programa.
+
+7. Revenda e distribuição
+
+O programa não pode ser vendido, revendido, alugado, licenciado, explorado comercialmente, incluído num produto ou serviço pago, nem de outra forma transferido para fins comerciais sem autorização prévia por escrito do titular dos direitos de autor.
+
+A modificação, cópia, redistribuição ou publicação do programa noutra forma só é permitida se tiver sido obtida autorização do titular dos direitos de autor ou se uma licença escrita separada o permitir expressamente.
+
+8. Alterações aos termos
+
+O programador do programa reserva-se o direito de alterar estes termos de utilização e esta exclusão de responsabilidade. Os novos termos aplicam-se a versões e distribuições posteriores do programa.
+
+9. Limitações da lei aplicável
+
+Esta exclusão de responsabilidade aplica-se na medida mais ampla permitida pela lei aplicável. Se qualquer parte deste texto for considerada inválida ou inexequível, as restantes partes permanecem em vigor na medida mais ampla permitida por lei.
+
+Ao aceitar estes termos, o utilizador confirma que compreende que o programa é inacabado, que é utilizado por sua conta e risco e que o programador do programa não é responsável por erros, defeitos, danos, perdas ou outras consequências resultantes da utilização do programa.

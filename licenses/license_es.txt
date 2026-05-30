@@ -1,0 +1,61 @@
+MORSEWURST
+
+CONDICIONES DE USO Y EXENCIÓN DE RESPONSABILIDAD
+
+Lea atentamente estas condiciones antes de instalar y utilizar el programa. Al instalar o utilizar este programa, acepta estas condiciones.
+
+1. Software inacabado
+
+Este programa es un software inacabado y aún en fase de desarrollo. Es posible que el programa no funcione correctamente, de forma completa, sin interrupciones o sin errores.
+
+El programa puede contener errores, fallos de funcionamiento, deficiencias, problemas de compatibilidad, tratamiento incorrecto de datos, comportamiento inesperado u otros problemas. El programa no debe utilizarse en situaciones en las que un funcionamiento incorrecto pueda causar daños, pérdidas económicas, pérdida de datos, riesgos de seguridad u otros perjuicios.
+
+2. Uso bajo su propio riesgo
+
+El usuario instala y utiliza el programa completamente bajo su propio riesgo.
+
+El desarrollador del programa, el titular de los derechos de autor o cualquier otra parte que participe en la distribución del programa no será responsable de ningún daño causado por el uso, la instalación, la eliminación, la falta de funcionamiento, el funcionamiento incorrecto o cualquier otro asunto relacionado con el programa.
+
+Esta exención de responsabilidad se aplica, entre otros, a daños directos e indirectos, daños consecuenciales, pérdidas económicas, lucro cesante, pérdida de datos, daños en hardware o software, interrupciones de uso, resultados incorrectos, daños causados a terceros y cualquier otra consecuencia posible.
+
+El desarrollador del programa no se responsabiliza de que el programa sea adecuado para el propósito del usuario ni de que funcione en el hardware, sistema operativo u otro entorno de software del usuario.
+
+3. Sin garantía
+
+El programa se proporciona tal cual, sin ninguna garantía expresa o implícita.
+
+El desarrollador del programa no ofrece garantía alguna sobre el funcionamiento, ausencia de errores, seguridad, disponibilidad continua, compatibilidad, exactitud o idoneidad del programa para ningún propósito concreto.
+
+4. Sin obligación de mantenimiento
+
+El desarrollador del programa no tiene obligación de mantener, actualizar, corregir, desarrollar, prestar soporte ni seguir poniendo el software a disposición.
+
+El desarrollador del programa se reserva el derecho de realizar cambios en el programa, eliminar funciones, añadir funciones, modificar el funcionamiento del programa o dejar de desarrollar y distribuir el programa sin aviso separado.
+
+5. Derechos de autor y otros derechos
+
+Este programa, su nombre, código fuente, interfaz de usuario, funcionalidades, documentación, textos, soluciones técnicas, elementos visuales y demás material relacionado con el programa están protegidos por derechos de autor y otros derechos de propiedad intelectual, salvo que se indique expresamente lo contrario.
+
+Todos los derechos quedan reservados al autor del programa o a otro titular de derechos.
+
+6. Derecho de uso
+
+Se concede al usuario un derecho limitado, personal y no exclusivo para instalar y utilizar el programa.
+
+Este derecho de uso no transfiere al usuario la propiedad del programa, su código fuente, nombre, documentación, soluciones técnicas ni ningún otro material relacionado con el programa.
+
+7. Reventa y distribución
+
+El programa no puede venderse, revenderse, alquilarse, licenciarse, explotarse comercialmente, incluirse en un producto o servicio de pago ni transferirse de otro modo con fines comerciales sin el permiso previo y por escrito del titular de los derechos de autor.
+
+La modificación, copia, redistribución o publicación del programa en otra forma solo está permitida si se ha obtenido permiso del titular de los derechos de autor o si una licencia escrita separada lo permite expresamente.
+
+8. Cambios en las condiciones
+
+El desarrollador del programa se reserva el derecho de modificar estas condiciones de uso y esta exención de responsabilidad. Las nuevas condiciones se aplican a versiones y distribuciones posteriores del programa.
+
+9. Limitaciones de la ley aplicable
+
+Esta exención de responsabilidad se aplica en la medida más amplia permitida por la ley aplicable. Si alguna parte de este texto se considera inválida o inaplicable, las demás partes seguirán en vigor en la mayor medida permitida por la ley.
+
+Al aceptar estas condiciones, el usuario confirma que entiende que el programa está inacabado, que se utiliza bajo su propio riesgo y que el desarrollador del programa no responde por errores, defectos, daños, pérdidas u otras consecuencias derivadas del uso del programa.
