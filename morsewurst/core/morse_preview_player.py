@@ -5,10 +5,17 @@
 from __future__ import annotations
 
 import threading
-from typing import Optional
+from typing import Any, Optional
 
-import numpy as np
-import sounddevice as sd
+try:
+    import numpy as np
+except ImportError:
+    np = None
+
+try:
+    import sounddevice as sd
+except ImportError:
+    sd = None
 
 
 MORSE_PREVIEW_CODE: dict[str, str] = {
@@ -74,8 +81,8 @@ class MorsePreviewPlayer:
         self.samplerate = int(samplerate)
         self.blocksize = int(blocksize)
 
-        self._stream: Optional[sd.OutputStream] = None
-        self._audio: Optional[np.ndarray] = None
+        self._stream: Optional[Any] = None
+        self._audio: Optional[Any] = None
         self._position = 0
         self._lock = threading.RLock()
 
@@ -85,6 +92,13 @@ class MorsePreviewPlayer:
         return stream is not None and bool(stream.active)
 
     def start(self, *, wpm: int) -> None:
+
+        if np is None:
+            raise RuntimeError("numpy is missing. Install: python -m pip install numpy")
+
+        if sd is None:
+            raise RuntimeError("sounddevice is missing. Install: python -m pip install sounddevice")
+
         with self._lock:
             self.stop()
 

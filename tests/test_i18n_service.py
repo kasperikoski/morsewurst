@@ -77,6 +77,8 @@ def _format_expectations_from_catalog(catalog: dict[str, Any]) -> dict[str, list
 ENGLISH_CATALOG = _load_catalog("en")
 REQUIRED_KEYS = list(ENGLISH_CATALOG.keys())
 FORMAT_EXPECTATIONS = _format_expectations_from_catalog(ENGLISH_CATALOG)
+ALL_SUPPORTED_LANGUAGES = tuple(I18nService().language_options().keys())
+NON_ENGLISH_LANGUAGES = tuple(language for language in ALL_SUPPORTED_LANGUAGES if language != "en")
 
 
 def _format_values(placeholders: list[str]) -> dict[str, Any]:
@@ -407,6 +409,52 @@ def test_format_placeholders_match_english_catalog() -> None:
                     f"{language}:{key} placeholders {translated_placeholders!r} "
                     f"do not match English {english_placeholders!r}"
                 )
+
+        assert failures == []
+
+
+def test_all_supported_catalogs_match_english_keys_and_placeholders() -> None:
+    english = _load_catalog("en")
+    english_keys = list(english.keys())
+
+    for language in NON_ENGLISH_LANGUAGES:
+        catalog = _load_catalog(language)
+        failures: list[str] = []
+
+        if list(catalog.keys()) != english_keys:
+            failures.append(f"{language}: key order differs from en.json")
+
+        extra = sorted(set(catalog) - set(english))
+        missing = sorted(set(english) - set(catalog))
+        if extra:
+            failures.append(f"{language}: extra keys {extra!r}")
+        if missing:
+            failures.append(f"{language}: missing keys {missing!r}")
+
+        for key in english_keys:
+            english_placeholders = _placeholder_names(str(english.get(key, "")))
+            translated_placeholders = _placeholder_names(str(catalog.get(key, "")))
+
+            if translated_placeholders != english_placeholders:
+                failures.append(
+                    f"{language}:{key} placeholders {translated_placeholders!r} "
+                    f"do not match English {english_placeholders!r}"
+                )
+
+        assert failures == []
+
+
+def test_all_supported_format_strings_render() -> None:
+    for language in ALL_SUPPORTED_LANGUAGES:
+        service = I18nService(language)
+        failures: list[str] = []
+
+        for key, placeholders in FORMAT_EXPECTATIONS.items():
+            values = _format_values(placeholders)
+            rendered = service.t(key, **values)
+
+            if "{" in rendered or "}" in rendered:
+                failures.append(f"{language}:{key} rendered as {rendered!r}")
 
         assert failures == []
 

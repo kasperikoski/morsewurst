@@ -17,8 +17,8 @@ from morsewurst.ui.network_matrix_theme import (
 
 class CallsignViewMixin:
     def _needs_first_callsign(self) -> bool:
-        if not self.settings_file_exists:
-            return True
+        if self.settings_file_exists:
+            return False
         return sanitize_callsign(self.settings.callsign) == "Morsewurst"
 
     def show_callsign_view(self) -> None:

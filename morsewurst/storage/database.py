@@ -70,7 +70,9 @@ class Database:
             )
 
         self.init_schema()
+        self._ensure_current_schema_columns()
         self._ensure_practice_tracking_schema()
+        self.ensure_koch_schema()
         self.ensure_practice_consistency()
         self.mark_in_progress_practices_interrupted()
         self._write_schema_version()
@@ -106,10 +108,17 @@ class Database:
         return row is not None
 
     def _prepare_existing_database_for_current_schema(self) -> None:
-        if not self._table_exists("sessions"):
-            return
+        """Bring an existing profile database up to the current additive schema.
 
+        This is not legacy data conversion. It only creates the current tables
+        and adds current columns that are missing from an otherwise usable
+        profile database before the compatibility check runs.
+        """
+
+        self.init_schema()
+        self._ensure_current_schema_columns()
         self._ensure_practice_tracking_schema()
+        self.ensure_koch_schema()
         self.ensure_practice_consistency()
 
     def _ensure_practice_tracking_schema(self) -> None:
@@ -164,7 +173,674 @@ class Database:
         )
 
         self.conn.commit()
-    
+
+
+    def _ensure_current_schema_columns(self) -> None:
+        """Add missing columns for the current non-Koch schema.
+
+        ``CREATE TABLE IF NOT EXISTS`` is enough for fresh databases, but it does
+        not update an existing table. This guard keeps an existing profile usable
+        when the current schema gains additive columns.
+        """
+
+        cur = self.conn.cursor()
+
+        def add_column_if_missing(
+            *,
+            table: str,
+            known_columns: set[str],
+            column: str,
+            definition: str,
+        ) -> None:
+            if column in known_columns:
+                return
+
+            cur.execute(f"ALTER TABLE {table} ADD COLUMN {definition}")
+            known_columns.add(column)
+
+        def add_columns(table: str, definitions: list[tuple[str, str]]) -> None:
+            if not self._table_exists(table):
+                return
+
+            known_columns = self._column_names(table)
+            for column, definition in definitions:
+                add_column_if_missing(
+                    table=table,
+                    known_columns=known_columns,
+                    column=column,
+                    definition=definition,
+                )
+
+        add_columns(
+            "practices",
+            [
+                ("started_at", "started_at TEXT NOT NULL DEFAULT ''"),
+                ("finished_at", "finished_at TEXT"),
+                ("status", "status TEXT NOT NULL DEFAULT 'in_progress'"),
+                ("planned_rounds", "planned_rounds INTEGER NOT NULL DEFAULT 1"),
+                ("completed_rounds", "completed_rounds INTEGER NOT NULL DEFAULT 0"),
+                ("total_elapsed_us", "total_elapsed_us INTEGER NOT NULL DEFAULT 0"),
+                ("total_standard_time_us", "total_standard_time_us INTEGER NOT NULL DEFAULT 0"),
+                ("settings_json", "settings_json TEXT NOT NULL DEFAULT '{}'"),
+            ],
+        )
+
+        add_columns(
+            "sessions",
+            [
+                ("started_at", "started_at TEXT NOT NULL DEFAULT ''"),
+                ("finished_at", "finished_at TEXT NOT NULL DEFAULT ''"),
+                ("target", "target TEXT NOT NULL DEFAULT ''"),
+                ("entered", "entered TEXT NOT NULL DEFAULT ''"),
+                ("source", "source TEXT NOT NULL DEFAULT ''"),
+                ("finish_reason", "finish_reason TEXT NOT NULL DEFAULT ''"),
+                ("practice_id", "practice_id INTEGER"),
+                ("round_number", "round_number INTEGER NOT NULL DEFAULT 1"),
+                ("accuracy", "accuracy REAL NOT NULL DEFAULT 0"),
+                ("cleanliness", "cleanliness REAL NOT NULL DEFAULT 0"),
+                ("overall_score", "overall_score REAL NOT NULL DEFAULT 0"),
+                ("speed_score", "speed_score REAL"),
+                ("timing_score", "timing_score REAL"),
+                ("timing_element_score", "timing_element_score REAL"),
+                ("timing_gap_score", "timing_gap_score REAL"),
+                ("timing_ratio_score", "timing_ratio_score REAL"),
+                ("timing_dot_consistency", "timing_dot_consistency REAL"),
+                ("timing_dash_consistency", "timing_dash_consistency REAL"),
+                ("timing_intra_gap_score", "timing_intra_gap_score REAL"),
+                ("timing_letter_gap_score", "timing_letter_gap_score REAL"),
+                ("timing_word_gap_score", "timing_word_gap_score REAL"),
+                ("profile_eligible", "profile_eligible INTEGER NOT NULL DEFAULT 1"),
+                ("profile_reject_reason", "profile_reject_reason TEXT"),
+                ("profile_max_element_units", "profile_max_element_units REAL"),
+                ("profile_max_gap_units", "profile_max_gap_units REAL"),
+                ("correct_count", "correct_count INTEGER NOT NULL DEFAULT 0"),
+                ("error_count", "error_count INTEGER NOT NULL DEFAULT 0"),
+                ("substitutions", "substitutions INTEGER NOT NULL DEFAULT 0"),
+                ("insertions", "insertions INTEGER NOT NULL DEFAULT 0"),
+                ("deletions", "deletions INTEGER NOT NULL DEFAULT 0"),
+                ("length_target", "length_target INTEGER NOT NULL DEFAULT 0"),
+                ("length_entered", "length_entered INTEGER NOT NULL DEFAULT 0"),
+                ("elapsed_us", "elapsed_us INTEGER"),
+                ("standard_time_us", "standard_time_us INTEGER"),
+                ("time_ok", "time_ok INTEGER"),
+                ("avg_wpm", "avg_wpm REAL"),
+                ("gross_wpm", "gross_wpm REAL"),
+                ("net_wpm", "net_wpm REAL"),
+                ("avg_dit_us", "avg_dit_us REAL"),
+                ("dit_sd_us", "dit_sd_us REAL"),
+                ("straight_dot_us", "straight_dot_us REAL"),
+                ("straight_dot_sd_us", "straight_dot_sd_us REAL"),
+                ("straight_dash_us", "straight_dash_us REAL"),
+                ("straight_dash_sd_us", "straight_dash_sd_us REAL"),
+                ("straight_dash_dot_ratio", "straight_dash_dot_ratio REAL"),
+                ("avg_letter_gap_us", "avg_letter_gap_us REAL"),
+                ("letter_gap_sd_us", "letter_gap_sd_us REAL"),
+                ("avg_word_gap_us", "avg_word_gap_us REAL"),
+                ("word_gap_sd_us", "word_gap_sd_us REAL"),
+                ("settings_json", "settings_json TEXT NOT NULL DEFAULT '{}'"),
+            ],
+        )
+
+        add_columns(
+            "events",
+            [
+                ("session_id", "session_id INTEGER NOT NULL DEFAULT 0"),
+                ("event_index", "event_index INTEGER NOT NULL DEFAULT 0"),
+                ("event_type", "event_type TEXT NOT NULL DEFAULT ''"),
+                ("event_json", "event_json TEXT NOT NULL DEFAULT '{}'"),
+            ],
+        )
+
+        add_columns(
+            "char_results",
+            [
+                ("session_id", "session_id INTEGER NOT NULL DEFAULT 0"),
+                ("position_index", "position_index INTEGER NOT NULL DEFAULT 0"),
+                ("target_char", "target_char TEXT"),
+                ("entered_char", "entered_char TEXT"),
+                ("result", "result TEXT NOT NULL DEFAULT ''"),
+                ("entered_code", "entered_code TEXT"),
+                ("source", "source TEXT"),
+                ("char_time_us", "char_time_us INTEGER"),
+                ("first_element_us", "first_element_us INTEGER"),
+                ("last_element_us", "last_element_us INTEGER"),
+                ("gap_before_us", "gap_before_us INTEGER"),
+                ("gap_before_units", "gap_before_units REAL"),
+                ("gap_kind", "gap_kind TEXT"),
+                ("element_unit_us", "element_unit_us REAL"),
+                ("gap_unit_us", "gap_unit_us REAL"),
+                ("wpm", "wpm REAL"),
+            ],
+        )
+
+        add_columns(
+            "skill_rating_snapshots",
+            [
+                ("created_at", "created_at TEXT NOT NULL DEFAULT ''"),
+                ("session_id", "session_id INTEGER"),
+                ("model_version", "model_version INTEGER NOT NULL DEFAULT 1"),
+                ("recent_sessions", "recent_sessions INTEGER NOT NULL DEFAULT 0"),
+                ("total_rounds", "total_rounds INTEGER NOT NULL DEFAULT 0"),
+                ("used_rounds", "used_rounds INTEGER NOT NULL DEFAULT 0"),
+                ("effective_wpm", "effective_wpm REAL"),
+                ("avg_accuracy", "avg_accuracy REAL"),
+                ("avg_cleanliness", "avg_cleanliness REAL"),
+                ("quality_factor", "quality_factor REAL NOT NULL DEFAULT 0"),
+                ("character_mastery_factor", "character_mastery_factor REAL NOT NULL DEFAULT 0"),
+                ("coverage_factor", "coverage_factor REAL NOT NULL DEFAULT 0"),
+                ("timing_stability_factor", "timing_stability_factor REAL NOT NULL DEFAULT 0"),
+                ("sample_confidence", "sample_confidence REAL NOT NULL DEFAULT 0"),
+                ("rating_confidence", "rating_confidence REAL NOT NULL DEFAULT 0"),
+                ("mastery_adjustment", "mastery_adjustment REAL NOT NULL DEFAULT 1"),
+                ("raw_skill", "raw_skill REAL"),
+                ("level", "level INTEGER NOT NULL DEFAULT 1"),
+                ("level_progress", "level_progress REAL NOT NULL DEFAULT 0"),
+                ("title", "title TEXT NOT NULL DEFAULT ''"),
+                ("details_json", "details_json TEXT NOT NULL DEFAULT '{}'"),
+            ],
+        )
+
+        add_columns(
+            "problem_stats",
+            [
+                ("attempts", "attempts INTEGER NOT NULL DEFAULT 0"),
+                ("errors", "errors INTEGER NOT NULL DEFAULT 0"),
+                ("last_seen_at", "last_seen_at TEXT NOT NULL DEFAULT ''"),
+            ],
+        )
+
+        add_columns(
+            "timing_profile_state",
+            [
+                ("updated_at", "updated_at TEXT NOT NULL DEFAULT ''"),
+                ("element_unit_us", "element_unit_us REAL"),
+                ("gap_unit_us", "gap_unit_us REAL"),
+                ("dot_us", "dot_us REAL"),
+                ("dash_us", "dash_us REAL"),
+                ("dash_dot_ratio", "dash_dot_ratio REAL"),
+                ("letter_gap_us", "letter_gap_us REAL"),
+                ("word_gap_us", "word_gap_us REAL"),
+                ("element_confidence", "element_confidence REAL NOT NULL DEFAULT 0"),
+                ("gap_confidence", "gap_confidence REAL NOT NULL DEFAULT 0"),
+                ("sample_rounds", "sample_rounds INTEGER NOT NULL DEFAULT 0"),
+                ("sample_events", "sample_events INTEGER NOT NULL DEFAULT 0"),
+                ("updated_from_session_id", "updated_from_session_id INTEGER"),
+            ],
+        )
+
+        self.conn.commit()
+
+
+    def ensure_koch_schema(self) -> None:
+        """Create Koch receive-practice tables without changing core schema compatibility.
+
+        Koch mode is an additive feature. Missing Koch tables in an existing
+        profile database must never make the old database look incompatible.
+        """
+
+        cur = self.conn.cursor()
+
+        cur.execute(
+            """
+            CREATE TABLE IF NOT EXISTS koch_progress (
+                sequence_key TEXT PRIMARY KEY,
+                guided_unlocked_stage INTEGER NOT NULL DEFAULT 2,
+                guided_current_stage INTEGER NOT NULL DEFAULT 2,
+                guided_fail_streak INTEGER NOT NULL DEFAULT 0,
+                guided_fail_stage INTEGER,
+                last_demoted_from_stage INTEGER,
+                last_demoted_to_stage INTEGER,
+                last_demoted_at TEXT,
+                total_sessions INTEGER NOT NULL DEFAULT 0,
+                total_practice_seconds INTEGER NOT NULL DEFAULT 0,
+                last_session_id INTEGER,
+                updated_at TEXT NOT NULL
+            )
+            """
+        )
+
+        cur.execute(
+            """
+            CREATE TABLE IF NOT EXISTS koch_sessions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                started_at TEXT NOT NULL,
+                finished_at TEXT NOT NULL,
+                mode TEXT NOT NULL,
+                sequence_key TEXT NOT NULL,
+                stage_index INTEGER NOT NULL,
+                active_chars TEXT NOT NULL,
+                new_stage_char TEXT,
+                target_text TEXT NOT NULL,
+                entered_text TEXT NOT NULL,
+                target_length INTEGER NOT NULL,
+                entered_length INTEGER NOT NULL,
+                character_wpm INTEGER NOT NULL,
+                effective_wpm INTEGER NOT NULL,
+                tone_hz INTEGER NOT NULL DEFAULT 600,
+                volume_percent INTEGER NOT NULL DEFAULT 70,
+                duration_ms INTEGER NOT NULL,
+                pass_accuracy REAL NOT NULL,
+                pass_cleanliness REAL NOT NULL,
+                new_char_min_attempts INTEGER NOT NULL,
+                new_char_min_accuracy REAL NOT NULL,
+                correct_count INTEGER NOT NULL,
+                error_count INTEGER NOT NULL,
+                substitutions INTEGER NOT NULL,
+                insertions INTEGER NOT NULL,
+                deletions INTEGER NOT NULL,
+                accuracy REAL NOT NULL,
+                aligned_accuracy REAL NOT NULL DEFAULT 0,
+                time_aligned_accuracy REAL NOT NULL DEFAULT 0,
+                timing_fit REAL NOT NULL DEFAULT 0,
+                cleanliness REAL NOT NULL,
+                new_char_accuracy REAL,
+                new_char_attempts INTEGER NOT NULL,
+                score REAL NOT NULL,
+                speed_factor REAL NOT NULL,
+                coverage_factor REAL NOT NULL,
+                level_estimate REAL NOT NULL,
+                pass_eligible INTEGER NOT NULL,
+                passed INTEGER NOT NULL,
+                advanced_from_stage INTEGER,
+                advanced_to_stage INTEGER,
+                demoted_from_stage INTEGER,
+                demoted_to_stage INTEGER,
+                demotion_reason TEXT NOT NULL DEFAULT '',
+                guided_fail_streak_after INTEGER NOT NULL DEFAULT 0,
+                pass_reason TEXT NOT NULL,
+                settings_json TEXT NOT NULL,
+                target_schedule_json TEXT NOT NULL DEFAULT '[]'
+            )
+            """
+        )
+
+        cur.execute(
+            """
+            CREATE TABLE IF NOT EXISTS koch_char_results (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                koch_session_id INTEGER NOT NULL,
+                position_index INTEGER NOT NULL,
+                target_char TEXT,
+                entered_char TEXT,
+                result TEXT NOT NULL,
+                target_stage_index INTEGER,
+                is_new_stage_char INTEGER NOT NULL DEFAULT 0,
+                expected_start_ms INTEGER,
+                expected_end_ms INTEGER,
+                typed_at_ms INTEGER,
+                latency_ms INTEGER,
+                timing_weight REAL NOT NULL DEFAULT 1.0,
+                timing_status TEXT NOT NULL DEFAULT '',
+                FOREIGN KEY(koch_session_id) REFERENCES koch_sessions(id)
+            )
+            """
+        )
+
+        cur.execute(
+            """
+            CREATE TABLE IF NOT EXISTS koch_key_events (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                koch_session_id INTEGER NOT NULL,
+                event_index INTEGER NOT NULL,
+                key TEXT NOT NULL,
+                char TEXT,
+                typed_at_ms INTEGER,
+                event_json TEXT NOT NULL,
+                FOREIGN KEY(koch_session_id) REFERENCES koch_sessions(id)
+            )
+            """
+        )
+
+        cur.execute(
+            """
+            CREATE TABLE IF NOT EXISTS koch_progress_snapshots (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                koch_session_id INTEGER NOT NULL,
+                created_at TEXT NOT NULL,
+                sequence_key TEXT NOT NULL,
+                mode TEXT NOT NULL,
+                session_stage_index INTEGER NOT NULL,
+                stage_before INTEGER NOT NULL,
+                stage_after INTEGER NOT NULL,
+                unlocked_before INTEGER NOT NULL,
+                unlocked_after INTEGER NOT NULL,
+                active_chars TEXT NOT NULL,
+                active_char_count INTEGER NOT NULL,
+                target_length INTEGER NOT NULL,
+                entered_length INTEGER NOT NULL,
+                character_wpm INTEGER NOT NULL,
+                effective_wpm INTEGER NOT NULL,
+                tone_hz INTEGER NOT NULL,
+                volume_percent INTEGER NOT NULL,
+                duration_ms INTEGER NOT NULL,
+                pass_accuracy REAL NOT NULL,
+                pass_cleanliness REAL NOT NULL,
+                new_char_min_attempts INTEGER NOT NULL,
+                new_char_min_accuracy REAL NOT NULL,
+                guided_fail_streak_before INTEGER NOT NULL DEFAULT 0,
+                guided_fail_streak_after INTEGER NOT NULL DEFAULT 0,
+                guided_fail_stage_before INTEGER,
+                guided_fail_stage_after INTEGER,
+                passed INTEGER NOT NULL,
+                pass_eligible INTEGER NOT NULL,
+                demoted_from_stage INTEGER,
+                demoted_to_stage INTEGER,
+                demotion_reason TEXT NOT NULL DEFAULT '',
+                advanced_from_stage INTEGER,
+                advanced_to_stage INTEGER,
+                correct_count INTEGER NOT NULL,
+                error_count INTEGER NOT NULL,
+                substitutions INTEGER NOT NULL,
+                insertions INTEGER NOT NULL,
+                deletions INTEGER NOT NULL,
+                accuracy REAL NOT NULL,
+                aligned_accuracy REAL NOT NULL,
+                time_aligned_accuracy REAL NOT NULL,
+                timing_fit REAL NOT NULL,
+                cleanliness REAL NOT NULL,
+                new_char_accuracy REAL,
+                new_char_attempts INTEGER NOT NULL,
+                score REAL NOT NULL,
+                speed_factor REAL NOT NULL,
+                coverage_factor REAL NOT NULL,
+                level_estimate REAL NOT NULL,
+                settings_json TEXT NOT NULL,
+                FOREIGN KEY(koch_session_id) REFERENCES koch_sessions(id)
+            )
+            """
+        )
+
+        cur.execute(
+            """
+            CREATE TABLE IF NOT EXISTS koch_skill_snapshots (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                koch_session_id INTEGER,
+                created_at TEXT NOT NULL,
+                model_version INTEGER NOT NULL,
+                recent_limit INTEGER NOT NULL,
+                sessions_used INTEGER NOT NULL,
+                required_sessions INTEGER NOT NULL,
+                displayable INTEGER NOT NULL,
+                confidence REAL NOT NULL,
+                level REAL NOT NULL,
+                raw_level REAL NOT NULL,
+                display_level INTEGER,
+                title_key TEXT NOT NULL,
+                base_sequence_key TEXT NOT NULL,
+                active_char_count INTEGER NOT NULL,
+                total_character_count INTEGER NOT NULL,
+                classic_active_count INTEGER NOT NULL,
+                lcwo_active_count INTEGER NOT NULL,
+                base_level REAL NOT NULL,
+                average_accuracy REAL NOT NULL,
+                average_cleanliness REAL NOT NULL,
+                average_character_wpm REAL NOT NULL,
+                average_effective_wpm REAL NOT NULL,
+                average_target_length REAL NOT NULL,
+                speed_factor REAL NOT NULL,
+                accuracy_factor REAL NOT NULL,
+                cleanliness_factor REAL NOT NULL,
+                length_factor REAL NOT NULL,
+                normalizer REAL NOT NULL,
+                FOREIGN KEY(koch_session_id) REFERENCES koch_sessions(id)
+            )
+            """
+        )
+
+        def add_column_if_missing(
+            *,
+            table: str,
+            known_columns: set[str],
+            column: str,
+            definition: str,
+        ) -> None:
+            if column in known_columns:
+                return
+
+            cur.execute(f"ALTER TABLE {table} ADD COLUMN {definition}")
+            known_columns.add(column)
+
+        current_koch_columns: dict[str, list[tuple[str, str]]] = {
+            "koch_progress": [
+                ("guided_unlocked_stage", "guided_unlocked_stage INTEGER NOT NULL DEFAULT 2"),
+                ("guided_current_stage", "guided_current_stage INTEGER NOT NULL DEFAULT 2"),
+                ("guided_fail_streak", "guided_fail_streak INTEGER NOT NULL DEFAULT 0"),
+                ("guided_fail_stage", "guided_fail_stage INTEGER"),
+                ("last_demoted_from_stage", "last_demoted_from_stage INTEGER"),
+                ("last_demoted_to_stage", "last_demoted_to_stage INTEGER"),
+                ("last_demoted_at", "last_demoted_at TEXT"),
+                ("total_sessions", "total_sessions INTEGER NOT NULL DEFAULT 0"),
+                ("total_practice_seconds", "total_practice_seconds INTEGER NOT NULL DEFAULT 0"),
+                ("last_session_id", "last_session_id INTEGER"),
+                ("updated_at", "updated_at TEXT NOT NULL DEFAULT ''"),
+            ],
+            "koch_sessions": [
+                ("started_at", "started_at TEXT NOT NULL DEFAULT ''"),
+                ("finished_at", "finished_at TEXT NOT NULL DEFAULT ''"),
+                ("mode", "mode TEXT NOT NULL DEFAULT 'guided'"),
+                ("sequence_key", "sequence_key TEXT NOT NULL DEFAULT 'classic'"),
+                ("stage_index", "stage_index INTEGER NOT NULL DEFAULT 2"),
+                ("active_chars", "active_chars TEXT NOT NULL DEFAULT ''"),
+                ("new_stage_char", "new_stage_char TEXT"),
+                ("target_text", "target_text TEXT NOT NULL DEFAULT ''"),
+                ("entered_text", "entered_text TEXT NOT NULL DEFAULT ''"),
+                ("target_length", "target_length INTEGER NOT NULL DEFAULT 0"),
+                ("entered_length", "entered_length INTEGER NOT NULL DEFAULT 0"),
+                ("character_wpm", "character_wpm INTEGER NOT NULL DEFAULT 20"),
+                ("effective_wpm", "effective_wpm INTEGER NOT NULL DEFAULT 15"),
+                ("tone_hz", "tone_hz INTEGER NOT NULL DEFAULT 600"),
+                ("volume_percent", "volume_percent INTEGER NOT NULL DEFAULT 70"),
+                ("duration_ms", "duration_ms INTEGER NOT NULL DEFAULT 0"),
+                ("pass_accuracy", "pass_accuracy REAL NOT NULL DEFAULT 90"),
+                ("pass_cleanliness", "pass_cleanliness REAL NOT NULL DEFAULT 85"),
+                ("new_char_min_attempts", "new_char_min_attempts INTEGER NOT NULL DEFAULT 8"),
+                ("new_char_min_accuracy", "new_char_min_accuracy REAL NOT NULL DEFAULT 80"),
+                ("correct_count", "correct_count INTEGER NOT NULL DEFAULT 0"),
+                ("error_count", "error_count INTEGER NOT NULL DEFAULT 0"),
+                ("substitutions", "substitutions INTEGER NOT NULL DEFAULT 0"),
+                ("insertions", "insertions INTEGER NOT NULL DEFAULT 0"),
+                ("deletions", "deletions INTEGER NOT NULL DEFAULT 0"),
+                ("accuracy", "accuracy REAL NOT NULL DEFAULT 0"),
+                ("aligned_accuracy", "aligned_accuracy REAL NOT NULL DEFAULT 0"),
+                ("time_aligned_accuracy", "time_aligned_accuracy REAL NOT NULL DEFAULT 0"),
+                ("timing_fit", "timing_fit REAL NOT NULL DEFAULT 0"),
+                ("cleanliness", "cleanliness REAL NOT NULL DEFAULT 0"),
+                ("new_char_accuracy", "new_char_accuracy REAL"),
+                ("new_char_attempts", "new_char_attempts INTEGER NOT NULL DEFAULT 0"),
+                ("score", "score REAL NOT NULL DEFAULT 0"),
+                ("speed_factor", "speed_factor REAL NOT NULL DEFAULT 0"),
+                ("coverage_factor", "coverage_factor REAL NOT NULL DEFAULT 0"),
+                ("level_estimate", "level_estimate REAL NOT NULL DEFAULT 0"),
+                ("pass_eligible", "pass_eligible INTEGER NOT NULL DEFAULT 0"),
+                ("passed", "passed INTEGER NOT NULL DEFAULT 0"),
+                ("advanced_from_stage", "advanced_from_stage INTEGER"),
+                ("advanced_to_stage", "advanced_to_stage INTEGER"),
+                ("demoted_from_stage", "demoted_from_stage INTEGER"),
+                ("demoted_to_stage", "demoted_to_stage INTEGER"),
+                ("demotion_reason", "demotion_reason TEXT NOT NULL DEFAULT ''"),
+                ("guided_fail_streak_after", "guided_fail_streak_after INTEGER NOT NULL DEFAULT 0"),
+                ("pass_reason", "pass_reason TEXT NOT NULL DEFAULT ''"),
+                ("settings_json", "settings_json TEXT NOT NULL DEFAULT '{}'"),
+                ("target_schedule_json", "target_schedule_json TEXT NOT NULL DEFAULT '[]'"),
+            ],
+            "koch_char_results": [
+                ("koch_session_id", "koch_session_id INTEGER NOT NULL DEFAULT 0"),
+                ("position_index", "position_index INTEGER NOT NULL DEFAULT 0"),
+                ("target_char", "target_char TEXT"),
+                ("entered_char", "entered_char TEXT"),
+                ("result", "result TEXT NOT NULL DEFAULT ''"),
+                ("target_stage_index", "target_stage_index INTEGER"),
+                ("is_new_stage_char", "is_new_stage_char INTEGER NOT NULL DEFAULT 0"),
+                ("expected_start_ms", "expected_start_ms INTEGER"),
+                ("expected_end_ms", "expected_end_ms INTEGER"),
+                ("typed_at_ms", "typed_at_ms INTEGER"),
+                ("latency_ms", "latency_ms INTEGER"),
+                ("timing_weight", "timing_weight REAL NOT NULL DEFAULT 1.0"),
+                ("timing_status", "timing_status TEXT NOT NULL DEFAULT ''"),
+            ],
+            "koch_key_events": [
+                ("koch_session_id", "koch_session_id INTEGER NOT NULL DEFAULT 0"),
+                ("event_index", "event_index INTEGER NOT NULL DEFAULT 0"),
+                ("key", "key TEXT NOT NULL DEFAULT ''"),
+                ("char", "char TEXT"),
+                ("typed_at_ms", "typed_at_ms INTEGER"),
+                ("event_json", "event_json TEXT NOT NULL DEFAULT '{}'"),
+            ],
+            "koch_progress_snapshots": [
+                ("koch_session_id", "koch_session_id INTEGER NOT NULL DEFAULT 0"),
+                ("created_at", "created_at TEXT NOT NULL DEFAULT ''"),
+                ("sequence_key", "sequence_key TEXT NOT NULL DEFAULT 'classic'"),
+                ("mode", "mode TEXT NOT NULL DEFAULT 'guided'"),
+                ("session_stage_index", "session_stage_index INTEGER NOT NULL DEFAULT 2"),
+                ("stage_before", "stage_before INTEGER NOT NULL DEFAULT 2"),
+                ("stage_after", "stage_after INTEGER NOT NULL DEFAULT 2"),
+                ("unlocked_before", "unlocked_before INTEGER NOT NULL DEFAULT 2"),
+                ("unlocked_after", "unlocked_after INTEGER NOT NULL DEFAULT 2"),
+                ("active_chars", "active_chars TEXT NOT NULL DEFAULT ''"),
+                ("active_char_count", "active_char_count INTEGER NOT NULL DEFAULT 0"),
+                ("target_length", "target_length INTEGER NOT NULL DEFAULT 0"),
+                ("entered_length", "entered_length INTEGER NOT NULL DEFAULT 0"),
+                ("character_wpm", "character_wpm INTEGER NOT NULL DEFAULT 20"),
+                ("effective_wpm", "effective_wpm INTEGER NOT NULL DEFAULT 15"),
+                ("tone_hz", "tone_hz INTEGER NOT NULL DEFAULT 600"),
+                ("volume_percent", "volume_percent INTEGER NOT NULL DEFAULT 70"),
+                ("duration_ms", "duration_ms INTEGER NOT NULL DEFAULT 0"),
+                ("pass_accuracy", "pass_accuracy REAL NOT NULL DEFAULT 90"),
+                ("pass_cleanliness", "pass_cleanliness REAL NOT NULL DEFAULT 85"),
+                ("new_char_min_attempts", "new_char_min_attempts INTEGER NOT NULL DEFAULT 8"),
+                ("new_char_min_accuracy", "new_char_min_accuracy REAL NOT NULL DEFAULT 80"),
+                ("guided_fail_streak_before", "guided_fail_streak_before INTEGER NOT NULL DEFAULT 0"),
+                ("guided_fail_streak_after", "guided_fail_streak_after INTEGER NOT NULL DEFAULT 0"),
+                ("guided_fail_stage_before", "guided_fail_stage_before INTEGER"),
+                ("guided_fail_stage_after", "guided_fail_stage_after INTEGER"),
+                ("passed", "passed INTEGER NOT NULL DEFAULT 0"),
+                ("pass_eligible", "pass_eligible INTEGER NOT NULL DEFAULT 0"),
+                ("demoted_from_stage", "demoted_from_stage INTEGER"),
+                ("demoted_to_stage", "demoted_to_stage INTEGER"),
+                ("demotion_reason", "demotion_reason TEXT NOT NULL DEFAULT ''"),
+                ("advanced_from_stage", "advanced_from_stage INTEGER"),
+                ("advanced_to_stage", "advanced_to_stage INTEGER"),
+                ("correct_count", "correct_count INTEGER NOT NULL DEFAULT 0"),
+                ("error_count", "error_count INTEGER NOT NULL DEFAULT 0"),
+                ("substitutions", "substitutions INTEGER NOT NULL DEFAULT 0"),
+                ("insertions", "insertions INTEGER NOT NULL DEFAULT 0"),
+                ("deletions", "deletions INTEGER NOT NULL DEFAULT 0"),
+                ("accuracy", "accuracy REAL NOT NULL DEFAULT 0"),
+                ("aligned_accuracy", "aligned_accuracy REAL NOT NULL DEFAULT 0"),
+                ("time_aligned_accuracy", "time_aligned_accuracy REAL NOT NULL DEFAULT 0"),
+                ("timing_fit", "timing_fit REAL NOT NULL DEFAULT 0"),
+                ("cleanliness", "cleanliness REAL NOT NULL DEFAULT 0"),
+                ("new_char_accuracy", "new_char_accuracy REAL"),
+                ("new_char_attempts", "new_char_attempts INTEGER NOT NULL DEFAULT 0"),
+                ("score", "score REAL NOT NULL DEFAULT 0"),
+                ("speed_factor", "speed_factor REAL NOT NULL DEFAULT 0"),
+                ("coverage_factor", "coverage_factor REAL NOT NULL DEFAULT 0"),
+                ("level_estimate", "level_estimate REAL NOT NULL DEFAULT 0"),
+                ("settings_json", "settings_json TEXT NOT NULL DEFAULT '{}'"),
+            ],
+            "koch_skill_snapshots": [
+                ("koch_session_id", "koch_session_id INTEGER"),
+                ("created_at", "created_at TEXT NOT NULL DEFAULT ''"),
+                ("model_version", "model_version INTEGER NOT NULL DEFAULT 2"),
+                ("recent_limit", "recent_limit INTEGER NOT NULL DEFAULT 1000"),
+                ("sessions_used", "sessions_used INTEGER NOT NULL DEFAULT 0"),
+                ("required_sessions", "required_sessions INTEGER NOT NULL DEFAULT 30"),
+                ("displayable", "displayable INTEGER NOT NULL DEFAULT 0"),
+                ("confidence", "confidence REAL NOT NULL DEFAULT 0"),
+                ("level", "level REAL NOT NULL DEFAULT 0"),
+                ("raw_level", "raw_level REAL NOT NULL DEFAULT 0"),
+                ("display_level", "display_level INTEGER"),
+                ("title_key", "title_key TEXT NOT NULL DEFAULT ''"),
+                ("base_sequence_key", "base_sequence_key TEXT NOT NULL DEFAULT ''"),
+                ("active_char_count", "active_char_count INTEGER NOT NULL DEFAULT 0"),
+                ("total_character_count", "total_character_count INTEGER NOT NULL DEFAULT 0"),
+                ("classic_active_count", "classic_active_count INTEGER NOT NULL DEFAULT 0"),
+                ("lcwo_active_count", "lcwo_active_count INTEGER NOT NULL DEFAULT 0"),
+                ("base_level", "base_level REAL NOT NULL DEFAULT 0"),
+                ("average_accuracy", "average_accuracy REAL NOT NULL DEFAULT 0"),
+                ("average_cleanliness", "average_cleanliness REAL NOT NULL DEFAULT 0"),
+                ("average_character_wpm", "average_character_wpm REAL NOT NULL DEFAULT 0"),
+                ("average_effective_wpm", "average_effective_wpm REAL NOT NULL DEFAULT 0"),
+                ("average_target_length", "average_target_length REAL NOT NULL DEFAULT 0"),
+                ("speed_factor", "speed_factor REAL NOT NULL DEFAULT 0"),
+                ("accuracy_factor", "accuracy_factor REAL NOT NULL DEFAULT 0"),
+                ("cleanliness_factor", "cleanliness_factor REAL NOT NULL DEFAULT 0"),
+                ("length_factor", "length_factor REAL NOT NULL DEFAULT 0"),
+                ("normalizer", "normalizer REAL NOT NULL DEFAULT 0"),
+            ],
+        }
+
+        for table, definitions in current_koch_columns.items():
+            if not self._table_exists(table):
+                continue
+
+            known_columns = self._column_names(table)
+            for column, definition in definitions:
+                add_column_if_missing(
+                    table=table,
+                    known_columns=known_columns,
+                    column=column,
+                    definition=definition,
+                )
+
+        cur.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_koch_sessions_sequence_stage
+            ON koch_sessions(sequence_key, stage_index, finished_at)
+            """
+        )
+
+        cur.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_koch_sessions_finished_at
+            ON koch_sessions(finished_at)
+            """
+        )
+
+        cur.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_koch_char_results_session_result
+            ON koch_char_results(koch_session_id, result)
+            """
+        )
+
+        cur.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_koch_key_events_session
+            ON koch_key_events(koch_session_id, event_index)
+            """
+        )
+
+        cur.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_koch_progress_snapshots_sequence_created
+            ON koch_progress_snapshots(sequence_key, created_at)
+            """
+        )
+
+        cur.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_koch_progress_snapshots_session
+            ON koch_progress_snapshots(koch_session_id)
+            """
+        )
+
+        cur.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_koch_skill_snapshots_created
+            ON koch_skill_snapshots(created_at)
+            """
+        )
+
+        cur.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_koch_skill_snapshots_session
+            ON koch_skill_snapshots(koch_session_id)
+            """
+        )
+
+        self.conn.commit()
+
 
     def _schema_is_compatible(self) -> bool:
         """Return True if the existing database looks usable by this version.
@@ -289,6 +965,37 @@ class Database:
                     "level_progress",
                     "title",
                     "details_json",
+                },
+                "koch_skill_snapshots": {
+                    "id",
+                    "koch_session_id",
+                    "created_at",
+                    "model_version",
+                    "recent_limit",
+                    "sessions_used",
+                    "required_sessions",
+                    "displayable",
+                    "confidence",
+                    "level",
+                    "raw_level",
+                    "display_level",
+                    "title_key",
+                    "base_sequence_key",
+                    "active_char_count",
+                    "total_character_count",
+                    "classic_active_count",
+                    "lcwo_active_count",
+                    "base_level",
+                    "average_accuracy",
+                    "average_cleanliness",
+                    "average_character_wpm",
+                    "average_effective_wpm",
+                    "average_target_length",
+                    "speed_factor",
+                    "accuracy_factor",
+                    "cleanliness_factor",
+                    "length_factor",
+                    "normalizer",
                 },
                 "problem_stats": {
                     "char",
@@ -1289,6 +1996,635 @@ class Database:
                 },
             )
             raise
+
+    def koch_progress(self, sequence_key: str) -> Optional[sqlite3.Row]:
+        self.ensure_koch_schema()
+
+        cur = self.conn.cursor()
+        row = cur.execute(
+            """
+            SELECT *
+            FROM koch_progress
+            WHERE sequence_key = ?
+            """,
+            (str(sequence_key or "classic"),),
+        ).fetchone()
+
+        return row
+
+    def save_koch_session(
+        self,
+        started_at: datetime,
+        finished_at: datetime,
+        result: Any,
+        typed_events: List[Dict[str, Any]] | None = None,
+        target_schedule: List[Dict[str, Any]] | None = None,
+    ) -> int:
+        """Persist one Koch receive-practice session and update guided progress."""
+
+        self.ensure_koch_schema()
+
+        typed_events = typed_events or []
+        target_schedule = target_schedule or []
+        cur = self.conn.cursor()
+        settings_json = dict(getattr(result, "settings_json", {}) or {})
+
+        try:
+            koch_columns = [
+                "started_at",
+                "finished_at",
+                "mode",
+                "sequence_key",
+                "stage_index",
+                "active_chars",
+                "new_stage_char",
+                "target_text",
+                "entered_text",
+                "target_length",
+                "entered_length",
+                "character_wpm",
+                "effective_wpm",
+                "tone_hz",
+                "volume_percent",
+                "duration_ms",
+                "pass_accuracy",
+                "pass_cleanliness",
+                "new_char_min_attempts",
+                "new_char_min_accuracy",
+                "correct_count",
+                "error_count",
+                "substitutions",
+                "insertions",
+                "deletions",
+                "accuracy",
+                "aligned_accuracy",
+                "time_aligned_accuracy",
+                "timing_fit",
+                "cleanliness",
+                "new_char_accuracy",
+                "new_char_attempts",
+                "score",
+                "speed_factor",
+                "coverage_factor",
+                "level_estimate",
+                "pass_eligible",
+                "passed",
+                "advanced_from_stage",
+                "advanced_to_stage",
+                "pass_reason",
+                "settings_json",
+                "target_schedule_json",
+            ]
+            koch_values = [
+                started_at.isoformat(timespec="seconds"),
+                finished_at.isoformat(timespec="seconds"),
+                result.mode,
+                result.sequence_key,
+                int(result.stage_index),
+                result.active_chars,
+                result.new_stage_char,
+                result.target,
+                result.entered,
+                int(result.length_target),
+                int(result.length_entered),
+                int(result.character_wpm),
+                int(result.effective_wpm),
+                int(settings_json.get("tone_hz", 600)),
+                int(settings_json.get("volume_percent", 70)),
+                int(result.duration_ms),
+                float(settings_json.get("pass_accuracy", 90.0)),
+                float(settings_json.get("pass_cleanliness", 85.0)),
+                int(settings_json.get("new_char_min_attempts", 8)),
+                float(settings_json.get("new_char_min_accuracy", 80.0)),
+                int(result.correct_count),
+                int(result.error_count),
+                int(result.substitutions),
+                int(result.insertions),
+                int(result.deletions),
+                float(result.accuracy),
+                float(getattr(result, "aligned_accuracy", result.accuracy)),
+                float(getattr(result, "time_aligned_accuracy", result.accuracy)),
+                float(getattr(result, "timing_fit", 100.0 if result.accuracy > 0 else 0.0)),
+                float(result.cleanliness),
+                result.new_char_accuracy,
+                int(result.new_char_attempts),
+                float(result.score),
+                float(result.speed_factor),
+                float(result.coverage_factor),
+                float(result.level_estimate),
+                1 if result.pass_eligible else 0,
+                1 if result.passed else 0,
+                result.advanced_from_stage,
+                result.advanced_to_stage,
+                result.pass_reason,
+                json.dumps(settings_json, ensure_ascii=False, sort_keys=True),
+                json.dumps(target_schedule, ensure_ascii=False),
+            ]
+
+            placeholders = ", ".join(["?"] * len(koch_columns))
+            cur.execute(
+                f"""
+                INSERT INTO koch_sessions (
+                    {", ".join(koch_columns)}
+                ) VALUES ({placeholders})
+                """,
+                tuple(koch_values),
+            )
+
+            session_id = int(cur.lastrowid)
+
+            for char_result in getattr(result, "character_results", []) or []:
+                cur.execute(
+                    """
+                    INSERT INTO koch_char_results (
+                        koch_session_id,
+                        position_index,
+                        target_char,
+                        entered_char,
+                        result,
+                        target_stage_index,
+                        is_new_stage_char,
+                        expected_start_ms,
+                        expected_end_ms,
+                        typed_at_ms,
+                        latency_ms,
+                        timing_weight,
+                        timing_status
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        session_id,
+                        int(char_result.position_index),
+                        char_result.target_char,
+                        char_result.entered_char,
+                        char_result.result,
+                        char_result.target_stage_index,
+                        1 if char_result.is_new_stage_char else 0,
+                        char_result.expected_start_ms,
+                        char_result.expected_end_ms,
+                        char_result.typed_at_ms,
+                        char_result.latency_ms,
+                        float(getattr(char_result, "timing_weight", 1.0)),
+                        str(getattr(char_result, "timing_status", "") or ""),
+                    ),
+                )
+
+            for event_index, event in enumerate(typed_events):
+                cur.execute(
+                    """
+                    INSERT INTO koch_key_events (
+                        koch_session_id,
+                        event_index,
+                        key,
+                        char,
+                        typed_at_ms,
+                        event_json
+                    ) VALUES (?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        session_id,
+                        event_index,
+                        str(event.get("key", "")),
+                        event.get("char"),
+                        event.get("typed_at_ms"),
+                        json.dumps(event, ensure_ascii=False, sort_keys=True),
+                    ),
+                )
+
+            now = datetime.now().isoformat(timespec="seconds")
+            existing = cur.execute(
+                """
+                SELECT *
+                FROM koch_progress
+                WHERE sequence_key = ?
+                """,
+                (result.sequence_key,),
+            ).fetchone()
+
+            guided_min_stage = max(1, int(getattr(config, "DEFAULT_KOCH_GUIDED_MIN_STAGE", 2)))
+            demote_after_failures = max(
+                1,
+                int(getattr(config, "DEFAULT_KOCH_GUIDED_DEMOTE_AFTER_FAILURES", 5)),
+            )
+
+            current_unlocked = guided_min_stage
+            current_stage = guided_min_stage
+            guided_fail_streak = 0
+            guided_fail_stage: int | None = None
+            last_demoted_from_stage: int | None = None
+            last_demoted_to_stage: int | None = None
+            last_demoted_at: str | None = None
+            total_sessions = 0
+            total_seconds = 0
+
+            if existing is not None:
+                current_unlocked = max(guided_min_stage, int(existing["guided_unlocked_stage"]))
+                current_stage = max(guided_min_stage, int(existing["guided_current_stage"]))
+                guided_fail_streak = max(0, int(existing["guided_fail_streak"]))
+                if existing["guided_fail_stage"] is not None:
+                    guided_fail_stage = int(existing["guided_fail_stage"])
+                if existing["last_demoted_from_stage"] is not None:
+                    last_demoted_from_stage = int(existing["last_demoted_from_stage"])
+                if existing["last_demoted_to_stage"] is not None:
+                    last_demoted_to_stage = int(existing["last_demoted_to_stage"])
+                last_demoted_at = existing["last_demoted_at"]
+                total_sessions = int(existing["total_sessions"])
+                total_seconds = int(existing["total_practice_seconds"])
+
+            current_unlocked = max(current_unlocked, current_stage)
+            is_guided = str(getattr(result, "mode", "")).strip().lower() == "guided"
+            result_stage = max(guided_min_stage, int(getattr(result, "stage_index", current_stage)))
+
+            next_unlocked = current_unlocked
+            next_stage = current_stage
+            next_fail_streak = guided_fail_streak
+            next_fail_stage = guided_fail_stage
+            demoted_from_stage: int | None = None
+            demoted_to_stage: int | None = None
+            demotion_reason = ""
+
+            if is_guided and bool(getattr(result, "passed", False)):
+                advanced_to_stage = getattr(result, "advanced_to_stage", None)
+                target_stage = int(advanced_to_stage) if advanced_to_stage is not None else result_stage
+                next_unlocked = max(current_unlocked, target_stage)
+                next_stage = max(current_stage, target_stage)
+                next_fail_streak = 0
+                next_fail_stage = None
+            elif (
+                is_guided
+                and bool(getattr(result, "pass_eligible", False))
+                and result_stage == current_stage
+            ):
+                if next_fail_stage != current_stage:
+                    next_fail_streak = 1
+                    next_fail_stage = current_stage
+                else:
+                    next_fail_streak += 1
+
+                if next_fail_streak >= demote_after_failures:
+                    if current_stage > guided_min_stage:
+                        demoted_from_stage = current_stage
+                        demoted_to_stage = current_stage - 1
+                        demotion_reason = "guided_failure_streak"
+                        next_stage = demoted_to_stage
+                        next_fail_streak = 0
+                        next_fail_stage = None
+                        last_demoted_from_stage = demoted_from_stage
+                        last_demoted_to_stage = demoted_to_stage
+                        last_demoted_at = now
+                    else:
+                        next_fail_streak = demote_after_failures
+                        next_fail_stage = current_stage
+
+            setattr(result, "demoted_from_stage", demoted_from_stage)
+            setattr(result, "demoted_to_stage", demoted_to_stage)
+            setattr(result, "demotion_reason", demotion_reason)
+            setattr(result, "guided_fail_streak_after", next_fail_streak)
+
+            cur.execute(
+                """
+                UPDATE koch_sessions
+                SET
+                    demoted_from_stage = ?,
+                    demoted_to_stage = ?,
+                    demotion_reason = ?,
+                    guided_fail_streak_after = ?
+                WHERE id = ?
+                """,
+                (
+                    demoted_from_stage,
+                    demoted_to_stage,
+                    demotion_reason,
+                    int(next_fail_streak),
+                    int(session_id),
+                ),
+            )
+
+            total_sessions += 1
+            total_seconds += max(0, int(result.duration_ms // 1000))
+
+            cur.execute(
+                """
+                INSERT INTO koch_progress (
+                    sequence_key,
+                    guided_unlocked_stage,
+                    guided_current_stage,
+                    guided_fail_streak,
+                    guided_fail_stage,
+                    last_demoted_from_stage,
+                    last_demoted_to_stage,
+                    last_demoted_at,
+                    total_sessions,
+                    total_practice_seconds,
+                    last_session_id,
+                    updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(sequence_key) DO UPDATE SET
+                    guided_unlocked_stage = excluded.guided_unlocked_stage,
+                    guided_current_stage = excluded.guided_current_stage,
+                    guided_fail_streak = excluded.guided_fail_streak,
+                    guided_fail_stage = excluded.guided_fail_stage,
+                    last_demoted_from_stage = excluded.last_demoted_from_stage,
+                    last_demoted_to_stage = excluded.last_demoted_to_stage,
+                    last_demoted_at = excluded.last_demoted_at,
+                    total_sessions = excluded.total_sessions,
+                    total_practice_seconds = excluded.total_practice_seconds,
+                    last_session_id = excluded.last_session_id,
+                    updated_at = excluded.updated_at
+                """,
+                (
+                    result.sequence_key,
+                    int(next_unlocked),
+                    int(next_stage),
+                    int(next_fail_streak),
+                    next_fail_stage,
+                    last_demoted_from_stage,
+                    last_demoted_to_stage,
+                    last_demoted_at,
+                    int(total_sessions),
+                    int(total_seconds),
+                    int(session_id),
+                    now,
+                ),
+            )
+
+            cur.execute(
+                """
+                INSERT INTO koch_progress_snapshots (
+                    koch_session_id,
+                    created_at,
+                    sequence_key,
+                    mode,
+                    session_stage_index,
+                    stage_before,
+                    stage_after,
+                    unlocked_before,
+                    unlocked_after,
+                    active_chars,
+                    active_char_count,
+                    target_length,
+                    entered_length,
+                    character_wpm,
+                    effective_wpm,
+                    tone_hz,
+                    volume_percent,
+                    duration_ms,
+                    pass_accuracy,
+                    pass_cleanliness,
+                    new_char_min_attempts,
+                    new_char_min_accuracy,
+                    guided_fail_streak_before,
+                    guided_fail_streak_after,
+                    guided_fail_stage_before,
+                    guided_fail_stage_after,
+                    passed,
+                    pass_eligible,
+                    demoted_from_stage,
+                    demoted_to_stage,
+                    demotion_reason,
+                    advanced_from_stage,
+                    advanced_to_stage,
+                    correct_count,
+                    error_count,
+                    substitutions,
+                    insertions,
+                    deletions,
+                    accuracy,
+                    aligned_accuracy,
+                    time_aligned_accuracy,
+                    timing_fit,
+                    cleanliness,
+                    new_char_accuracy,
+                    new_char_attempts,
+                    score,
+                    speed_factor,
+                    coverage_factor,
+                    level_estimate,
+                    settings_json
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    int(session_id),
+                    now,
+                    result.sequence_key,
+                    result.mode,
+                    int(result_stage),
+                    int(current_stage),
+                    int(next_stage),
+                    int(current_unlocked),
+                    int(next_unlocked),
+                    result.active_chars,
+                    len(result.active_chars or ""),
+                    int(result.length_target),
+                    int(result.length_entered),
+                    int(result.character_wpm),
+                    int(result.effective_wpm),
+                    int(settings_json.get("tone_hz", 600)),
+                    int(settings_json.get("volume_percent", 70)),
+                    int(result.duration_ms),
+                    float(settings_json.get("pass_accuracy", 90.0)),
+                    float(settings_json.get("pass_cleanliness", 85.0)),
+                    int(settings_json.get("new_char_min_attempts", 8)),
+                    float(settings_json.get("new_char_min_accuracy", 80.0)),
+                    int(guided_fail_streak),
+                    int(next_fail_streak),
+                    guided_fail_stage,
+                    next_fail_stage,
+                    1 if result.passed else 0,
+                    1 if result.pass_eligible else 0,
+                    demoted_from_stage,
+                    demoted_to_stage,
+                    demotion_reason,
+                    result.advanced_from_stage,
+                    result.advanced_to_stage,
+                    int(result.correct_count),
+                    int(result.error_count),
+                    int(result.substitutions),
+                    int(result.insertions),
+                    int(result.deletions),
+                    float(result.accuracy),
+                    float(getattr(result, "aligned_accuracy", result.accuracy)),
+                    float(getattr(result, "time_aligned_accuracy", result.accuracy)),
+                    float(getattr(result, "timing_fit", 100.0 if result.accuracy > 0 else 0.0)),
+                    float(result.cleanliness),
+                    result.new_char_accuracy,
+                    int(result.new_char_attempts),
+                    float(result.score),
+                    float(result.speed_factor),
+                    float(result.coverage_factor),
+                    float(result.level_estimate),
+                    json.dumps(settings_json, ensure_ascii=False, sort_keys=True),
+                ),
+            )
+
+            self.conn.commit()
+            return session_id
+
+        except Exception as exc:
+            self.conn.rollback()
+            log_app_exception(
+                "app.database.koch_session_save_failed",
+                exc,
+                level="warning",
+                message="Saving Koch receive-practice session failed.",
+                context={"sequence_key": getattr(result, "sequence_key", ""), "stage_index": getattr(result, "stage_index", None)},
+            )
+            raise
+
+    def count_koch_sessions(self) -> int:
+        self.ensure_koch_schema()
+
+        cur = self.conn.cursor()
+        row = cur.execute("SELECT COUNT(*) AS total FROM koch_sessions").fetchone()
+        return int(row["total"] if row is not None else 0)
+
+    def recent_koch_sessions(self, limit: int = 20) -> List[sqlite3.Row]:
+        self.ensure_koch_schema()
+
+        cur = self.conn.cursor()
+        return cur.execute(
+            """
+            SELECT *
+            FROM koch_sessions
+            ORDER BY finished_at DESC, id DESC
+            LIMIT ?
+            """,
+            (max(1, int(limit)),),
+        ).fetchall()
+
+    def save_koch_skill_snapshot(self, koch_session_id: int | None, summary: Any) -> int:
+        """Save the rolling Koch receive-skill state after a Koch session."""
+
+        self.ensure_koch_schema()
+        created_at = datetime.now().isoformat(timespec="seconds")
+        display_level = (
+            int(round(float(getattr(summary, "level", 0.0) or 0.0)))
+            if bool(getattr(summary, "displayable", False))
+            else None
+        )
+
+        cur = self.conn.cursor()
+        cur.execute(
+            """
+            INSERT INTO koch_skill_snapshots (
+                koch_session_id,
+                created_at,
+                model_version,
+                recent_limit,
+                sessions_used,
+                required_sessions,
+                displayable,
+                confidence,
+                level,
+                raw_level,
+                display_level,
+                title_key,
+                base_sequence_key,
+                active_char_count,
+                total_character_count,
+                classic_active_count,
+                lcwo_active_count,
+                base_level,
+                average_accuracy,
+                average_cleanliness,
+                average_character_wpm,
+                average_effective_wpm,
+                average_target_length,
+                speed_factor,
+                accuracy_factor,
+                cleanliness_factor,
+                length_factor,
+                normalizer
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                koch_session_id,
+                created_at,
+                int(getattr(config, "KOCH_SKILL_MODEL_VERSION", 2)),
+                int(getattr(config, "DEFAULT_KOCH_SKILL_RECENT_ROUNDS", 1000)),
+                int(getattr(summary, "sessions_used", 0) or 0),
+                int(getattr(summary, "required_sessions", 30) or 30),
+                1 if bool(getattr(summary, "displayable", False)) else 0,
+                float(getattr(summary, "confidence", 0.0) or 0.0),
+                float(getattr(summary, "level", 0.0) or 0.0),
+                float(getattr(summary, "raw_level", 0.0) or 0.0),
+                display_level,
+                str(getattr(summary, "title_key", "") or ""),
+                str(getattr(summary, "base_sequence_key", "") or ""),
+                int(getattr(summary, "active_char_count", 0) or 0),
+                int(getattr(summary, "total_character_count", 0) or 0),
+                int(getattr(summary, "classic_active_count", 0) or 0),
+                int(getattr(summary, "lcwo_active_count", 0) or 0),
+                float(getattr(summary, "base_level", 0.0) or 0.0),
+                float(getattr(summary, "average_accuracy", 0.0) or 0.0),
+                float(getattr(summary, "average_cleanliness", 0.0) or 0.0),
+                float(getattr(summary, "average_character_wpm", 0.0) or 0.0),
+                float(getattr(summary, "average_effective_wpm", 0.0) or 0.0),
+                float(getattr(summary, "average_target_length", 0.0) or 0.0),
+                float(getattr(summary, "speed_factor", 0.0) or 0.0),
+                float(getattr(summary, "accuracy_factor", 0.0) or 0.0),
+                float(getattr(summary, "cleanliness_factor", 0.0) or 0.0),
+                float(getattr(summary, "length_factor", 0.0) or 0.0),
+                float(getattr(summary, "normalizer", 0.0) or 0.0),
+            ),
+        )
+        self.conn.commit()
+        return int(cur.lastrowid)
+
+    def recent_koch_skill_snapshots(self, limit: int = 200) -> List[sqlite3.Row]:
+        self.ensure_koch_schema()
+
+        cur = self.conn.cursor()
+        return cur.execute(
+            """
+            SELECT *
+            FROM koch_skill_snapshots
+            ORDER BY created_at DESC, id DESC
+            LIMIT ?
+            """,
+            (max(1, int(limit)),),
+        ).fetchall()
+
+    def koch_character_stats(
+        self,
+        recent_sessions: int = 1000,
+        limit: int = 50,
+    ) -> List[sqlite3.Row]:
+        self.ensure_koch_schema()
+
+        cur = self.conn.cursor()
+        return cur.execute(
+            """
+            SELECT
+                target_char AS char,
+                COUNT(*) AS attempts,
+                SUM(CASE WHEN result = 'correct' THEN 1 ELSE 0 END) AS correct,
+                SUM(CASE WHEN result != 'correct' THEN 1 ELSE 0 END) AS errors,
+                ROUND(
+                    SUM(CASE WHEN result != 'correct' THEN 1 ELSE 0 END)
+                    * 100.0 / COUNT(*),
+                    1
+                ) AS error_rate,
+                AVG(CASE WHEN latency_ms IS NOT NULL THEN latency_ms ELSE NULL END) AS avg_latency_ms
+            FROM koch_char_results
+            WHERE koch_session_id IN (
+                SELECT id
+                FROM koch_sessions
+                ORDER BY finished_at DESC, id DESC
+                LIMIT ?
+            )
+            AND target_char IS NOT NULL
+            AND target_char != ''
+            AND target_char != ' '
+            AND result IN ('correct', 'substitution', 'deletion')
+            GROUP BY target_char
+            HAVING attempts > 0
+            ORDER BY error_rate DESC, errors DESC, attempts DESC, char ASC
+            LIMIT ?
+            """,
+            (max(1, int(recent_sessions)), max(1, int(limit))),
+        ).fetchall()
+
 
     def recent_sessions(self, limit: int = 10) -> List[sqlite3.Row]:
         cur = self.conn.cursor()

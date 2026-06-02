@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 import threading
+import time
 from typing import TYPE_CHECKING, Optional
 
 import tkinter as tk
@@ -562,13 +563,72 @@ class SerialController:
                 found_result = probe_summary
                 break
 
-        app.after(
-            0,
-            lambda: self.finish_auto_connect_scan(
-                found_port,
+        self.schedule_auto_connect_finish_from_worker(
+            found_port,
+            found_result=found_result,
+            probe_results=probe_results,
+        )
+
+    def schedule_auto_connect_finish_from_worker(
+        self,
+        port: Optional[str],
+        *,
+        found_result: dict[str, object] | None = None,
+        probe_results: list[dict[str, object]] | None = None,
+    ) -> None:
+        """Schedule auto-connect completion from the worker thread.
+
+        Tkinter callbacks must be registered while the main thread is inside
+        the Tk main loop. During startup, shutdown or quick restart, the worker
+        can finish just outside that window and app.after() raises RuntimeError.
+        Retrying briefly avoids a noisy crash during startup, and abandoning
+        the scan keeps shutdown quiet when the window is already going away.
+        """
+
+        app = self.app
+
+        def finish() -> None:
+            self.finish_auto_connect_scan(
+                port,
                 found_result=found_result,
                 probe_results=probe_results,
-            ),
+            )
+
+        attempts = 40
+        retry_delay_seconds = 0.05
+
+        for _attempt in range(attempts):
+            try:
+                app.after(0, finish)
+                return
+            except RuntimeError as exc:
+                if "main thread is not in main loop" not in str(exc):
+                    app.auto_connect_running = False
+                    log_app_exception(
+                        "app.serial.auto_scan_finish_schedule_failed",
+                        exc,
+                        level="warning",
+                        message="Serial auto-connect finish callback could not be scheduled.",
+                    )
+                    return
+
+                time.sleep(retry_delay_seconds)
+            except tk.TclError as exc:
+                app.auto_connect_running = False
+                log_app_exception(
+                    "app.serial.auto_scan_finish_schedule_cancelled",
+                    exc,
+                    level="warning",
+                    message="Serial auto-connect finish callback was cancelled because Tk is not available.",
+                )
+                return
+
+        app.auto_connect_running = False
+        log_app_event(
+            "app.serial.auto_scan_finish_schedule_abandoned",
+            level="warning",
+            message="Serial auto-connect finish callback was abandoned because Tk main loop was not active.",
+            context={"retry_attempts": attempts},
         )
 
     def finish_auto_connect_scan(

@@ -267,6 +267,9 @@ class InputController:
     
     def on_global_keyboard_morse_key_press(self, event: tk.Event) -> Optional[str]:
         """Handle keyboard Morse key presses regardless of which app window has focus."""
+        if getattr(self.app, "active_mode", "main") == "koch":
+            return None
+
         if self.handle_keyboard_morse_key_press(event):
             return "break"
 
@@ -278,6 +281,9 @@ class InputController:
         This global handler must not call on_hid_key_release(), because normal
         HID text input belongs only to the hidden main input field.
         """
+        if getattr(self.app, "active_mode", "main") == "koch":
+            return None
+
         if self.handle_keyboard_morse_key_release(event):
             return "break"
 

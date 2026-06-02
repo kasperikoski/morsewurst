@@ -59,6 +59,20 @@ class NetworkClientSettings:
     sample_rate: int = 44_100
     blocksize: int = 2048
     latency: str = "high"
+    radio_noise_enabled: bool = bool(getattr(config, "NETWORK_RADIO_NOISE_ENABLED_DEFAULT", False))
+    radio_noise_volume: float = float(getattr(config, "NETWORK_RADIO_NOISE_VOLUME_PERCENT_DEFAULT", 5)) / 100.0
+    radio_noise_profile: str = str(getattr(config, "NETWORK_RADIO_NOISE_PROFILE_DEFAULT", "radio"))
+    radio_noise_tone: str = str(getattr(config, "NETWORK_RADIO_NOISE_TONE_DEFAULT", "low"))
+    radio_noise_tx_ducking_enabled: bool = bool(getattr(config, "NETWORK_RADIO_NOISE_TX_DUCKING_ENABLED", True))
+    radio_noise_tx_ducking_depth_percent: int = int(getattr(config, "NETWORK_RADIO_NOISE_TX_DUCKING_DEPTH_PERCENT", 85))
+    radio_noise_tx_ducking_attack_ms: int = int(getattr(config, "NETWORK_RADIO_NOISE_TX_DUCKING_ATTACK_MS", 60))
+    radio_noise_tx_ducking_hold_ms: int = int(getattr(config, "NETWORK_RADIO_NOISE_TX_DUCKING_HOLD_MS", 350))
+    radio_noise_tx_ducking_release_ms: int = int(getattr(config, "NETWORK_RADIO_NOISE_TX_DUCKING_RELEASE_MS", 500))
+    radio_noise_rx_ducking_enabled: bool = bool(getattr(config, "NETWORK_RADIO_NOISE_RX_DUCKING_ENABLED", False))
+    radio_noise_rx_ducking_depth_percent: int = int(getattr(config, "NETWORK_RADIO_NOISE_RX_DUCKING_DEPTH_PERCENT", 45))
+    radio_noise_rx_ducking_attack_ms: int = int(getattr(config, "NETWORK_RADIO_NOISE_RX_DUCKING_ATTACK_MS", 80))
+    radio_noise_rx_ducking_hold_ms: int = int(getattr(config, "NETWORK_RADIO_NOISE_RX_DUCKING_HOLD_MS", 250))
+    radio_noise_rx_ducking_release_ms: int = int(getattr(config, "NETWORK_RADIO_NOISE_RX_DUCKING_RELEASE_MS", 450))
     remember_password: bool = False
     saved_password: str = ""
     remembered_private_rooms: list[RememberedPrivateRoom] = field(default_factory=list)
@@ -170,6 +184,20 @@ def _settings_log_context(settings: NetworkClientSettings) -> dict[str, Any]:
         "jitter_buffer_ms": settings.jitter_buffer_ms,
         "frequency_hz": settings.frequency_hz,
         "volume": settings.volume,
+        "radio_noise_enabled": settings.radio_noise_enabled,
+        "radio_noise_volume": settings.radio_noise_volume,
+        "radio_noise_profile": settings.radio_noise_profile,
+        "radio_noise_tone": settings.radio_noise_tone,
+        "radio_noise_tx_ducking_enabled": settings.radio_noise_tx_ducking_enabled,
+        "radio_noise_tx_ducking_depth_percent": settings.radio_noise_tx_ducking_depth_percent,
+        "radio_noise_tx_ducking_attack_ms": settings.radio_noise_tx_ducking_attack_ms,
+        "radio_noise_tx_ducking_hold_ms": settings.radio_noise_tx_ducking_hold_ms,
+        "radio_noise_tx_ducking_release_ms": settings.radio_noise_tx_ducking_release_ms,
+        "radio_noise_rx_ducking_enabled": settings.radio_noise_rx_ducking_enabled,
+        "radio_noise_rx_ducking_depth_percent": settings.radio_noise_rx_ducking_depth_percent,
+        "radio_noise_rx_ducking_attack_ms": settings.radio_noise_rx_ducking_attack_ms,
+        "radio_noise_rx_ducking_hold_ms": settings.radio_noise_rx_ducking_hold_ms,
+        "radio_noise_rx_ducking_release_ms": settings.radio_noise_rx_ducking_release_ms,
         "remembered_private_rooms_count": len(settings.remembered_private_rooms or []),
     }
 
@@ -198,6 +226,74 @@ def settings_from_data(data: dict[str, Any]) -> NetworkClientSettings:
         sample_rate=_safe_int(data.get("sample_rate"), 44_100, 8_000, 192_000),
         blocksize=_safe_int(data.get("blocksize"), 2048, 64, 16_384),
         latency=sanitize_latency(data.get("latency")),
+        radio_noise_enabled=_safe_bool(
+            data.get("radio_noise_enabled"),
+            bool(getattr(config, "NETWORK_RADIO_NOISE_ENABLED_DEFAULT", False)),
+        ),
+        radio_noise_volume=_safe_float(
+            data.get("radio_noise_volume"),
+            float(getattr(config, "NETWORK_RADIO_NOISE_VOLUME_PERCENT_DEFAULT", 5)) / 100.0,
+            0.0,
+            0.30,
+        ),
+        radio_noise_profile=sanitize_radio_noise_profile(data.get("radio_noise_profile")),
+        radio_noise_tone=sanitize_radio_noise_tone(data.get("radio_noise_tone")),
+        radio_noise_tx_ducking_enabled=_safe_bool(
+            data.get("radio_noise_tx_ducking_enabled"),
+            bool(getattr(config, "NETWORK_RADIO_NOISE_TX_DUCKING_ENABLED", True)),
+        ),
+        radio_noise_tx_ducking_depth_percent=_safe_int(
+            data.get("radio_noise_tx_ducking_depth_percent"),
+            int(getattr(config, "NETWORK_RADIO_NOISE_TX_DUCKING_DEPTH_PERCENT", 85)),
+            0,
+            95,
+        ),
+        radio_noise_tx_ducking_attack_ms=_safe_int(
+            data.get("radio_noise_tx_ducking_attack_ms"),
+            int(getattr(config, "NETWORK_RADIO_NOISE_TX_DUCKING_ATTACK_MS", 60)),
+            1,
+            500,
+        ),
+        radio_noise_tx_ducking_hold_ms=_safe_int(
+            data.get("radio_noise_tx_ducking_hold_ms"),
+            int(getattr(config, "NETWORK_RADIO_NOISE_TX_DUCKING_HOLD_MS", 350)),
+            0,
+            5000,
+        ),
+        radio_noise_tx_ducking_release_ms=_safe_int(
+            data.get("radio_noise_tx_ducking_release_ms"),
+            int(getattr(config, "NETWORK_RADIO_NOISE_TX_DUCKING_RELEASE_MS", 500)),
+            1,
+            5000,
+        ),
+        radio_noise_rx_ducking_enabled=_safe_bool(
+            data.get("radio_noise_rx_ducking_enabled"),
+            bool(getattr(config, "NETWORK_RADIO_NOISE_RX_DUCKING_ENABLED", False)),
+        ),
+        radio_noise_rx_ducking_depth_percent=_safe_int(
+            data.get("radio_noise_rx_ducking_depth_percent"),
+            int(getattr(config, "NETWORK_RADIO_NOISE_RX_DUCKING_DEPTH_PERCENT", 45)),
+            0,
+            95,
+        ),
+        radio_noise_rx_ducking_attack_ms=_safe_int(
+            data.get("radio_noise_rx_ducking_attack_ms"),
+            int(getattr(config, "NETWORK_RADIO_NOISE_RX_DUCKING_ATTACK_MS", 80)),
+            1,
+            5000,
+        ),
+        radio_noise_rx_ducking_hold_ms=_safe_int(
+            data.get("radio_noise_rx_ducking_hold_ms"),
+            int(getattr(config, "NETWORK_RADIO_NOISE_RX_DUCKING_HOLD_MS", 250)),
+            0,
+            5000,
+        ),
+        radio_noise_rx_ducking_release_ms=_safe_int(
+            data.get("radio_noise_rx_ducking_release_ms"),
+            int(getattr(config, "NETWORK_RADIO_NOISE_RX_DUCKING_RELEASE_MS", 450)),
+            1,
+            5000,
+        ),
         remember_password=remembered,
         saved_password=sanitize_password_for_storage(data.get("saved_password")) if remembered else "",
         remembered_private_rooms=sanitize_remembered_private_rooms(data.get("remembered_private_rooms")),
@@ -395,6 +491,16 @@ def sanitize_waveform(value: object) -> str:
 def sanitize_latency(value: object) -> str:
     text = str(value or "high").strip().lower()[:16]
     return text if text in {"low", "high", "medium"} else "high"
+
+
+def sanitize_radio_noise_profile(value: object) -> str:
+    text = str(value or getattr(config, "NETWORK_RADIO_NOISE_PROFILE_DEFAULT", "radio")).strip().lower()[:24]
+    return text if text in {"light", "radio", "dx"} else "radio"
+
+
+def sanitize_radio_noise_tone(value: object) -> str:
+    text = str(value or getattr(config, "NETWORK_RADIO_NOISE_TONE_DEFAULT", "low")).strip().lower()[:24]
+    return text if text in {"normal", "low", "deep"} else str(getattr(config, "NETWORK_RADIO_NOISE_TONE_DEFAULT", "low"))
 
 
 def sanitize_password_for_storage(value: object) -> str:

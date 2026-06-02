@@ -81,6 +81,7 @@ class NetworkLobbyWindow(
         )
 
         self.current_view = ""
+        self.settings_view_tab = "general"
         self.connected_room_key = ""
         self.connected_room_id = ""
 
@@ -176,6 +177,20 @@ class NetworkLobbyWindow(
         self.frequency_var = tk.StringVar(value=str(int(round(self.settings.frequency_hz))))
         self.volume_percent_var = tk.IntVar(value=int(round(self.settings.volume * 100)))
         self.jitter_buffer_var = tk.IntVar(value=int(self.settings.jitter_buffer_ms))
+        self.radio_noise_enabled_var = tk.BooleanVar(value=bool(self.settings.radio_noise_enabled))
+        self.radio_noise_volume_percent_var = tk.IntVar(value=int(round(self.settings.radio_noise_volume * 100)))
+        self.radio_noise_profile_var = tk.StringVar(value=str(self.settings.radio_noise_profile or "radio"))
+        self.radio_noise_tone_var = tk.StringVar(value=str(getattr(self.settings, "radio_noise_tone", "low") or "low"))
+        self.radio_noise_tx_ducking_enabled_var = tk.BooleanVar(value=bool(self.settings.radio_noise_tx_ducking_enabled))
+        self.radio_noise_tx_ducking_depth_percent_var = tk.IntVar(value=int(self.settings.radio_noise_tx_ducking_depth_percent))
+        self.radio_noise_tx_ducking_attack_ms_var = tk.IntVar(value=int(self.settings.radio_noise_tx_ducking_attack_ms))
+        self.radio_noise_tx_ducking_hold_ms_var = tk.IntVar(value=int(self.settings.radio_noise_tx_ducking_hold_ms))
+        self.radio_noise_tx_ducking_release_ms_var = tk.IntVar(value=int(self.settings.radio_noise_tx_ducking_release_ms))
+        self.radio_noise_rx_ducking_enabled_var = tk.BooleanVar(value=bool(self.settings.radio_noise_rx_ducking_enabled))
+        self.radio_noise_rx_ducking_depth_percent_var = tk.IntVar(value=int(self.settings.radio_noise_rx_ducking_depth_percent))
+        self.radio_noise_rx_ducking_attack_ms_var = tk.IntVar(value=int(self.settings.radio_noise_rx_ducking_attack_ms))
+        self.radio_noise_rx_ducking_hold_ms_var = tk.IntVar(value=int(self.settings.radio_noise_rx_ducking_hold_ms))
+        self.radio_noise_rx_ducking_release_ms_var = tk.IntVar(value=int(self.settings.radio_noise_rx_ducking_release_ms))
 
         self.public_rooms_frame: tk.Frame | None = None
         self.remembered_rooms_frame: tk.Frame | None = None

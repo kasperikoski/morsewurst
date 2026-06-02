@@ -41,6 +41,7 @@ The core local training workflow is functional and continues to be refined. The 
 - Dot, dash and gap analysis
 - Training rounds with generated target text
 - Problem character practice
+- Koch receive practice with guided progression, manual stages, full-character-set drills and local copy scoring
 - Skill and progress tracking
 - Practice history stored locally
 - WX-MOR practice mode for weather-oriented Morse training
@@ -54,6 +55,8 @@ The core local training workflow is functional and continues to be refined. The 
 Morsewurst includes network practice support for connecting users through a relay server. Users can join public rooms or create private rooms and exchange real-time Morse tone telemetry.
 
 The network system includes relay-side room handling, client reconnect logic, ping and server status checks, jitter-buffered receive playback and a visible network quality indicator. Morsewurst Network is still an actively developed prototype, so occasional glitches and unexpected behaviour may occur.
+
+Network receive playback can also include local radio-style channel noise, with configurable noise profile, tone and level settings. This is intended to make online Morse practice feel closer to listening through a real radio channel while keeping the actual transmitted Morse telemetry clean.
 
 ## 4. Screenshots
 
@@ -224,7 +227,6 @@ Planned and ongoing work includes:
 - Further improving network practice and online room features
 - Making network connection handling, reconnecting and diagnostics clearer
 - Adding more training modes
-- Possibly developing Koch method practice as its own separate application
 - Improving the update workflow so the application can eventually update itself
 - Adding better diagnostics and troubleshooting tools
 - Keeping the documentation clearer and more up to date, including small cleanups like this one

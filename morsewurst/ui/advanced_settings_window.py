@@ -37,6 +37,7 @@ class AdvancedSettingsWindow(tk.Toplevel):
         self._build_language_tab(notebook)
         self._build_speed_tab(notebook)
         self._build_adaptive_tab(notebook)
+        self._build_koch_tab(notebook)
         self._build_problem_chars_tab(notebook)
         self._build_sound_tab(notebook)
         self._build_input_tab(notebook)
@@ -416,6 +417,49 @@ class AdvancedSettingsWindow(tk.Toplevel):
             self.app.app_lifecycle_controller.restart_application()
 
         combo.bind("<<ComboboxSelected>>", on_language_selected)
+
+    def _build_koch_tab(self, notebook: ttk.Notebook) -> None:
+        frame = self._make_scrollable_tab(
+            notebook,
+            self.app.i18n.t("advanced.tab.koch", "Koch"),
+        )
+
+        ttk.Label(
+            frame,
+            text=self.app.i18n.t("advanced.koch.title", "Koch receive practice"),
+            font=("TkDefaultFont", 12, "bold"),
+        ).pack(anchor=tk.W, pady=(0, 6))
+
+        ttk.Label(
+            frame,
+            text=self.app.i18n.t(
+                "advanced.koch.description",
+                "These settings control Koch receive-practice scoring and automatic scoring timing.",
+            ),
+            wraplength=760,
+            justify=tk.LEFT,
+        ).pack(anchor=tk.W, fill=tk.X, pady=(0, 14))
+
+        scoring = ttk.LabelFrame(
+            frame,
+            text=self.app.i18n.t("advanced.koch.scoring_behavior_title", "Scoring behaviour"),
+            padding=10,
+        )
+        scoring.pack(fill=tk.X, pady=(0, 12))
+        scoring.columnconfigure(1, weight=1)
+
+        ttk.Label(
+            scoring,
+            text=self.app.i18n.t("advanced.koch.auto_score_delay_ms", "Automatic scoring delay after playback ms"),
+        ).grid(row=0, column=0, sticky=tk.W, padx=(0, 12), pady=4)
+        ttk.Spinbox(
+            scoring,
+            from_=0,
+            to=10000,
+            increment=250,
+            textvariable=self.app.koch_controller.auto_score_delay_ms_var,
+            width=10,
+        ).grid(row=0, column=1, sticky=tk.W, pady=4)
 
     def _build_problem_chars_tab(self, notebook: ttk.Notebook) -> None:
         frame = ttk.Frame(notebook, padding=12)

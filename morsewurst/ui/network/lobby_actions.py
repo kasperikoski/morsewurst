@@ -196,14 +196,79 @@ class LobbyActionsMixin:
             context={"server_uri": self._server_uri(), "room_title": room_title},
         )
 
-    def _network_settings(self, *, room_name: str, password: str) -> NetworkSettings:
-        playback = PlaybackSettings(
+    def _radio_noise_profile_from_form(self) -> str:
+        profile = str(self.radio_noise_profile_var.get() or "radio").strip().lower()
+        return profile if profile in {"light", "radio", "dx"} else "radio"
+
+    def _radio_noise_tone_from_form(self) -> str:
+        tone = str(self.radio_noise_tone_var.get() or getattr(config, "NETWORK_RADIO_NOISE_TONE_DEFAULT", "low")).strip().lower()
+        return tone if tone in {"normal", "low", "deep"} else str(getattr(config, "NETWORK_RADIO_NOISE_TONE_DEFAULT", "low"))
+
+    def _playback_settings_from_form(self) -> PlaybackSettings:
+        return PlaybackSettings(
             enabled=bool(self.playback_enabled_var.get()),
             jitter_buffer_ms=self._safe_int(self.jitter_buffer_var.get(), 750, 250, 5000),
             frequency_hz=float(self._safe_int(self.frequency_var.get(), 650, 80, 2400)),
             volume=float(self._safe_int(self.volume_percent_var.get(), 100, 0, 100)) / 100.0,
             waveform="sine",
+            radio_noise_enabled=bool(self.radio_noise_enabled_var.get()),
+            radio_noise_volume=float(self._safe_int(self.radio_noise_volume_percent_var.get(), 5, 0, 30)) / 100.0,
+            radio_noise_profile=self._radio_noise_profile_from_form(),
+            radio_noise_tone=self._radio_noise_tone_from_form(),
+            radio_noise_tx_ducking_enabled=bool(self.radio_noise_tx_ducking_enabled_var.get()),
+            radio_noise_tx_ducking_depth_percent=self._safe_int(
+                self.radio_noise_tx_ducking_depth_percent_var.get(),
+                int(getattr(config, "NETWORK_RADIO_NOISE_TX_DUCKING_DEPTH_PERCENT", 85)),
+                0,
+                95,
+            ),
+            radio_noise_tx_ducking_attack_ms=self._safe_int(
+                self.radio_noise_tx_ducking_attack_ms_var.get(),
+                int(getattr(config, "NETWORK_RADIO_NOISE_TX_DUCKING_ATTACK_MS", 60)),
+                1,
+                500,
+            ),
+            radio_noise_tx_ducking_hold_ms=self._safe_int(
+                self.radio_noise_tx_ducking_hold_ms_var.get(),
+                int(getattr(config, "NETWORK_RADIO_NOISE_TX_DUCKING_HOLD_MS", 350)),
+                1,
+                1500,
+            ),
+            radio_noise_tx_ducking_release_ms=self._safe_int(
+                self.radio_noise_tx_ducking_release_ms_var.get(),
+                int(getattr(config, "NETWORK_RADIO_NOISE_TX_DUCKING_RELEASE_MS", 500)),
+                1,
+                2000,
+            ),
+            radio_noise_rx_ducking_enabled=bool(self.radio_noise_rx_ducking_enabled_var.get()),
+            radio_noise_rx_ducking_depth_percent=self._safe_int(
+                self.radio_noise_rx_ducking_depth_percent_var.get(),
+                int(getattr(config, "NETWORK_RADIO_NOISE_RX_DUCKING_DEPTH_PERCENT", 45)),
+                0,
+                95,
+            ),
+            radio_noise_rx_ducking_attack_ms=self._safe_int(
+                self.radio_noise_rx_ducking_attack_ms_var.get(),
+                int(getattr(config, "NETWORK_RADIO_NOISE_RX_DUCKING_ATTACK_MS", 80)),
+                1,
+                500,
+            ),
+            radio_noise_rx_ducking_hold_ms=self._safe_int(
+                self.radio_noise_rx_ducking_hold_ms_var.get(),
+                int(getattr(config, "NETWORK_RADIO_NOISE_RX_DUCKING_HOLD_MS", 250)),
+                1,
+                1500,
+            ),
+            radio_noise_rx_ducking_release_ms=self._safe_int(
+                self.radio_noise_rx_ducking_release_ms_var.get(),
+                int(getattr(config, "NETWORK_RADIO_NOISE_RX_DUCKING_RELEASE_MS", 450)),
+                1,
+                2000,
+            ),
         )
+
+    def _network_settings(self, *, room_name: str, password: str) -> NetworkSettings:
+        playback = self._playback_settings_from_form()
 
         return NetworkSettings(
             callsign=sanitize_callsign(self.callsign_var.get()),
@@ -244,6 +309,60 @@ class LobbyActionsMixin:
             frequency_hz=float(self._safe_int(self.frequency_var.get(), 650, 80, 2400)),
             volume=float(self._safe_int(self.volume_percent_var.get(), 100, 0, 100)) / 100.0,
             waveform="sine",
+            radio_noise_enabled=bool(self.radio_noise_enabled_var.get()),
+            radio_noise_volume=float(self._safe_int(self.radio_noise_volume_percent_var.get(), 5, 0, 30)) / 100.0,
+            radio_noise_profile=self._radio_noise_profile_from_form(),
+            radio_noise_tone=self._radio_noise_tone_from_form(),
+            radio_noise_tx_ducking_enabled=bool(self.radio_noise_tx_ducking_enabled_var.get()),
+            radio_noise_tx_ducking_depth_percent=self._safe_int(
+                self.radio_noise_tx_ducking_depth_percent_var.get(),
+                int(getattr(config, "NETWORK_RADIO_NOISE_TX_DUCKING_DEPTH_PERCENT", 85)),
+                0,
+                95,
+            ),
+            radio_noise_tx_ducking_attack_ms=self._safe_int(
+                self.radio_noise_tx_ducking_attack_ms_var.get(),
+                int(getattr(config, "NETWORK_RADIO_NOISE_TX_DUCKING_ATTACK_MS", 60)),
+                1,
+                500,
+            ),
+            radio_noise_tx_ducking_hold_ms=self._safe_int(
+                self.radio_noise_tx_ducking_hold_ms_var.get(),
+                int(getattr(config, "NETWORK_RADIO_NOISE_TX_DUCKING_HOLD_MS", 350)),
+                1,
+                1500,
+            ),
+            radio_noise_tx_ducking_release_ms=self._safe_int(
+                self.radio_noise_tx_ducking_release_ms_var.get(),
+                int(getattr(config, "NETWORK_RADIO_NOISE_TX_DUCKING_RELEASE_MS", 500)),
+                1,
+                2000,
+            ),
+            radio_noise_rx_ducking_enabled=bool(self.radio_noise_rx_ducking_enabled_var.get()),
+            radio_noise_rx_ducking_depth_percent=self._safe_int(
+                self.radio_noise_rx_ducking_depth_percent_var.get(),
+                int(getattr(config, "NETWORK_RADIO_NOISE_RX_DUCKING_DEPTH_PERCENT", 45)),
+                0,
+                95,
+            ),
+            radio_noise_rx_ducking_attack_ms=self._safe_int(
+                self.radio_noise_rx_ducking_attack_ms_var.get(),
+                int(getattr(config, "NETWORK_RADIO_NOISE_RX_DUCKING_ATTACK_MS", 80)),
+                1,
+                500,
+            ),
+            radio_noise_rx_ducking_hold_ms=self._safe_int(
+                self.radio_noise_rx_ducking_hold_ms_var.get(),
+                int(getattr(config, "NETWORK_RADIO_NOISE_RX_DUCKING_HOLD_MS", 250)),
+                1,
+                1500,
+            ),
+            radio_noise_rx_ducking_release_ms=self._safe_int(
+                self.radio_noise_rx_ducking_release_ms_var.get(),
+                int(getattr(config, "NETWORK_RADIO_NOISE_RX_DUCKING_RELEASE_MS", 450)),
+                1,
+                2000,
+            ),
             remember_password=False,
             saved_password="",
             remembered_private_rooms=remembered_private_rooms,
@@ -257,6 +376,20 @@ class LobbyActionsMixin:
         self.frequency_var.set(str(int(round(safe.frequency_hz))))
         self.volume_percent_var.set(int(round(safe.volume * 100)))
         self.jitter_buffer_var.set(int(safe.jitter_buffer_ms))
+        self.radio_noise_enabled_var.set(bool(safe.radio_noise_enabled))
+        self.radio_noise_volume_percent_var.set(int(round(safe.radio_noise_volume * 100)))
+        self.radio_noise_profile_var.set(str(safe.radio_noise_profile or "radio"))
+        self.radio_noise_tone_var.set(str(getattr(safe, "radio_noise_tone", "low") or "low"))
+        self.radio_noise_tx_ducking_enabled_var.set(bool(safe.radio_noise_tx_ducking_enabled))
+        self.radio_noise_tx_ducking_depth_percent_var.set(int(safe.radio_noise_tx_ducking_depth_percent))
+        self.radio_noise_tx_ducking_attack_ms_var.set(int(safe.radio_noise_tx_ducking_attack_ms))
+        self.radio_noise_tx_ducking_hold_ms_var.set(int(safe.radio_noise_tx_ducking_hold_ms))
+        self.radio_noise_tx_ducking_release_ms_var.set(int(safe.radio_noise_tx_ducking_release_ms))
+        self.radio_noise_rx_ducking_enabled_var.set(bool(safe.radio_noise_rx_ducking_enabled))
+        self.radio_noise_rx_ducking_depth_percent_var.set(int(safe.radio_noise_rx_ducking_depth_percent))
+        self.radio_noise_rx_ducking_attack_ms_var.set(int(safe.radio_noise_rx_ducking_attack_ms))
+        self.radio_noise_rx_ducking_hold_ms_var.set(int(safe.radio_noise_rx_ducking_hold_ms))
+        self.radio_noise_rx_ducking_release_ms_var.set(int(safe.radio_noise_rx_ducking_release_ms))
 
     def _apply_live_settings(self) -> bool:
         manager = getattr(self.app, "network_manager", None)
@@ -270,13 +403,7 @@ class LobbyActionsMixin:
             return False
 
         try:
-            playback = PlaybackSettings(
-                enabled=bool(self.playback_enabled_var.get()),
-                jitter_buffer_ms=self._safe_int(self.jitter_buffer_var.get(), 750, 250, 5000),
-                frequency_hz=float(self._safe_int(self.frequency_var.get(), 650, 80, 2400)),
-                volume=float(self._safe_int(self.volume_percent_var.get(), 100, 0, 100)) / 100.0,
-                waveform="sine",
-            )
+            playback = self._playback_settings_from_form()
             manager.update_playback_settings(playback)
             manager.set_transmit_enabled(bool(self.transmit_enabled_var.get()))
             log_event(
@@ -289,6 +416,19 @@ class LobbyActionsMixin:
                     "jitter_buffer_ms": playback.jitter_buffer_ms,
                     "frequency_hz": playback.frequency_hz,
                     "volume": playback.volume,
+                    "radio_noise_enabled": playback.radio_noise_enabled,
+                    "radio_noise_volume": playback.radio_noise_volume,
+                    "radio_noise_profile": playback.radio_noise_profile,
+                    "radio_noise_tx_ducking_enabled": playback.radio_noise_tx_ducking_enabled,
+                    "radio_noise_tx_ducking_depth_percent": playback.radio_noise_tx_ducking_depth_percent,
+                    "radio_noise_tx_ducking_attack_ms": playback.radio_noise_tx_ducking_attack_ms,
+                    "radio_noise_tx_ducking_hold_ms": playback.radio_noise_tx_ducking_hold_ms,
+                    "radio_noise_tx_ducking_release_ms": playback.radio_noise_tx_ducking_release_ms,
+                    "radio_noise_rx_ducking_enabled": playback.radio_noise_rx_ducking_enabled,
+                    "radio_noise_rx_ducking_depth_percent": playback.radio_noise_rx_ducking_depth_percent,
+                    "radio_noise_rx_ducking_attack_ms": playback.radio_noise_rx_ducking_attack_ms,
+                    "radio_noise_rx_ducking_hold_ms": playback.radio_noise_rx_ducking_hold_ms,
+                    "radio_noise_rx_ducking_release_ms": playback.radio_noise_rx_ducking_release_ms,
                 },
             )
             self._append_log("success", self.tr("network.settings.live_updated"))

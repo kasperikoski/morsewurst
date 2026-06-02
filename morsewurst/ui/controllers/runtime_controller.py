@@ -49,9 +49,12 @@ class RuntimeController:
         app.last_live_ui_refresh_monotonic = 0.0
         app.last_live_score_refresh_monotonic = 0.0
 
+        app.active_mode = "main"
+
         app.network_manager = NetworkManager()
         app.network_window: tk.Toplevel | None = None
         app.network_modal_active = False
+        app.koch_window: tk.Toplevel | None = None
 
         app.timing_profiles: dict[str, Any] = (
             app.decoder_controller.default_timing_profiles()

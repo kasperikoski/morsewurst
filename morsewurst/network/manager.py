@@ -80,6 +80,7 @@ class NetworkManager:
         self._closed = threading.Event()
         self._closed.set()
         self._control_ready_event = threading.Event()
+        self._room_noise_active = False
 
         log_event(
             "network",
@@ -106,7 +107,7 @@ class NetworkManager:
         return self._control_ready_event.is_set()
 
     def _create_tone_player(self, playback_settings: PlaybackSettings) -> TonePlayer:
-        return TonePlayer(
+        player = TonePlayer(
             frequency_hz=playback_settings.frequency_hz,
             volume=playback_settings.volume,
             waveform=playback_settings.waveform,
@@ -116,6 +117,8 @@ class NetworkManager:
             output_device=playback_settings.output_device,
             status_callback=self._tone_player_status,
         )
+        self._configure_tone_player_background_noise(player, playback_settings)
+        return player
 
     def start_host(self, settings: NetworkSettings) -> None:
         log_event(
@@ -411,6 +414,7 @@ class NetworkManager:
 
     def stop(self) -> None:
         previous_mode = self._mode
+        self._room_noise_active = False
         log_event(
             "network",
             "network.manager.stop_started",
@@ -575,6 +579,7 @@ class NetworkManager:
             self._status("warning", f"Tone-viestiä ei lähetetty: {exc}")
             return
 
+        self._duck_room_noise_for_local_tone(event)
         asyncio.run_coroutine_threadsafe(self._send_tone_message(message), self._loop)
 
     def update_playback_settings(self, settings: PlaybackSettings) -> None:
@@ -588,8 +593,23 @@ class NetworkManager:
                 "frequency_hz": settings.frequency_hz,
                 "volume": settings.volume,
                 "waveform": settings.waveform,
+                "radio_noise_enabled": settings.radio_noise_enabled,
+                "radio_noise_volume": settings.radio_noise_volume,
+                "radio_noise_profile": settings.radio_noise_profile,
+                "radio_noise_tone": settings.radio_noise_tone,
+                "radio_noise_tx_ducking_enabled": settings.radio_noise_tx_ducking_enabled,
+                "radio_noise_tx_ducking_depth_percent": settings.radio_noise_tx_ducking_depth_percent,
+                "radio_noise_tx_ducking_attack_ms": settings.radio_noise_tx_ducking_attack_ms,
+                "radio_noise_tx_ducking_hold_ms": settings.radio_noise_tx_ducking_hold_ms,
+                "radio_noise_tx_ducking_release_ms": settings.radio_noise_tx_ducking_release_ms,
+                "radio_noise_rx_ducking_enabled": settings.radio_noise_rx_ducking_enabled,
+                "radio_noise_rx_ducking_depth_percent": settings.radio_noise_rx_ducking_depth_percent,
+                "radio_noise_rx_ducking_attack_ms": settings.radio_noise_rx_ducking_attack_ms,
+                "radio_noise_rx_ducking_hold_ms": settings.radio_noise_rx_ducking_hold_ms,
+                "radio_noise_rx_ducking_release_ms": settings.radio_noise_rx_ducking_release_ms,
             },
         )
+        room_noise_active = self._room_noise_active
         self.playback_settings = settings
         self.tone_player.stop()
         self.tone_player = self._create_tone_player(settings)
@@ -598,6 +618,9 @@ class NetworkManager:
             playback_settings=settings,
             status_callback=self._status,
         )
+        self._room_noise_active = room_noise_active
+        if room_noise_active:
+            self._start_room_background_noise()
 
     def reset_receive_playback(self) -> None:
         log_event(
@@ -631,6 +654,78 @@ class NetworkManager:
             message="Network transmit setting changed.",
             context={"enabled": bool(enabled), "mode": self._mode},
         )
+
+    def _configure_tone_player_background_noise(self, player: TonePlayer, settings: PlaybackSettings) -> None:
+        player.configure_background_noise(
+            enabled=bool(settings.radio_noise_enabled),
+            volume=float(settings.radio_noise_volume),
+            profile=settings.radio_noise_profile,
+            tone=settings.radio_noise_tone,
+            tx_ducking_enabled=bool(settings.radio_noise_tx_ducking_enabled),
+            tx_ducking_depth_percent=settings.radio_noise_tx_ducking_depth_percent,
+            tx_ducking_attack_ms=settings.radio_noise_tx_ducking_attack_ms,
+            tx_ducking_hold_ms=settings.radio_noise_tx_ducking_hold_ms,
+            tx_ducking_release_ms=settings.radio_noise_tx_ducking_release_ms,
+            rx_ducking_enabled=bool(settings.radio_noise_rx_ducking_enabled),
+            rx_ducking_depth_percent=settings.radio_noise_rx_ducking_depth_percent,
+            rx_ducking_attack_ms=settings.radio_noise_rx_ducking_attack_ms,
+            rx_ducking_hold_ms=settings.radio_noise_rx_ducking_hold_ms,
+            rx_ducking_release_ms=settings.radio_noise_rx_ducking_release_ms,
+        )
+
+    def _start_room_background_noise(self) -> None:
+        self._room_noise_active = True
+        self._configure_tone_player_background_noise(self.tone_player, self.playback_settings)
+        if not self.playback_settings.radio_noise_enabled:
+            return
+        try:
+            self.tone_player.start_background_noise()
+            log_event(
+                "network",
+                "network.radio_noise.started",
+                message="Network room radio noise started.",
+                context={
+                    "mode": self._mode,
+                    "room_key": self.last_joined_room_key,
+                    "volume": self.playback_settings.radio_noise_volume,
+                    "profile": self.playback_settings.radio_noise_profile,
+                    "tone": self.playback_settings.radio_noise_tone,
+                },
+            )
+        except Exception as exc:
+            log_exception(
+                "network",
+                "network.radio_noise.start_failed",
+                exc,
+                level="warning",
+                message="Network room radio noise could not be started.",
+                context={"mode": self._mode},
+            )
+
+    def _duck_room_noise_for_local_tone(self, event: Dict[str, Any]) -> None:
+        if not self._room_noise_active or not self.playback_settings.radio_noise_enabled:
+            return
+
+        duration_seconds = 0.0
+        try:
+            duration_seconds = max(0.0, float(event.get("dur") or 0.0) / 1_000_000.0)
+        except Exception:
+            duration_seconds = 0.0
+
+        if duration_seconds <= 0.0:
+            return
+
+        try:
+            self.tone_player.duck_noise(kind="tx", duration_seconds=duration_seconds)
+        except Exception as exc:
+            log_exception(
+                "network",
+                "network.radio_noise.tx_duck_failed",
+                exc,
+                level="debug",
+                message="Network room radio noise TX ducking failed.",
+                context={"mode": self._mode},
+            )
 
     def request_server_info(self) -> None:
         if not self.is_running:
@@ -881,6 +976,7 @@ class NetworkManager:
                 message="Hosted room server started.",
                 context=_settings_log_context(settings, mode="host"),
             )
+            self._start_room_background_noise()
         except asyncio.CancelledError:
             raise
         except Exception as exc:
@@ -956,6 +1052,7 @@ class NetworkManager:
                         f"Connected to room {room_name}.",
                         room_payload,
                     )
+                    self._start_room_background_noise()
 
                     sender = asyncio.create_task(self._client_sender_loop(websocket))
                     receiver = asyncio.create_task(self._client_receiver_loop(websocket))
@@ -1432,6 +1529,20 @@ def _settings_log_context(settings: NetworkSettings, *, mode: str) -> dict[str, 
         "transmit_enabled": settings.transmit_enabled,
         "playback_enabled": settings.playback.enabled,
         "jitter_buffer_ms": settings.playback.jitter_buffer_ms,
+        "radio_noise_enabled": settings.playback.radio_noise_enabled,
+        "radio_noise_volume": settings.playback.radio_noise_volume,
+        "radio_noise_profile": settings.playback.radio_noise_profile,
+        "radio_noise_tone": settings.playback.radio_noise_tone,
+        "radio_noise_tx_ducking_enabled": settings.playback.radio_noise_tx_ducking_enabled,
+        "radio_noise_tx_ducking_depth_percent": settings.playback.radio_noise_tx_ducking_depth_percent,
+        "radio_noise_tx_ducking_attack_ms": settings.playback.radio_noise_tx_ducking_attack_ms,
+        "radio_noise_tx_ducking_hold_ms": settings.playback.radio_noise_tx_ducking_hold_ms,
+        "radio_noise_tx_ducking_release_ms": settings.playback.radio_noise_tx_ducking_release_ms,
+        "radio_noise_rx_ducking_enabled": settings.playback.radio_noise_rx_ducking_enabled,
+        "radio_noise_rx_ducking_depth_percent": settings.playback.radio_noise_rx_ducking_depth_percent,
+        "radio_noise_rx_ducking_attack_ms": settings.playback.radio_noise_rx_ducking_attack_ms,
+        "radio_noise_rx_ducking_hold_ms": settings.playback.radio_noise_rx_ducking_hold_ms,
+        "radio_noise_rx_ducking_release_ms": settings.playback.radio_noise_rx_ducking_release_ms,
     }
 
 

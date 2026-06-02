@@ -50,6 +50,7 @@ class SettingsController:
         self.load_main_training_settings(data)
         self.load_input_and_serial_settings(data)
         self.load_advanced_stat_settings(data)
+        self.load_koch_settings(data)
         self.load_window_settings(data)
         log_app_event(
             "app.settings.applied",
@@ -371,6 +372,76 @@ class SettingsController:
             app.effective_wpm_min_cleanliness_var,
             0,
             100,
+        )
+
+    def load_koch_settings(self, data: dict[str, Any]) -> None:
+        """Load Koch receive-practice settings."""
+        app = self.app
+
+        self.set_string_from_data(
+            data,
+            "koch_mode",
+            app.koch_controller.mode_var,
+        )
+        self.set_string_from_data(
+            data,
+            "koch_sequence_key",
+            app.koch_controller.sequence_key_var,
+        )
+        self.set_int_from_data(
+            data,
+            "koch_stage_index",
+            app.koch_controller.stage_index_var,
+            1,
+            1000,
+        )
+        self.set_int_from_data(
+            data,
+            "koch_target_chars",
+            app.koch_controller.target_chars_var,
+            30,
+            5000,
+        )
+        self.set_int_from_data(
+            data,
+            "koch_character_wpm",
+            app.koch_controller.character_wpm_var,
+            5,
+            80,
+        )
+        self.set_int_from_data(
+            data,
+            "koch_effective_wpm",
+            app.koch_controller.effective_wpm_var,
+            5,
+            80,
+        )
+        self.set_int_from_data(
+            data,
+            "koch_tone_hz",
+            app.koch_controller.tone_hz_var,
+            100,
+            2000,
+        )
+        self.set_int_from_data(
+            data,
+            "koch_volume_percent",
+            app.koch_controller.volume_percent_var,
+            0,
+            100,
+        )
+        self.set_string_from_data(
+            data,
+            "koch_window_geometry",
+            app.koch_controller.window_geometry_var,
+        )
+
+        self.set_int_from_data(
+            data,
+            "koch_auto_score_delay_ms",
+            app.koch_controller.auto_score_delay_ms_var,
+            0,
+            10000,
         )
 
     def load_window_settings(self, data: dict[str, Any]) -> None:
@@ -696,6 +767,60 @@ class SettingsController:
                 default=getattr(config, "DEFAULT_EFFECTIVE_WPM_MIN_CLEANLINESS", 85),
                 minimum=0,
                 maximum=100,
+            ),
+            "koch_mode": str(
+                app.koch_controller.mode_var.get()
+                or getattr(config, "DEFAULT_KOCH_MODE", "guided")
+            ),
+            "koch_sequence_key": str(
+                app.koch_controller.sequence_key_var.get()
+                or getattr(config, "DEFAULT_KOCH_SEQUENCE", "classic")
+            ),
+            "koch_stage_index": helpers.safe_int_var(
+                app.koch_controller.stage_index_var,
+                default=getattr(config, "DEFAULT_KOCH_STAGE_INDEX", 2),
+                minimum=1,
+                maximum=1000,
+            ),
+            "koch_target_chars": helpers.safe_int_var(
+                app.koch_controller.target_chars_var,
+                default=getattr(config, "DEFAULT_KOCH_TARGET_CHARS", 30),
+                minimum=30,
+                maximum=5000,
+            ),
+            "koch_character_wpm": helpers.safe_int_var(
+                app.koch_controller.character_wpm_var,
+                default=getattr(config, "DEFAULT_KOCH_CHARACTER_WPM", 20),
+                minimum=5,
+                maximum=80,
+            ),
+            "koch_effective_wpm": helpers.safe_int_var(
+                app.koch_controller.effective_wpm_var,
+                default=getattr(config, "DEFAULT_KOCH_EFFECTIVE_WPM", 15),
+                minimum=5,
+                maximum=80,
+            ),
+            "koch_tone_hz": helpers.safe_int_var(
+                app.koch_controller.tone_hz_var,
+                default=getattr(config, "DEFAULT_KOCH_TONE_HZ", 600),
+                minimum=100,
+                maximum=2000,
+            ),
+            "koch_volume_percent": helpers.safe_int_var(
+                app.koch_controller.volume_percent_var,
+                default=getattr(config, "DEFAULT_KOCH_VOLUME_PERCENT", 70),
+                minimum=0,
+                maximum=100,
+            ),
+            "koch_window_geometry": str(
+                app.koch_controller.window_geometry_var.get()
+                or getattr(config, "UI_KOCH_WINDOW_GEOMETRY", "1260x1000")
+            ),
+            "koch_auto_score_delay_ms": helpers.safe_int_var(
+                app.koch_controller.auto_score_delay_ms_var,
+                default=getattr(config, "DEFAULT_KOCH_AUTO_SCORE_DELAY_MS", 1500),
+                minimum=0,
+                maximum=10000,
             ),
             "window_geometry": app.geometry(),
         }

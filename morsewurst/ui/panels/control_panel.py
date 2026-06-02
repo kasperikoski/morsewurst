@@ -71,6 +71,12 @@ def build_control_panel(app: tk.Misc, parent: ttk.Frame) -> None:
         command=app.window_controller.open_network_window,
     ).pack(side=tk.LEFT, padx=(8, 0))
 
+    ttk.Button(
+        buttons,
+        text=app.i18n.t("control.koch"),
+        command=app.window_controller.open_koch_window,
+    ).pack(side=tk.LEFT, padx=(8, 0))
+
     app.status_label = ttk.Label(
         buttons,
         textvariable=app.status_var,

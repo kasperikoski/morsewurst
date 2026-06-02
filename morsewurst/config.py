@@ -9,7 +9,7 @@ import sys
 from pathlib import Path
 
 APP_NAME = "Morsewurst"
-APP_VERSION = "0.99.11.3"
+APP_VERSION = "0.99.12"
 
 # ============================================================
 # Update check
@@ -193,6 +193,19 @@ UI_RAW_TELEMETRY_HEIGHT = 72
 UI_SUMMARY_ROW_HEIGHT = 330
 UI_GENERAL_INFO_WIDTH = 360
 
+# Koch receive-practice layout.
+# The receive-practice window has its own geometry because it contains a wide
+# copy area, comparison output, recent sessions and a right-side skill/problem
+# summary stack. The geometry can be overridden by the user's saved UI settings.
+UI_KOCH_WINDOW_GEOMETRY = "1260x1000"
+UI_KOCH_WINDOW_MIN_WIDTH = 1200
+UI_KOCH_WINDOW_MIN_HEIGHT = 920
+
+# The right panel has a fixed width for the practice actions, receive-skill
+# summary and difficult-character stack. The left practice area expands into the
+# remaining space, so this is the main value to tune when adjusting the layout.
+UI_KOCH_RIGHT_PANEL_WIDTH = 360
+
 # Settings window.
 UI_SETTINGS_WINDOW_GEOMETRY = "880x780"
 UI_SETTINGS_WINDOW_MIN_WIDTH = 880
@@ -220,6 +233,90 @@ DEFAULT_TARGET_WPM = 15
 LETTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
 NUMBERS = "0123456789"
 PUNCTUATION = ".,?!/()&:;=+-_\"@$'"
+
+# ============================================================
+# Koch receive practice mode
+# ============================================================
+DEFAULT_KOCH_SEQUENCE = "classic"
+DEFAULT_KOCH_MODE = "guided"
+DEFAULT_KOCH_STAGE_INDEX = 2
+DEFAULT_KOCH_TARGET_CHARS = 30
+# Hard safety cap for generated receive-practice length. The time-aware
+# alignment used by scoring is intentionally rich, so very long drills should
+# be split into multiple sessions instead of one massive O(n*m) comparison.
+DEFAULT_KOCH_MAX_TARGET_CHARS = 1000
+DEFAULT_KOCH_MIN_TARGET_CHARS_ABSOLUTE = 30
+DEFAULT_KOCH_MIN_TARGET_CHARS_ACTIVE_FACTOR = 1.50
+DEFAULT_KOCH_CHARACTER_WPM = 20
+DEFAULT_KOCH_EFFECTIVE_WPM = 15
+DEFAULT_KOCH_TONE_HZ = 600
+DEFAULT_KOCH_VOLUME_PERCENT = 70
+
+# Rendered Koch playback sample rate. 8 kHz is intentionally used because
+# Koch receive drills use narrow-band Morse tones plus deliberately lo-fi
+# background noise. Keeping this low makes temporary WAV rendering much faster.
+DEFAULT_KOCH_AUDIO_SAMPLE_RATE = 8_000
+
+# Quiet generated radio-style background noise for Koch receive playback.
+# This is rendered directly into the same temporary WAV as the Morse tones, so
+# it does not require extra asset files or parallel audio playback. Keep the
+# default volume low: the noise is meant to add atmosphere, not mask copying.
+DEFAULT_KOCH_BACKGROUND_NOISE_ENABLED = True
+DEFAULT_KOCH_BACKGROUND_NOISE_VOLUME_PERCENT = 5
+DEFAULT_KOCH_BACKGROUND_NOISE_FADE_MS = 750
+DEFAULT_KOCH_BACKGROUND_NOISE_LEAD_IN_MS = 750
+DEFAULT_KOCH_BACKGROUND_NOISE_LOW_PASS_HZ = 3200
+DEFAULT_KOCH_BACKGROUND_NOISE_HIGH_PASS_HZ = 250
+DEFAULT_KOCH_BACKGROUND_NOISE_SEED = None
+
+# Advanced radio-noise dynamics. These affect only the generated background
+# noise, not the Morse tone itself. Keep the defaults subtle: the goal is to
+# make the receiver sound alive without making copy practice unfair.
+DEFAULT_KOCH_BACKGROUND_NOISE_FLUTTER_PERCENT = 10
+DEFAULT_KOCH_BACKGROUND_NOISE_FLUTTER_SPEED_HZ = 0.45
+DEFAULT_KOCH_BACKGROUND_NOISE_DRIFT_PERCENT = 18
+DEFAULT_KOCH_BACKGROUND_NOISE_DRIFT_SPEED_HZ = 0.18
+DEFAULT_KOCH_BACKGROUND_NOISE_BURST_CHANCE_PER_SECOND = 0.25
+DEFAULT_KOCH_BACKGROUND_NOISE_BURST_STRENGTH_PERCENT = 70
+DEFAULT_KOCH_BACKGROUND_NOISE_BURST_DECAY_MS = 180
+DEFAULT_KOCH_BACKGROUND_NOISE_CRACKLE_CHANCE_PER_SECOND = 1.2
+DEFAULT_KOCH_BACKGROUND_NOISE_CRACKLE_STRENGTH_PERCENT = 18
+DEFAULT_KOCH_BACKGROUND_NOISE_DROPOUT_CHANCE_PER_SECOND = 0.08
+DEFAULT_KOCH_BACKGROUND_NOISE_DROPOUT_DEPTH_PERCENT = 35
+DEFAULT_KOCH_BACKGROUND_NOISE_DROPOUT_DECAY_MS = 650
+
+DEFAULT_KOCH_PASS_ACCURACY = 90.0
+DEFAULT_KOCH_PASS_CLEANLINESS = 85.0
+DEFAULT_KOCH_NEW_CHAR_MIN_ATTEMPTS = 8
+# In guided Koch receive practice, five consecutive pass-eligible failures on
+# the same sequence and stage step the current practice stage down by one. The
+# unlocked stage is not reduced, so the user can recover without losing access
+# to already opened characters.
+DEFAULT_KOCH_GUIDED_DEMOTE_AFTER_FAILURES = 5
+DEFAULT_KOCH_GUIDED_MIN_STAGE = 2
+DEFAULT_KOCH_NEW_CHAR_MIN_ACCURACY = 80.0
+DEFAULT_KOCH_AUTO_SCORE_DELAY_MS = 1500
+DEFAULT_KOCH_COUNTDOWN_SECONDS = 5
+KOCH_RATING_FULL_SET_LEVEL_AT_20_WPM = 50.0
+KOCH_RATING_FULL_SET_LEVEL_AT_40_WPM = 100.0
+KOCH_RATING_MAX_LEVEL = 100.0
+
+# Rolling Koch receive-skill model. This applies only to Koch receive practice,
+# not to the main Morse sending skill rating.
+KOCH_SKILL_MODEL_VERSION = 2
+DEFAULT_KOCH_SKILL_RECENT_ROUNDS = 1000
+DEFAULT_KOCH_SKILL_MIN_SESSIONS = 30
+KOCH_SKILL_REFERENCE_CHARACTER_WPM = 20.0
+KOCH_SKILL_REFERENCE_EFFECTIVE_WPM = 20.0
+KOCH_SKILL_REFERENCE_TARGET_CHARS = 100.0
+KOCH_SKILL_REFERENCE_ACCURACY = 90.0
+KOCH_SKILL_REFERENCE_CLEANLINESS = 85.0
+KOCH_SKILL_CHARACTER_WPM_EXPONENT = 0.35
+KOCH_SKILL_EFFECTIVE_WPM_EXPONENT = 0.65
+KOCH_SKILL_CLEANLINESS_BASE_FACTOR = 0.55
+KOCH_SKILL_LENGTH_EXPONENT = 0.15
+KOCH_SKILL_LENGTH_MIN_FACTOR = 0.75
+KOCH_SKILL_LENGTH_MAX_FACTOR = 1.08
 
 # Default long-term target distribution for generated practice characters.
 # The values are weights used by the character mix bar. Active groups are
@@ -559,6 +656,62 @@ ROUND_TIMING_IAMBIC_WORD_GAP_WEIGHT = 0.25
 ROUND_TIMING_STRAIGHT_SOURCE_WEIGHT = 1.00
 ROUND_TIMING_IAMBIC_SOURCE_WEIGHT = 0.60
 ROUND_TIMING_USE_TARGET_EXPECTATIONS = True
+
+
+# ============================================================
+# Network radio channel noise
+# ============================================================
+# Local-only receiver ambience for network rooms. This is never sent over the
+# network and is mixed into the same local TonePlayer stream as received Morse.
+NETWORK_RADIO_NOISE_ENABLED_DEFAULT = True
+NETWORK_RADIO_NOISE_VOLUME_PERCENT_DEFAULT = 5
+NETWORK_RADIO_NOISE_PROFILE_DEFAULT = "radio"
+# The noise profile controls movement and interference. The tone preset controls
+# the perceived brightness of the channel by selecting the band-pass filter.
+NETWORK_RADIO_NOISE_TONE_DEFAULT = "low"
+NETWORK_RADIO_NOISE_FADE_IN_MS = 700
+NETWORK_RADIO_NOISE_FADE_OUT_MS = 700
+
+NETWORK_RADIO_NOISE_TONE_NORMAL_LOW_PASS_HZ = 3200
+NETWORK_RADIO_NOISE_TONE_NORMAL_HIGH_PASS_HZ = 250
+NETWORK_RADIO_NOISE_TONE_LOW_LOW_PASS_HZ = 1800
+NETWORK_RADIO_NOISE_TONE_LOW_HIGH_PASS_HZ = 100
+NETWORK_RADIO_NOISE_TONE_DEEP_LOW_PASS_HZ = 950
+NETWORK_RADIO_NOISE_TONE_DEEP_HIGH_PASS_HZ = 40
+
+# Base profile used by the live network noise bed. Keep this a little quieter
+# than Koch by default because network rooms may stay open for a long time.
+NETWORK_RADIO_NOISE_LOW_PASS_HZ = 3200
+NETWORK_RADIO_NOISE_HIGH_PASS_HZ = 250
+NETWORK_RADIO_NOISE_SEED = None
+NETWORK_RADIO_NOISE_FLUTTER_PERCENT = 8
+NETWORK_RADIO_NOISE_FLUTTER_SPEED_HZ = 0.38
+NETWORK_RADIO_NOISE_DRIFT_PERCENT = 14
+NETWORK_RADIO_NOISE_DRIFT_SPEED_HZ = 0.14
+NETWORK_RADIO_NOISE_BURST_CHANCE_PER_SECOND = 0.12
+NETWORK_RADIO_NOISE_BURST_STRENGTH_PERCENT = 45
+NETWORK_RADIO_NOISE_BURST_DECAY_MS = 190
+NETWORK_RADIO_NOISE_CRACKLE_CHANCE_PER_SECOND = 0.65
+NETWORK_RADIO_NOISE_CRACKLE_STRENGTH_PERCENT = 11
+NETWORK_RADIO_NOISE_DROPOUT_CHANCE_PER_SECOND = 0.04
+NETWORK_RADIO_NOISE_DROPOUT_DEPTH_PERCENT = 22
+NETWORK_RADIO_NOISE_DROPOUT_DECAY_MS = 700
+
+# Strong local transmit ducking approximates real transceiver behaviour: while
+# sending, the receiver noise floor is heavily muted and the operator hears the
+# sidetone instead. Remote receive ducking is gentler so incoming Morse still
+# feels like it is riding over a live channel rather than muting it completely.
+NETWORK_RADIO_NOISE_TX_DUCKING_ENABLED = True
+NETWORK_RADIO_NOISE_TX_DUCKING_DEPTH_PERCENT = 85
+NETWORK_RADIO_NOISE_TX_DUCKING_ATTACK_MS = 60
+NETWORK_RADIO_NOISE_TX_DUCKING_RELEASE_MS = 500
+NETWORK_RADIO_NOISE_TX_DUCKING_HOLD_MS = 350
+
+NETWORK_RADIO_NOISE_RX_DUCKING_ENABLED = False
+NETWORK_RADIO_NOISE_RX_DUCKING_DEPTH_PERCENT = 45
+NETWORK_RADIO_NOISE_RX_DUCKING_ATTACK_MS = 80
+NETWORK_RADIO_NOISE_RX_DUCKING_RELEASE_MS = 450
+NETWORK_RADIO_NOISE_RX_DUCKING_HOLD_MS = 250
 
 # ============================================================
 # Network settings

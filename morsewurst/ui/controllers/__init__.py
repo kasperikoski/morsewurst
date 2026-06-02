@@ -13,6 +13,7 @@ from morsewurst.ui.controllers.decoder_controller import DecoderController
 from morsewurst.ui.controllers.effective_wpm_controller import EffectiveWpmController
 from morsewurst.ui.controllers.history_controller import HistoryController
 from morsewurst.ui.controllers.input_controller import InputController
+from morsewurst.ui.controllers.koch_controller import KochController
 from morsewurst.ui.controllers.layout_controller import LayoutController
 from morsewurst.ui.controllers.practice_controller import PracticeController
 from morsewurst.ui.controllers.profile_controller import ProfileController
@@ -37,6 +38,7 @@ __all__ = [
     "EffectiveWpmController",
     "HistoryController",
     "InputController",
+    "KochController",
     "LayoutController",
     "PracticeController",
     "ProfileController",

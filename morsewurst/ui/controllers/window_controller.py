@@ -183,6 +183,21 @@ class WindowController:
         self.app.network_window = NetworkLobbyWindow(self.app)
         self.apply_window_icon(self.app.network_window)
 
+    def open_koch_window(self) -> None:
+        """Open the Koch receive-practice window, or focus it if it is already open."""
+        if self.raise_existing_window("koch_window"):
+            return
+
+        from morsewurst.ui.koch import KochWindow
+
+        self.app.koch_window = KochWindow(self.app)
+        self.apply_window_icon(self.app.koch_window)
+        log_app_event(
+            "app.window.opened",
+            message="Koch receive-practice window opened.",
+            context={"window": "koch_window"},
+        )
+
     def close_known_windows(self) -> None:
         """Best-effort close for known secondary windows."""
         log_app_event(
@@ -194,6 +209,7 @@ class WindowController:
             "debug_window",
             "stats_window",
             "network_window",
+            "koch_window",
             "profile_window",
         ):
             window = self.existing_window_or_none(attribute)

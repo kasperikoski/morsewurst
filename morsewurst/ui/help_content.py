@@ -9,7 +9,7 @@ from typing import Any
 
 # This file defines the help document structure only.
 # The visible text is loaded through the normal Morsewurst i18n service.
-# Add matching translations for these keys to morsewurst/i18n/en.json and fi.json.
+# Add matching translations for these keys to all supported morsewurst/i18n/*.json files.
 
 HELP_DOCUMENT_SPEC: list[dict[str, str]] = [
     {"type": "title", "key": "help.content.title"},
@@ -44,6 +44,18 @@ HELP_DOCUMENT_SPEC: list[dict[str, str]] = [
     {"type": "paragraph", "key": "help.content.practice_settings.problem_chars"},
     {"type": "paragraph", "key": "help.content.practice_settings.problem_chars_mix"},
     {"type": "paragraph", "key": "help.content.practice_settings.suggest_speed"},
+
+    {"type": "heading", "key": "help.content.koch.heading"},
+    {"type": "paragraph", "key": "help.content.koch.intro"},
+    {"type": "paragraph", "key": "help.content.koch.modes"},
+    {"type": "paragraph", "key": "help.content.koch.sequence_stage"},
+    {"type": "paragraph", "key": "help.content.koch.speed_audio"},
+    {"type": "paragraph", "key": "help.content.koch.target_length"},
+    {"type": "paragraph", "key": "help.content.koch.scoring"},
+    {"type": "paragraph", "key": "help.content.koch.guided_progress"},
+    {"type": "paragraph", "key": "help.content.koch.skill"},
+    {"type": "paragraph", "key": "help.content.koch.radio_noise"},
+    {"type": "note", "key": "help.content.koch.note"},
 
     {"type": "heading", "key": "help.content.round.heading"},
     {"type": "paragraph", "key": "help.content.round.intro"},
@@ -102,6 +114,7 @@ HELP_DOCUMENT_SPEC: list[dict[str, str]] = [
     {"type": "paragraph", "key": "help.content.advanced.decoder"},
     {"type": "paragraph", "key": "help.content.advanced.problem_chars"},
     {"type": "paragraph", "key": "help.content.advanced.sound"},
+    {"type": "paragraph", "key": "help.content.advanced.koch"},
     {"type": "paragraph", "key": "help.content.advanced.effective"},
     {"type": "paragraph", "key": "help.content.advanced.skill"},
     {"type": "paragraph", "key": "help.content.advanced.stats"},
@@ -117,6 +130,9 @@ HELP_DOCUMENT_SPEC: list[dict[str, str]] = [
     {"type": "paragraph", "key": "help.content.network.server_info"},
     {"type": "paragraph", "key": "help.content.network.quality"},
     {"type": "paragraph", "key": "help.content.network.settings"},
+    {"type": "paragraph", "key": "help.content.network.audio"},
+    {"type": "paragraph", "key": "help.content.network.radio_noise"},
+    {"type": "paragraph", "key": "help.content.network.noise_ducking"},
     {"type": "paragraph", "key": "help.content.network.transmit"},
     {"type": "note", "key": "help.content.network.note"},
 
