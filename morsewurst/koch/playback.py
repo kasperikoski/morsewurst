@@ -8,6 +8,7 @@ import os
 import tempfile
 import threading
 import time
+import wave
 from dataclasses import dataclass
 from typing import Callable
 
@@ -28,6 +29,28 @@ def _make_temp_wave_path() -> str:
         return handle.name
     finally:
         handle.close()
+
+
+def _wave_duration_ms(path: str) -> float:
+    """Return the real duration of a rendered WAV file.
+
+    Koch playback should wait for the actual WAV length, not only for the
+    theoretical target schedule. This avoids clipping the last element when
+    rendered sample rounding or audio-device buffering makes the file slightly
+    longer than the schedule estimate.
+    """
+
+    try:
+        with wave.open(str(path), "rb") as wav:
+            frame_count = int(wav.getnframes())
+            frame_rate = int(wav.getframerate())
+    except Exception:
+        return 0.0
+
+    if frame_count <= 0 or frame_rate <= 0:
+        return 0.0
+
+    return (float(frame_count) / float(frame_rate)) * 1000.0
 
 
 @dataclass
@@ -297,21 +320,29 @@ class KochPlayback:
                 return
 
             lead_in_ms = koch_background_noise_lead_in_ms()
+            wave_duration_ms = _wave_duration_ms(temp_path)
+            expected_duration_ms = lead_in_ms + max(0.0, float(duration_ms))
+            total_wait_ms = max(wave_duration_ms, expected_duration_ms) + 180.0
+
             winsound.PlaySound(temp_path, winsound.SND_FILENAME | winsound.SND_ASYNC)
 
             if lead_in_ms > 0.0:
                 self._sleep_ms(lead_in_ms, stop_event)
 
-            if on_started is not None and not stop_event.is_set():
+            if stop_event.is_set():
+                return
+
+            if on_started is not None:
                 on_started()
 
-            remaining_ms = max(0.0, float(duration_ms))
-            self._sleep_ms(remaining_ms + 80, stop_event)
+            remaining_ms = max(0.0, total_wait_ms - lead_in_ms)
+            self._sleep_ms(remaining_ms, stop_event)
         finally:
-            try:
-                winsound.PlaySound(None, 0)
-            except Exception:
-                pass
+            if stop_event.is_set():
+                try:
+                    winsound.PlaySound(None, 0)
+                except Exception:
+                    pass
             if temp_path is not None and self._temp_wave_path == temp_path:
                 self._temp_wave_path = None
             if temp_path is not None:

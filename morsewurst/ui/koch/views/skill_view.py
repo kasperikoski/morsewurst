@@ -52,7 +52,7 @@ class KochSkillView(ttk.LabelFrame):
             ("sessions", self.window.tr("koch.skill.metric.sessions", "Sessions")),
             ("accuracy", self.window.tr("koch.skill.metric.accuracy", "Average accuracy")),
             ("cleanliness", self.window.tr("koch.skill.metric.cleanliness", "Average cleanliness")),
-            ("avg_wpm", self.window.tr("koch.skill.metric.avg_wpm", "Average WPM")),
+            ("avg_wpm", self.window.tr("koch.skill.metric.avg_wpm", "Farnsworth/char WPM")),
             ("target_length", self.window.tr("koch.skill.metric.target_length", "Average length")),
             ("confidence", self.window.tr("koch.skill.metric.confidence", "Confidence")),
         ]

@@ -22,7 +22,7 @@ _SAMPLE_WIDTH_BYTES = 2
 _CHANNELS = 1
 _TONE_RAMP_MS = 4.0
 _CHUNK_SAMPLES = 4096
-_TAIL_MS = 20.0
+_TAIL_MS = 120.0
 
 
 def _koch_audio_sample_rate() -> int:

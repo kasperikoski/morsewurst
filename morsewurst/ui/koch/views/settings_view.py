@@ -110,7 +110,7 @@ class KochSettingsView(ttk.Frame):
         char_wpm_field = self._field_frame(
             bottom_row,
             label_key="koch.settings.char_wpm",
-            fallback="Char WPM",
+            fallback="Character WPM",
             column=0,
         )
         self.char_wpm_spin = ttk.Spinbox(
@@ -127,7 +127,7 @@ class KochSettingsView(ttk.Frame):
         effective_wpm_field = self._field_frame(
             bottom_row,
             label_key="koch.settings.effective_wpm",
-            fallback="Effective WPM",
+            fallback="Farnsworth WPM",
             column=1,
         )
         self.effective_wpm_spin = ttk.Spinbox(

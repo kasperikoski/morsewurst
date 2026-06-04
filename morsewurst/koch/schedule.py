@@ -9,24 +9,46 @@ from morsewurst.koch.models import KochSettings
 
 
 def koch_timing_ms(settings: KochSettings) -> dict[str, float]:
-    """Return Morse timing values for Koch receive playback.
+    """Return PARIS-based Farnsworth timing for Koch receive playback.
 
-    Character speed controls the dot length. Effective speed controls the
-    spacing between characters and word/groups. This is intentionally simple and
-    predictable rather than a full Farnsworth textbook implementation: the
-    Morse characters themselves stay crisp, while slower effective WPM stretches
-    the silence between characters and groups.
+    Character WPM controls the dot length, dash length and intra-character
+    element gaps. Effective WPM controls only the silence between characters
+    and word/groups. The inter-character and word/group gaps share the same
+    Farnsworth gap unit, so their normal 3:7 Morse timing relationship stays
+    intact while the overall PARIS word duration matches the effective WPM.
     """
 
     normalized = settings.normalized()
-    element_unit_ms = 1200.0 / max(1.0, float(normalized.character_wpm))
-    spacing_factor = max(1.0, float(normalized.character_wpm) / max(1.0, float(normalized.effective_wpm)))
+    character_wpm = max(1.0, float(normalized.character_wpm))
+    effective_wpm = max(1.0, float(normalized.effective_wpm))
+
+    # Standard PARIS timing contains 50 dot units in total. Of those units,
+    # 31 are inside the letters P A R I S, including their intra-character
+    # element gaps. The remaining 19 are the four inter-character gaps plus
+    # the trailing word gap. Farnsworth timing keeps the 31 internal units at
+    # character WPM and stretches only the 19 external spacing units.
+    paris_total_units = 50.0
+    paris_internal_units = 31.0
+    paris_spacing_units = 19.0
+
+    element_unit_ms = 1200.0 / character_wpm
+
+    if effective_wpm >= character_wpm:
+        farnsworth_gap_unit_ms = element_unit_ms
+    else:
+        effective_unit_ms = 1200.0 / effective_wpm
+        farnsworth_gap_unit_ms = (
+            (paris_total_units * effective_unit_ms)
+            - (paris_internal_units * element_unit_ms)
+        ) / paris_spacing_units
+        farnsworth_gap_unit_ms = max(element_unit_ms, farnsworth_gap_unit_ms)
 
     return {
         "element_unit_ms": element_unit_ms,
         "element_gap_ms": element_unit_ms,
-        "char_gap_ms": 3.0 * element_unit_ms * spacing_factor,
-        "word_gap_ms": 7.0 * element_unit_ms * spacing_factor,
+        "farnsworth_gap_unit_ms": farnsworth_gap_unit_ms,
+        "char_gap_ms": 3.0 * farnsworth_gap_unit_ms,
+        "word_gap_ms": 7.0 * farnsworth_gap_unit_ms,
     }
 
 

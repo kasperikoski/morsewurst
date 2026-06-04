@@ -63,7 +63,7 @@ class KochHistoryView(ttk.LabelFrame):
         headings = {
             "stage": self.window.tr("koch.history.stage", "Stage"),
             "accuracy": self.window.tr("koch.history.accuracy", "Accuracy"),
-            "wpm": self.window.tr("koch.history.wpm", "WPM"),
+            "wpm": self.window.tr("koch.history.wpm", "Farnsworth/char WPM"),
             "target_chars": self.window.tr("koch.history.target_chars", "Chars"),
             "duration": self.window.tr("koch.history.duration", "Duration"),
             "entered": self.window.tr("koch.history.entered", "Entered"),
@@ -72,7 +72,7 @@ class KochHistoryView(ttk.LabelFrame):
         widths = {
             "stage": 70,
             "accuracy": 95,
-            "wpm": 90,
+            "wpm": 150,
             "target_chars": 80,
             "duration": 90,
             "entered": 260,

@@ -265,14 +265,22 @@ def test_koch_generator_preserves_all_active_characters_when_boosting_newest_cha
     assert copied.count(newest_char) >= 20
 
 
-def test_koch_timing_keeps_character_speed_but_stretches_spacing_at_lower_effective_wpm() -> None:
+def test_koch_timing_keeps_character_speed_but_uses_true_farnsworth_spacing_at_lower_effective_wpm() -> None:
     normal = koch_timing_ms(KochSettings(character_wpm=20, effective_wpm=20))
     farnsworth = koch_timing_ms(KochSettings(character_wpm=20, effective_wpm=10))
 
+    character_unit_ms = 1200.0 / 20.0
+    effective_unit_ms = 1200.0 / 10.0
+    farnsworth_gap_unit_ms = ((50.0 * effective_unit_ms) - (31.0 * character_unit_ms)) / 19.0
+
     assert farnsworth["element_unit_ms"] == pytest.approx(normal["element_unit_ms"])
     assert farnsworth["element_gap_ms"] == pytest.approx(normal["element_gap_ms"])
-    assert farnsworth["char_gap_ms"] == pytest.approx(normal["char_gap_ms"] * 2.0)
-    assert farnsworth["word_gap_ms"] == pytest.approx(normal["word_gap_ms"] * 2.0)
+
+    assert farnsworth["char_gap_ms"] == pytest.approx(3.0 * farnsworth_gap_unit_ms)
+    assert farnsworth["word_gap_ms"] == pytest.approx(7.0 * farnsworth_gap_unit_ms)
+
+    assert farnsworth["char_gap_ms"] > normal["char_gap_ms"] * 2.0
+    assert farnsworth["word_gap_ms"] > normal["word_gap_ms"] * 2.0
 
 
 def test_koch_target_schedule_matches_scored_text_and_word_gap_is_longer_than_letter_gap() -> None:

@@ -1,17 +1,11 @@
 {
   "app": "Morsewurst",
-  "latest_version": "0.99.12",
-  "release_date": "2026-06-02",
-  "release_url": "https://github.com/kasperikoski/morsewurst/releases/tag/v0.99.12",
+  "latest_version": "0.99.12.1",
+  "release_date": "2026-06-04",
+  "release_url": "https://github.com/kasperikoski/morsewurst/releases/tag/v0.99.12.1",
   "download_url": "https://kasperikoski.fi/morsewurst",
   "release_notes": [
-    "Major feature release with a new Koch receive practice mode, including guided progression, manual stages, full-character-set practice, Farnsworth-style effective WPM spacing, receive-copy scoring, session history and local Koch skill tracking.",
-    "Added generated radio-style background noise for Koch receive playback to make listening practice feel more alive while keeping the Morse tone clear.",
-    "Added radio channel noise to Morsewurst Network for a more authentic radio communication atmosphere. The noise is generated locally and includes configurable profile, tone and level controls.",
-    "Improved network receive playback with jitter-buffer handling, stale tone dropping and clearer feedback when incoming tones arrive too late.",
-    "Fixed a startup/shutdown race condition where the serial auto-connect background thread could try to call Tkinter after the main UI loop was no longer available.",
-    "Updated language files and user interface text across supported languages.",
-    "Improved settings persistence, database handling, stability and general user experience.",
-    "Includes many smaller bug fixes, regression test additions and internal cleanup improvements."
-    ]
+    "Fixed a Koch receive-practice playback issue where the final Morse element could be cut off and removed an audible click at the end of playback.",
+    "Improved Koch WPM settings by implementing realistic Farnsworth WPM timing, where character elements keep their character speed while inter-character and word/group spacing is adjusted to the selected Farnsworth speed."
+]
 }
