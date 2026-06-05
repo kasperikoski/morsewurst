@@ -8,6 +8,8 @@ from dataclasses import asdict, dataclass
 from statistics import median
 from typing import Any, Iterable, Optional
 
+import morsewurst.config as config
+
 
 VALID_SOURCES = {"straight", "iambic", "mixed", "unknown"}
 
@@ -85,6 +87,149 @@ def _stability_confidence(values: Iterable[Any]) -> float:
 
 def _combined_confidence(count: int, values: Iterable[Any], *, full_at: int) -> float:
     return round(_sample_confidence(count, full_at=full_at) * _stability_confidence(values), 4)
+
+
+def _cfg_float(name: str, default: float, *, minimum: Optional[float] = None, maximum: Optional[float] = None) -> float:
+    try:
+        value = float(getattr(config, name, default))
+    except Exception:
+        value = float(default)
+
+    if value != value or value in (float("inf"), float("-inf")):
+        value = float(default)
+
+    if minimum is not None:
+        value = max(float(minimum), value)
+    if maximum is not None:
+        value = min(float(maximum), value)
+
+    return float(value)
+
+
+def _clamp(value: float, minimum: float, maximum: float) -> float:
+    if maximum < minimum:
+        minimum, maximum = maximum, minimum
+    return max(float(minimum), min(float(maximum), float(value)))
+
+
+def _clamp_optional_us(
+    value: Optional[float],
+    *,
+    element_unit_us: Optional[float],
+    min_units: float,
+    max_units: float,
+) -> tuple[Optional[float], bool]:
+    numeric = _as_float(value)
+    element = _as_float(element_unit_us)
+
+    if numeric is None or element is None:
+        return value, False
+
+    lower = element * float(min_units)
+    upper = element * float(max_units)
+    clamped = _clamp(numeric, lower, upper)
+
+    return clamped, abs(clamped - numeric) > max(1.0, abs(numeric) * 0.001)
+
+
+def normalize_timing_profile_guardrails(profile: "TimingProfile") -> "TimingProfile":
+    """Clamp persisted profile spacing to Morse-like element-relative bounds.
+
+    The profile is allowed to adapt to the user's hand, but it must not learn
+    letter and word spacing so far from the element unit that it creates a
+    feedback loop where progressively longer gaps are required for decoding.
+    Raw round data is not modified; only the seed profile is guarded.
+    """
+
+    element_unit_us = _as_float(profile.element_unit_us)
+    if element_unit_us is None:
+        dot_us = _as_float(profile.dot_us)
+        dash_us = _as_float(profile.dash_us)
+        if dot_us is not None:
+            element_unit_us = dot_us
+        elif dash_us is not None:
+            element_unit_us = dash_us / 3.0
+
+    if element_unit_us is None:
+        return profile
+
+    gap_min_ratio = _cfg_float("DECODER_PROFILE_GAP_UNIT_MIN_ELEMENT_RATIO", 0.75, minimum=0.20, maximum=2.00)
+    gap_max_ratio = _cfg_float("DECODER_PROFILE_GAP_UNIT_MAX_ELEMENT_RATIO", 1.35, minimum=gap_min_ratio, maximum=4.00)
+
+    letter_min_units = _cfg_float("DECODER_PROFILE_LETTER_GAP_MIN_ELEMENT_UNITS", 2.35, minimum=1.20, maximum=4.00)
+    letter_max_units = _cfg_float("DECODER_PROFILE_LETTER_GAP_MAX_ELEMENT_UNITS", 3.85, minimum=letter_min_units, maximum=8.00)
+
+    word_min_units = _cfg_float("DECODER_PROFILE_WORD_GAP_MIN_ELEMENT_UNITS", 5.50, minimum=3.50, maximum=8.00)
+    word_max_units = _cfg_float("DECODER_PROFILE_WORD_GAP_MAX_ELEMENT_UNITS", 8.75, minimum=word_min_units, maximum=14.00)
+    word_min_after_letter_units = _cfg_float(
+        "DECODER_PROFILE_WORD_GAP_MIN_AFTER_LETTER_ELEMENT_UNITS",
+        2.00,
+        minimum=0.50,
+        maximum=6.00,
+    )
+
+    changed = False
+
+    gap_unit_us, gap_changed = _clamp_optional_us(
+        profile.gap_unit_us,
+        element_unit_us=element_unit_us,
+        min_units=gap_min_ratio,
+        max_units=gap_max_ratio,
+    )
+    changed = changed or gap_changed
+
+    letter_gap_us, letter_changed = _clamp_optional_us(
+        profile.letter_gap_us,
+        element_unit_us=element_unit_us,
+        min_units=letter_min_units,
+        max_units=letter_max_units,
+    )
+    changed = changed or letter_changed
+
+    word_gap_us, word_changed = _clamp_optional_us(
+        profile.word_gap_us,
+        element_unit_us=element_unit_us,
+        min_units=word_min_units,
+        max_units=word_max_units,
+    )
+    changed = changed or word_changed
+
+    letter_value = _as_float(letter_gap_us)
+    word_value = _as_float(word_gap_us)
+    if letter_value is not None and word_value is not None:
+        minimum_word_gap_us = letter_value + (element_unit_us * word_min_after_letter_units)
+        if word_value < minimum_word_gap_us:
+            word_gap_us = minimum_word_gap_us
+            changed = True
+
+    gap_confidence = float(profile.gap_confidence or 0.0)
+    if changed:
+        max_guarded_confidence = _cfg_float(
+            "DECODER_PROFILE_GUARDRAIL_MAX_CONFIDENCE_AFTER_CLAMP",
+            0.70,
+            minimum=0.05,
+            maximum=1.00,
+        )
+        gap_confidence = min(gap_confidence, max_guarded_confidence)
+
+    if not changed and element_unit_us == profile.element_unit_us:
+        return profile
+
+    return TimingProfile(
+        source=profile.source,
+        element_unit_us=element_unit_us,
+        gap_unit_us=gap_unit_us,
+        dot_us=profile.dot_us,
+        dash_us=profile.dash_us,
+        dash_dot_ratio=profile.dash_dot_ratio,
+        letter_gap_us=letter_gap_us,
+        word_gap_us=word_gap_us,
+        element_confidence=profile.element_confidence,
+        gap_confidence=gap_confidence,
+        sample_rounds=profile.sample_rounds,
+        sample_events=profile.sample_events,
+        updated_from_session_id=profile.updated_from_session_id,
+    )
 
 
 def normalize_source(source: Any) -> str:
@@ -270,18 +415,20 @@ def build_timing_profile(
         full_at=300,
     )
 
-    return TimingProfile(
-        source=source_name,
-        element_unit_us=element_unit_us,
-        gap_unit_us=gap_unit_us,
-        dot_us=dot_us,
-        dash_us=dash_us,
-        dash_dot_ratio=dash_dot_ratio,
-        letter_gap_us=letter_gap_us,
-        word_gap_us=word_gap_us,
-        element_confidence=element_confidence,
-        gap_confidence=gap_confidence,
-        sample_rounds=len(rows),
-        sample_events=event_count,
-        updated_from_session_id=max(latest_session_ids) if latest_session_ids else None,
+    return normalize_timing_profile_guardrails(
+        TimingProfile(
+            source=source_name,
+            element_unit_us=element_unit_us,
+            gap_unit_us=gap_unit_us,
+            dot_us=dot_us,
+            dash_us=dash_us,
+            dash_dot_ratio=dash_dot_ratio,
+            letter_gap_us=letter_gap_us,
+            word_gap_us=word_gap_us,
+            element_confidence=element_confidence,
+            gap_confidence=gap_confidence,
+            sample_rounds=len(rows),
+            sample_events=event_count,
+            updated_from_session_id=max(latest_session_ids) if latest_session_ids else None,
+        )
     )

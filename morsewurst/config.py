@@ -9,7 +9,7 @@ import sys
 from pathlib import Path
 
 APP_NAME = "Morsewurst"
-APP_VERSION = "0.99.12.1"
+APP_VERSION = "0.99.12.2"
 
 # ============================================================
 # Update check
@@ -366,7 +366,7 @@ WXMOR_LOCATIONS: list[str] = []
 # ============================================================
 # Problem character practice
 # ============================================================
-DEFAULT_PROBLEM_RECENT_ROUNDS = 500
+DEFAULT_PROBLEM_RECENT_ROUNDS = 300
 DEFAULT_PROBLEM_CHAR_WEIGHT_PERCENT = 30
 DEFAULT_PROBLEM_CHAR_LIMIT = 12
 DEFAULT_PROBLEM_CHAR_CANDIDATE_LIMIT = 50
@@ -375,7 +375,7 @@ DEFAULT_PROBLEM_CHAR_CANDIDATE_LIMIT = 50
 # ============================================================
 # Effective WPM suggestion
 # ============================================================
-DEFAULT_EFFECTIVE_WPM_RECENT_ROUNDS = 1000
+DEFAULT_EFFECTIVE_WPM_RECENT_ROUNDS = 300
 DEFAULT_EFFECTIVE_WPM_MIN_ACCURACY = 90
 DEFAULT_EFFECTIVE_WPM_MIN_CLEANLINESS = 85
 EFFECTIVE_WPM_MIN_ROUNDS_REQUIRED = 3
@@ -456,6 +456,16 @@ DECODER_IAMBIC_COMPLETION_IDLE_UNITS = 4.8
 
 # Tolerance added around gap thresholds when classifying boundaries.
 DECODER_GAP_TOLERANCE_UNITS = 0.15
+
+# Element-anchored guardrails for adaptive gap classification. These stop
+# learned gap timing from drifting so far upward that normal Morse spacing no
+# longer produces letter or word boundaries. The adaptive gap unit and iambic
+# spacing profile can still move inside this window.
+DECODER_LETTER_CUTOFF_MIN_ELEMENT_UNITS = 2.15
+DECODER_LETTER_CUTOFF_MAX_ELEMENT_UNITS = 2.65
+DECODER_WORD_CUTOFF_MIN_ELEMENT_UNITS = 5.15
+DECODER_WORD_CUTOFF_MAX_ELEMENT_UNITS = 5.95
+DECODER_WORD_CUTOFF_MIN_AFTER_LETTER_ELEMENT_UNITS = 1.50
 
 
 # ------------------------------------------------------------
@@ -540,6 +550,19 @@ DECODER_PROFILE_MAX_ELEMENT_CHANGE_RATIO = 0.10
 # Maximum allowed gap unit change ratio when updating an existing timing profile.
 DECODER_PROFILE_MAX_GAP_CHANGE_RATIO = 0.15
 
+# Profile-learning guardrails. These apply only to persisted timing profiles,
+# not to raw round data. They prevent long-term timing profiles from learning
+# letter and word spacing so far away from the element unit that the adaptive
+# decoder starts requiring progressively longer gaps.
+DECODER_PROFILE_GAP_UNIT_MIN_ELEMENT_RATIO = 0.75
+DECODER_PROFILE_GAP_UNIT_MAX_ELEMENT_RATIO = 1.35
+DECODER_PROFILE_LETTER_GAP_MIN_ELEMENT_UNITS = 2.35
+DECODER_PROFILE_LETTER_GAP_MAX_ELEMENT_UNITS = 3.85
+DECODER_PROFILE_WORD_GAP_MIN_ELEMENT_UNITS = 5.50
+DECODER_PROFILE_WORD_GAP_MAX_ELEMENT_UNITS = 8.75
+DECODER_PROFILE_WORD_GAP_MIN_AFTER_LETTER_ELEMENT_UNITS = 2.00
+DECODER_PROFILE_GUARDRAIL_MAX_CONFIDENCE_AFTER_CLAMP = 0.70
+
 
 # ------------------------------------------------------------
 # Timing profile outlier filtering
@@ -582,7 +605,7 @@ ROUND_NET_WPM_TIMING_MAX_FACTOR = 1.00
 # Timing quality scoring
 # ============================================================
 SKILL_RATING_CAP_BY_TARGET_WPM = True
-DEFAULT_SKILL_RATING_RECENT_ROUNDS = 1000
+DEFAULT_SKILL_RATING_RECENT_ROUNDS = 300
 SKILL_RATING_MODEL_VERSION = 1
 SKILL_RATING_MIN_TARGET_CHARS = 12
 SKILL_RATING_MIN_QUALIFIED_ROUNDS = 50

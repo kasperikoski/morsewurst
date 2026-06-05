@@ -1,11 +1,13 @@
 {
   "app": "Morsewurst",
-  "latest_version": "0.99.12.1",
-  "release_date": "2026-06-04",
-  "release_url": "https://github.com/kasperikoski/morsewurst/releases/tag/v0.99.12.1",
+  "latest_version": "0.99.12.2",
+  "release_date": "2026-06-05",
+  "release_url": "https://github.com/kasperikoski/morsewurst/releases/tag/v0.99.12.2",
   "download_url": "https://kasperikoski.fi/morsewurst",
   "release_notes": [
-    "Fixed a Koch receive-practice playback issue where the final Morse element could be cut off and removed an audible click at the end of playback.",
-    "Improved Koch WPM settings by implementing realistic Farnsworth WPM timing, where character elements keep their character speed while inter-character and word/group spacing is adjusted to the selected Farnsworth speed."
-]
+    "Fixed a Network window startup issue where the callsign prompt could appear before the Network loading screen, and allowed users to keep the default placeholder callsign if desired.",
+    "Fixed a bug where the main Morse practice could be started by key presses while Koch receive-practice mode was active.",
+    "Improved adaptive decoding by preventing learned spacing from drifting too far from normal Morse timing, which could previously trap users in a loop where overly long learned gaps forced progressively longer spacing.",
+    "Reduced the default recent-round analysis window to the last 300 rounds for faster and more practical history, problem character, effective WPM and skill calculations."
+  ]
 }

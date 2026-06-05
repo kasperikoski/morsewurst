@@ -357,7 +357,7 @@ class HistoryController:
         app = self.app
 
         try:
-            rows = app.db.recent_sessions(1000)
+            rows = app.db.recent_sessions(300)
         except Exception as exc:
             log_app_exception(
                 "app.history.table_load_failed",
@@ -750,7 +750,7 @@ class HistoryController:
         try:
             recent_rounds = helpers.safe_int_var(
                 app.stats_recent_rounds_var,
-                default=1000,
+                default=300,
                 minimum=1,
                 maximum=100000,
             )
@@ -823,7 +823,7 @@ class HistoryController:
 
         recent_rounds = helpers.safe_int_var(
             app.skill_recent_rounds_var,
-            default=getattr(config, "DEFAULT_SKILL_RATING_RECENT_ROUNDS", 1000),
+            default=getattr(config, "DEFAULT_SKILL_RATING_RECENT_ROUNDS", 300),
             minimum=1,
             maximum=100000,
         )
@@ -1097,7 +1097,7 @@ class HistoryController:
             result = app.db.optimized_wpm_from_recent_sessions(
                 recent_sessions=helpers.safe_int_var(
                     app.effective_wpm_recent_rounds_var,
-                    default=getattr(config, "DEFAULT_EFFECTIVE_WPM_RECENT_ROUNDS", 1000),
+                    default=getattr(config, "DEFAULT_EFFECTIVE_WPM_RECENT_ROUNDS", 300),
                     minimum=1,
                     maximum=100000,
                 ),

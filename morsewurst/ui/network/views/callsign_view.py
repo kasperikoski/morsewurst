@@ -64,19 +64,18 @@ class CallsignViewMixin:
         entry.bind("<Return>", lambda _event: self._save_first_callsign())
 
     def _save_first_callsign(self) -> None:
+        previous_callsign = sanitize_callsign(getattr(self.settings, "callsign", ""))
         callsign = sanitize_callsign(self.callsign_var.get())
-
-        if callsign == "Morsewurst":
-            self.callsign_notice_var.set("Please enter your own network callsign first.")
-            return
 
         self.callsign_var.set(callsign)
         self._save_current_settings(last_room=self.settings.last_room)
+        self.settings_file_exists = True
 
-        try:
-            self._network_startup_complete = False
-        except Exception:
-            pass
+        if bool(getattr(self, "_network_startup_complete", False)):
+            if previous_callsign != callsign:
+                self._restart_lobby_presence_after_callsign_change()
+            self.show_lobby_view()
+            return
 
         self.show_lobby_view()
 
@@ -84,3 +83,17 @@ class CallsignViewMixin:
             self._start_network_startup_sequence()
         except Exception:
             self.after(150, self._ensure_lobby_presence)
+
+    def _restart_lobby_presence_after_callsign_change(self) -> None:
+        if self.connected_room_key or self.connected_room_id:
+            return
+
+        manager = getattr(self.app, "network_manager", None)
+        if manager is None:
+            return
+
+        try:
+            if manager.is_running:
+                manager.stop()
+        except Exception:
+            pass

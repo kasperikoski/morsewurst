@@ -253,7 +253,7 @@ class KochPracticeService:
         approximately level 200.
         """
 
-        configured_recent = int(getattr(config, "DEFAULT_KOCH_SKILL_RECENT_ROUNDS", 1000))
+        configured_recent = int(getattr(config, "DEFAULT_KOCH_SKILL_RECENT_ROUNDS", 300))
         recent_limit = configured_recent if recent_limit is None else int(recent_limit)
         recent_limit = max(1, recent_limit)
         required_sessions = max(1, int(getattr(config, "DEFAULT_KOCH_SKILL_MIN_SESSIONS", 30)))
@@ -379,7 +379,7 @@ class KochPracticeService:
             raw_level=round(raw_level, 4),
         )
 
-    def character_stats(self, recent_sessions: int = 1000, limit: int = 50) -> list[Any]:
+    def character_stats(self, recent_sessions: int = 300, limit: int = 50) -> list[Any]:
         return self.db.koch_character_stats(
             recent_sessions=recent_sessions,
             limit=limit,

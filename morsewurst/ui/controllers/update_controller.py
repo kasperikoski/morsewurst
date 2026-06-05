@@ -581,7 +581,7 @@ class UpdateController:
 
         try:
             notes.configure(font=("", 10))
-            notes.tag_configure("bullet", lmargin1=12, lmargin2=28, spacing1=3, spacing3=7)
+            notes.tag_configure("bullet", lmargin1=12, lmargin2=12, spacing1=3, spacing3=7)
             notes.tag_configure("empty", foreground="#666666")
         except Exception:
             pass

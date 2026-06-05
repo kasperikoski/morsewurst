@@ -29,7 +29,7 @@ class ChallengeSettings:
     problem_recent_rounds: int = 50
     problem_char_weight_percent: int = 30
     problem_char_limit: int = 12
-    auto_optimize_recent_rounds: int = 1000
+    auto_optimize_recent_rounds: int = 300
     auto_optimize_min_accuracy: int = 90
 
 

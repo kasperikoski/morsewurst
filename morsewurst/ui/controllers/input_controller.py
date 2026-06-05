@@ -636,7 +636,8 @@ class InputController:
             except Exception:
                 pass
 
-            if bool(getattr(app, "network_modal_active", False)):
+            if self.main_practice_tone_input_suspended():
+                app.start_trigger_timestamps.clear()
                 return
 
         if event_type == "tone" and self.should_drop_stale_tone_event(event):
@@ -706,6 +707,30 @@ class InputController:
             return True
 
         return False
+
+    def main_practice_tone_input_suspended(self) -> bool:
+        """Return True when another Morse mode owns incoming tone events.
+
+        Network and Koch are separate modes from the classic main practice.
+        While either mode is active, physical key events must not feed the main
+        round decoder or trigger the seven-press auto-start shortcut.
+        """
+        app = self.app
+
+        if bool(getattr(app, "network_modal_active", False)):
+            return True
+
+        if str(getattr(app, "active_mode", "main") or "main") == "koch":
+            return True
+
+        koch_window = getattr(app, "koch_window", None)
+        if koch_window is None:
+            return False
+
+        try:
+            return bool(koch_window.winfo_exists())
+        except Exception:
+            return True
 
     def accept_tone_event(self, event: Dict[str, Any]) -> bool:
         """Return True when the tone event is valid and not a duplicate."""

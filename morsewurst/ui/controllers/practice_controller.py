@@ -775,7 +775,7 @@ class PracticeController:
         try:
             recent_rounds = helpers.safe_int_var(
                 app.skill_recent_rounds_var,
-                default=getattr(config, "DEFAULT_SKILL_RATING_RECENT_ROUNDS", 1000),
+                default=getattr(config, "DEFAULT_SKILL_RATING_RECENT_ROUNDS", 300),
                 minimum=1,
                 maximum=100000,
             )

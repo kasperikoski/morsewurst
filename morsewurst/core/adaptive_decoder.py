@@ -7,6 +7,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Optional
 
+import morsewurst.config as config
 from morsewurst.core.adaptive_timing import (
     DecoderSettings,
     NormalizedToneEvent,
@@ -83,6 +84,92 @@ def _cutoff(gap_unit_us: float, units: float, tolerance_units: float) -> float:
     return max(0.0, float(units) - float(tolerance_units)) * max(1.0, float(gap_unit_us))
 
 
+def _config_float(name: str, default: float, *, minimum: float, maximum: float) -> float:
+    value = _positive_float(getattr(config, name, None))
+    if value is None:
+        value = float(default)
+    return max(float(minimum), min(float(maximum), float(value)))
+
+
+def _gap_cutoff_guardrails(
+    estimate: SourceTimingEstimate,
+    letter_cutoff_us: float,
+    word_cutoff_us: float,
+    basis: str,
+) -> tuple[float, float, str]:
+    """Keep adaptive gap classification anchored to the tone element unit.
+
+    The adaptive gap unit and iambic spacing profile may still move the cutoffs
+    within this window, but they cannot drift so far upward that a normal-ish
+    Morse letter gap is decoded as an intra-character gap.
+    """
+
+    element_unit_us = max(1.0, float(estimate.element_unit_us))
+
+    letter_min_units = _config_float(
+        "DECODER_LETTER_CUTOFF_MIN_ELEMENT_UNITS",
+        2.15,
+        minimum=1.50,
+        maximum=3.00,
+    )
+    letter_max_units = _config_float(
+        "DECODER_LETTER_CUTOFF_MAX_ELEMENT_UNITS",
+        2.65,
+        minimum=letter_min_units,
+        maximum=3.50,
+    )
+
+    word_min_units = _config_float(
+        "DECODER_WORD_CUTOFF_MIN_ELEMENT_UNITS",
+        5.15,
+        minimum=4.00,
+        maximum=7.00,
+    )
+    word_max_units = _config_float(
+        "DECODER_WORD_CUTOFF_MAX_ELEMENT_UNITS",
+        5.95,
+        minimum=word_min_units,
+        maximum=8.00,
+    )
+    min_word_after_letter_units = _config_float(
+        "DECODER_WORD_CUTOFF_MIN_AFTER_LETTER_ELEMENT_UNITS",
+        1.50,
+        minimum=0.50,
+        maximum=4.00,
+    )
+
+    # Keep misconfigured values sane. A word boundary must remain clearly above
+    # a letter boundary even when users tune these constants later.
+    word_min_units = max(word_min_units, letter_min_units + min_word_after_letter_units)
+    word_max_units = max(word_max_units, word_min_units, letter_max_units + min_word_after_letter_units)
+
+    letter_floor_us = element_unit_us * letter_min_units
+    letter_ceiling_us = element_unit_us * letter_max_units
+    word_floor_us = element_unit_us * word_min_units
+    word_ceiling_us = element_unit_us * word_max_units
+
+    guarded_letter_cutoff_us = max(
+        letter_floor_us,
+        min(float(letter_cutoff_us), letter_ceiling_us),
+    )
+    guarded_word_cutoff_us = max(
+        word_floor_us,
+        min(float(word_cutoff_us), word_ceiling_us),
+        guarded_letter_cutoff_us + (element_unit_us * min_word_after_letter_units),
+    )
+
+    adjusted = (
+        abs(guarded_letter_cutoff_us - float(letter_cutoff_us)) > 0.5
+        or abs(guarded_word_cutoff_us - float(word_cutoff_us)) > 0.5
+    )
+
+    return (
+        guarded_letter_cutoff_us,
+        guarded_word_cutoff_us,
+        f"{basis}_element_guarded" if adjusted else basis,
+    )
+
+
 def _positive_float(value: Any) -> Optional[float]:
     try:
         number = float(value)
@@ -129,13 +216,23 @@ def _gap_cutoffs(
     )
 
     if source != "iambic":
-        return default_letter_cutoff_us, default_word_cutoff_us, "unit_ratio"
+        return _gap_cutoff_guardrails(
+            estimate,
+            default_letter_cutoff_us,
+            default_word_cutoff_us,
+            "unit_ratio",
+        )
 
     profile_letter_gap_us = _positive_float(getattr(estimate, "letter_gap_us", None))
     profile_word_gap_us = _positive_float(getattr(estimate, "word_gap_us", None))
 
     if profile_letter_gap_us is None or profile_word_gap_us is None:
-        return default_letter_cutoff_us, default_word_cutoff_us, "standard_iambic_unit_ratio"
+        return _gap_cutoff_guardrails(
+            estimate,
+            default_letter_cutoff_us,
+            default_word_cutoff_us,
+            "standard_iambic_unit_ratio",
+        )
 
     element_unit_us = max(1.0, float(estimate.element_unit_us))
 
@@ -147,7 +244,12 @@ def _gap_cutoffs(
         letter_cutoff_us + element_unit_us * 0.50,
     )
 
-    return letter_cutoff_us, word_cutoff_us, "iambic_profile_letter_word"
+    return _gap_cutoff_guardrails(
+        estimate,
+        letter_cutoff_us,
+        word_cutoff_us,
+        "iambic_profile_letter_word",
+    )
 
 
 def _live_finish_cutoff_us(
@@ -174,7 +276,9 @@ def _classify_gap(previous: NormalizedToneEvent, current: NormalizedToneEvent, t
     estimate = timing.for_source(source)
     gap_us = max(0, int(current.t0) - int(previous.t1))
     gap_unit_us = max(1.0, float(estimate.gap_unit_us))
+    element_unit_us = max(1.0, float(estimate.element_unit_us))
     gap_units = float(gap_us) / gap_unit_us
+    element_gap_units = float(gap_us) / element_unit_us
 
     letter_cutoff_us, word_cutoff_us, cutoff_basis = _gap_cutoffs(
         estimate,
@@ -198,9 +302,13 @@ def _classify_gap(previous: NormalizedToneEvent, current: NormalizedToneEvent, t
         "source": source,
         "gap_us": gap_us,
         "gap_units": gap_units,
+        "element_gap_units": element_gap_units,
         "gap_unit_us": gap_unit_us,
+        "element_unit_us": element_unit_us,
         "letter_cutoff_us": letter_cutoff_us,
         "word_cutoff_us": word_cutoff_us,
+        "letter_cutoff_element_units": letter_cutoff_us / element_unit_us,
+        "word_cutoff_element_units": word_cutoff_us / element_unit_us,
         "cutoff_basis": cutoff_basis,
         "profile_letter_gap_us": getattr(estimate, "letter_gap_us", None),
         "profile_word_gap_us": getattr(estimate, "word_gap_us", None),

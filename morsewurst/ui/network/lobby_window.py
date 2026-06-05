@@ -216,7 +216,6 @@ class NetworkLobbyWindow(
         needs_first_callsign = self._needs_first_callsign()
 
         if needs_first_callsign:
-            self._network_startup_complete = True
             self.show_callsign_view()
         else:
             self.show_lobby_view()
@@ -227,10 +226,10 @@ class NetworkLobbyWindow(
         self.protocol("WM_DELETE_WINDOW", self.close)
         self.bind("<Escape>", lambda _event: self.close())
 
-        if needs_first_callsign:
-            self._show_network_window()
-        else:
-            self._start_network_startup_sequence()
+        # Always show the Network startup splash first. On a first run the
+        # window remains withdrawn while the splash runs, and the callsign view
+        # is shown only after the startup sequence has finished.
+        self._start_network_startup_sequence()
 
     def _build_window_chrome(self) -> None:
         self.window_chrome = tk.Frame(

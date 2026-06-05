@@ -22,7 +22,13 @@ from morsewurst.core.app_logging import (
     summarize_score_summary,
     summarize_timing_profile,
 )
-from morsewurst.core.timing_profile import TimingProfile, TimingProfileSample, build_timing_profile, normalize_source
+from morsewurst.core.timing_profile import (
+    TimingProfile,
+    TimingProfileSample,
+    build_timing_profile,
+    normalize_source,
+    normalize_timing_profile_guardrails,
+)
 from morsewurst.models import ChallengeSettings, CharacterResult, ScoreSummary
 
 SCHEMA_VERSION = 1
@@ -742,7 +748,7 @@ class Database:
                 ("koch_session_id", "koch_session_id INTEGER"),
                 ("created_at", "created_at TEXT NOT NULL DEFAULT ''"),
                 ("model_version", "model_version INTEGER NOT NULL DEFAULT 2"),
-                ("recent_limit", "recent_limit INTEGER NOT NULL DEFAULT 1000"),
+                ("recent_limit", "recent_limit INTEGER NOT NULL DEFAULT 300"),
                 ("sessions_used", "sessions_used INTEGER NOT NULL DEFAULT 0"),
                 ("required_sessions", "required_sessions INTEGER NOT NULL DEFAULT 30"),
                 ("displayable", "displayable INTEGER NOT NULL DEFAULT 0"),
@@ -2541,7 +2547,7 @@ class Database:
                 koch_session_id,
                 created_at,
                 int(getattr(config, "KOCH_SKILL_MODEL_VERSION", 2)),
-                int(getattr(config, "DEFAULT_KOCH_SKILL_RECENT_ROUNDS", 1000)),
+                int(getattr(config, "DEFAULT_KOCH_SKILL_RECENT_ROUNDS", 300)),
                 int(getattr(summary, "sessions_used", 0) or 0),
                 int(getattr(summary, "required_sessions", 30) or 30),
                 1 if bool(getattr(summary, "displayable", False)) else 0,
@@ -2587,7 +2593,7 @@ class Database:
 
     def koch_character_stats(
         self,
-        recent_sessions: int = 1000,
+        recent_sessions: int = 300,
         limit: int = 50,
     ) -> List[sqlite3.Row]:
         self.ensure_koch_schema()
@@ -3188,7 +3194,7 @@ class Database:
             "produced_chars_total": int(char_row["produced_chars_total"] or 0) if char_row is not None else 0,
         }
 
-    def stats_summary(self, recent_sessions: int = 1000) -> Dict[str, Any]:
+    def stats_summary(self, recent_sessions: int = 300) -> Dict[str, Any]:
         recent_sessions = max(1, int(recent_sessions))
 
         cur = self.conn.cursor()
@@ -3340,7 +3346,7 @@ class Database:
 
     def optimized_wpm_from_recent_sessions(
         self,
-        recent_sessions: int = 1000,
+        recent_sessions: int = 300,
         min_accuracy: float = 90.0,
         min_cleanliness: float = 85.0,
         min_target_chars: int | None = None,
@@ -3523,7 +3529,7 @@ class Database:
 
     def skill_recent_sessions(
         self,
-        limit: int = 1000,
+        limit: int = 300,
         min_target_chars: int = 12,
     ) -> List[sqlite3.Row]:
         cur = self.conn.cursor()
@@ -3604,7 +3610,7 @@ class Database:
 
     def skill_recent_sessions_by_key_source(
         self,
-        recent_sessions_per_source: int = 1000,
+        recent_sessions_per_source: int = 300,
         min_target_chars: int = 12,
     ) -> Dict[str, List[Dict[str, Any]]]:
         """Return recent skill rows split by dominant key source.
@@ -3785,7 +3791,7 @@ class Database:
 
     def skill_character_results(
         self,
-        recent_sessions: int = 1000,
+        recent_sessions: int = 300,
         min_target_chars: int = 12,
     ) -> List[sqlite3.Row]:
         cur = self.conn.cursor()
@@ -3827,7 +3833,7 @@ class Database:
 
     def skill_full_charset_character_results(
         self,
-        recent_sessions: int = 1000,
+        recent_sessions: int = 300,
         min_target_chars: int = 12,
         min_accuracy: float = 90.0,
         min_cleanliness: float = 85.0,
@@ -3889,7 +3895,7 @@ class Database:
 
     def skill_timing_source_data(
         self,
-        recent_sessions: int = 1000,
+        recent_sessions: int = 300,
         min_target_chars: int = 12,
         min_accuracy: float = 85.0,
         min_cleanliness: float = 80.0,
@@ -4015,7 +4021,7 @@ class Database:
             int(
                 recent_sessions
                 if recent_sessions is not None
-                else getattr(config, "DEFAULT_SKILL_RATING_RECENT_ROUNDS", 1000)
+                else getattr(config, "DEFAULT_SKILL_RATING_RECENT_ROUNDS", 300)
             ),
         )
 
@@ -4724,20 +4730,22 @@ class Database:
         if row is None:
             return TimingProfile(source=source_name)
 
-        return TimingProfile(
-            source=source_name,
-            element_unit_us=row["element_unit_us"],
-            gap_unit_us=row["gap_unit_us"],
-            dot_us=row["dot_us"],
-            dash_us=row["dash_us"],
-            dash_dot_ratio=row["dash_dot_ratio"],
-            letter_gap_us=row["letter_gap_us"],
-            word_gap_us=row["word_gap_us"],
-            element_confidence=float(row["element_confidence"] or 0.0),
-            gap_confidence=float(row["gap_confidence"] or 0.0),
-            sample_rounds=int(row["sample_rounds"] or 0),
-            sample_events=int(row["sample_events"] or 0),
-            updated_from_session_id=row["updated_from_session_id"],
+        return normalize_timing_profile_guardrails(
+            TimingProfile(
+                source=source_name,
+                element_unit_us=row["element_unit_us"],
+                gap_unit_us=row["gap_unit_us"],
+                dot_us=row["dot_us"],
+                dash_us=row["dash_us"],
+                dash_dot_ratio=row["dash_dot_ratio"],
+                letter_gap_us=row["letter_gap_us"],
+                word_gap_us=row["word_gap_us"],
+                element_confidence=float(row["element_confidence"] or 0.0),
+                gap_confidence=float(row["gap_confidence"] or 0.0),
+                sample_rounds=int(row["sample_rounds"] or 0),
+                sample_events=int(row["sample_events"] or 0),
+                updated_from_session_id=row["updated_from_session_id"],
+            )
         )
 
 
@@ -4785,20 +4793,22 @@ class Database:
                 self._profile_max_gap_change_ratio(),
             )
 
-        return TimingProfile(
-            source=candidate.source,
-            element_unit_us=element_unit_us,
-            gap_unit_us=gap_unit_us,
-            dot_us=candidate.dot_us,
-            dash_us=candidate.dash_us,
-            dash_dot_ratio=candidate.dash_dot_ratio,
-            letter_gap_us=candidate.letter_gap_us,
-            word_gap_us=candidate.word_gap_us,
-            element_confidence=candidate.element_confidence,
-            gap_confidence=candidate.gap_confidence,
-            sample_rounds=candidate.sample_rounds,
-            sample_events=candidate.sample_events,
-            updated_from_session_id=candidate.updated_from_session_id,
+        return normalize_timing_profile_guardrails(
+            TimingProfile(
+                source=candidate.source,
+                element_unit_us=element_unit_us,
+                gap_unit_us=gap_unit_us,
+                dot_us=candidate.dot_us,
+                dash_us=candidate.dash_us,
+                dash_dot_ratio=candidate.dash_dot_ratio,
+                letter_gap_us=candidate.letter_gap_us,
+                word_gap_us=candidate.word_gap_us,
+                element_confidence=candidate.element_confidence,
+                gap_confidence=candidate.gap_confidence,
+                sample_rounds=candidate.sample_rounds,
+                sample_events=candidate.sample_events,
+                updated_from_session_id=candidate.updated_from_session_id,
+            )
         )
     
 
@@ -4842,6 +4852,8 @@ class Database:
 
 
     def _save_persisted_timing_profile(self, profile: TimingProfile) -> None:
+        profile = normalize_timing_profile_guardrails(profile)
+
         if not self._profile_is_usable(profile):
             log_app_event(
                 "app.timing_profile.persistence_skipped",
