@@ -6,6 +6,7 @@ from morsewurst.i18n import I18nService
 from morsewurst.ui.controllers import (
     AppLifecycleController,
     AudioController,
+    BackupController,
     ChallengeSettingsController,
     DebugController,
     DecoderController,
@@ -55,6 +56,7 @@ class MorsewurstApp(tk.Tk):
         self.results_controller = ResultsController(self)
         self.history_controller = HistoryController(self)
         self.audio_controller = AudioController(self)
+        self.backup_controller = BackupController(self)
         self.status_controller = StatusController(self)
         self.update_controller = UpdateController(self)
         self.wxmor_controller = WxmorController(self)

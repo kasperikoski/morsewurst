@@ -146,6 +146,21 @@ class WindowController:
             context={"window": "profile_window"},
         )
 
+    def open_backup_window(self) -> None:
+        """Open the profile backup window, or focus it if it is already open."""
+        if self.raise_existing_window("backup_window"):
+            return
+
+        from morsewurst.ui.backup_window import BackupWindow
+
+        self.app.backup_window = BackupWindow(self.app)
+        self.apply_window_icon(self.app.backup_window)
+        log_app_event(
+            "app.window.opened",
+            message="Backup window opened.",
+            context={"window": "backup_window"},
+        )
+
     def open_help(self) -> None:
         """Open the help window."""
         from morsewurst.ui.help_window import HelpWindow
@@ -211,6 +226,7 @@ class WindowController:
             "network_window",
             "koch_window",
             "profile_window",
+            "backup_window",
         ):
             window = self.existing_window_or_none(attribute)
 

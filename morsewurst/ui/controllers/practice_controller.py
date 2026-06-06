@@ -9,7 +9,7 @@ import queue
 import threading
 import time
 from datetime import datetime
-from typing import TYPE_CHECKING, Any, Callable, Dict, Optional
+from typing import TYPE_CHECKING, Any, Callable, Dict, Optional, Sequence
 
 import tkinter as tk
 
@@ -63,6 +63,7 @@ class PracticeController:
         self.current_practice_token: Optional[int] = None
         self.current_practice_started_at: Optional[datetime] = None
         self.pending_after_round_updates_session_id: Optional[int] = None
+        self.pending_after_round_snapshot_session_ids: list[int] = []
         self._last_round_generation_context: dict[str, Any] = {}
         self._practice_token_counter = 0
         self._practice_token_lock = threading.Lock()
@@ -689,10 +690,16 @@ class PracticeController:
             ),
         }
 
-    def _request_after_round_analytics_async(self, session_id: int) -> None:
+    def _request_after_round_analytics_async(
+        self,
+        session_id: int,
+        snapshot_session_ids: Sequence[int] | None = None,
+    ) -> None:
         app = self.app
         params = self._after_round_analytics_parameters_from_ui()
         db_path = app.db.path
+
+        snapshot_ids = self._normalize_snapshot_session_ids(snapshot_session_ids, fallback=session_id)
 
         self._after_round_analytics_generation += 1
         generation = self._after_round_analytics_generation
@@ -701,6 +708,8 @@ class PracticeController:
             message="Background after-round analytics was requested.",
             context={
                 "session_id": session_id,
+                "snapshot_session_ids": snapshot_ids,
+                "snapshot_count": len(snapshot_ids),
                 "generation": generation,
                 "params": params,
                 "active_round_or_countdown": self._active_round_or_countdown_running(),
@@ -757,27 +766,52 @@ class PracticeController:
 
                 try:
                     step_started_at = time.monotonic()
-                    rating = calculate_skill_rating(
-                        db,
-                        recent_rounds=int(params["skill_recent_rounds"]),
-                    )
-                    record_step(
-                        "skill_rating_calculate",
-                        step_started_at,
-                        {"rating": summarize_rating(rating)},
-                    )
-                    payload["rating"] = rating
+                    latest_rating = None
+                    saved_snapshot_ids: list[int] = []
 
-                    step_started_at = time.monotonic()
-                    db.save_skill_rating_snapshot(session_id, rating)
-                    record_step("skill_rating_snapshot", step_started_at)
+                    for snapshot_session_id in snapshot_ids:
+                        rating = calculate_skill_rating(
+                            db,
+                            recent_rounds=int(params["skill_recent_rounds"]),
+                            max_session_id=int(snapshot_session_id),
+                        )
+                        db.save_skill_rating_snapshot(int(snapshot_session_id), rating)
+                        latest_rating = rating
+                        saved_snapshot_ids.append(int(snapshot_session_id))
+
+                    if latest_rating is None:
+                        latest_rating = calculate_skill_rating(
+                            db,
+                            recent_rounds=int(params["skill_recent_rounds"]),
+                            max_session_id=int(session_id),
+                        )
+                        db.save_skill_rating_snapshot(int(session_id), latest_rating)
+                        saved_snapshot_ids.append(int(session_id))
+
+                    payload["rating"] = latest_rating
+                    payload["skill_snapshot_session_ids"] = saved_snapshot_ids
+
+                    record_step(
+                        "skill_rating_snapshot_batch",
+                        step_started_at,
+                        {
+                            "snapshot_count": len(saved_snapshot_ids),
+                            "snapshot_session_ids": saved_snapshot_ids,
+                            "latest_session_id": saved_snapshot_ids[-1] if saved_snapshot_ids else session_id,
+                            "rating": summarize_rating(latest_rating),
+                        },
+                    )
                 except Exception as exc:
                     payload["errors"]["skill_rating"] = str(exc)
                     log_app_exception(
                         "app.skill_rating.background_failed",
                         exc,
                         message="Background skill rating calculation or snapshot save failed after round.",
-                        context={"session_id": session_id, "generation": generation},
+                        context={
+                            "session_id": session_id,
+                            "snapshot_session_ids": snapshot_ids,
+                            "generation": generation,
+                        },
                     )
 
                 try:
@@ -869,6 +903,7 @@ class PracticeController:
                     message="Background after-round analytics worker completed.",
                     context={
                         "session_id": session_id,
+                        "snapshot_session_ids": snapshot_ids,
                         "generation": generation,
                         "errors": dict(payload.get("errors") or {}),
                         "perf": dict(payload.get("perf") or {}),
@@ -1934,50 +1969,129 @@ class PracticeController:
                 )
             )
 
-        self.pending_after_round_updates_session_id = int(session_id)
-        self._schedule_pending_after_round_updates()
+        self._mark_after_round_analytics_pending(int(session_id))
 
     def _reschedule_pending_after_round_analytics(self, *, reason: str) -> None:
         """Keep a pending after-round analytics job pending while practice is active."""
 
-        if self.pending_after_round_updates_session_id is None:
+        if not self._pending_after_round_snapshot_ids():
             return
 
         self._cancel_scheduled_after_round_analytics()
+        pending_ids = self._pending_after_round_snapshot_ids()
         log_app_event(
             "app.practice.after_round_analytics_rescheduled",
             message="Pending after-round analytics was rescheduled.",
             context={
-                "session_id": self.pending_after_round_updates_session_id,
+                "session_id": pending_ids[-1],
+                "snapshot_session_ids": pending_ids,
+                "snapshot_count": len(pending_ids),
                 "reason": reason,
                 "active_round_or_countdown": self._active_round_or_countdown_running(),
             },
         )
         self._schedule_pending_after_round_updates(active_reschedule=True)
 
+    def _pending_after_round_snapshot_ids(self) -> list[int]:
+        """Return pending snapshot session ids in chronological order."""
+
+        ids = list(self.pending_after_round_snapshot_session_ids)
+
+        if self.pending_after_round_updates_session_id is not None:
+            ids.append(int(self.pending_after_round_updates_session_id))
+
+        return self._normalize_snapshot_session_ids(ids, fallback=None)
+
+    def _normalize_snapshot_session_ids(
+        self,
+        session_ids: Sequence[int] | None,
+        *,
+        fallback: int | None,
+    ) -> list[int]:
+        """Return unique positive session ids in chronological order."""
+
+        normalized: list[int] = []
+        seen: set[int] = set()
+
+        raw_ids: list[Any] = list(session_ids or [])
+        if fallback is not None:
+            raw_ids.append(fallback)
+
+        for raw_session_id in raw_ids:
+            try:
+                session_id = int(raw_session_id)
+            except Exception:
+                continue
+
+            if session_id <= 0 or session_id in seen:
+                continue
+
+            seen.add(session_id)
+            normalized.append(session_id)
+
+        normalized.sort()
+        return normalized
+
+    def _mark_after_round_analytics_pending(self, session_id: int) -> None:
+        """Queue a saved round for later per-round skill snapshot analytics."""
+
+        pending_ids = self._pending_after_round_snapshot_ids()
+        if int(session_id) not in pending_ids:
+            pending_ids.append(int(session_id))
+
+        pending_ids = self._normalize_snapshot_session_ids(pending_ids, fallback=None)
+        self.pending_after_round_snapshot_session_ids = pending_ids
+        self.pending_after_round_updates_session_id = pending_ids[-1] if pending_ids else None
+
+        log_app_event(
+            "app.practice.after_round_analytics_pending_marked",
+            message="Saved round was marked for idle after-round analytics.",
+            context={
+                "session_id": int(session_id),
+                "snapshot_session_ids": pending_ids,
+                "snapshot_count": len(pending_ids),
+            },
+        )
+        self._schedule_pending_after_round_updates()
+
     def _schedule_pending_after_round_updates(self, *, active_reschedule: bool = False) -> None:
-        """Queue heavy after-round updates once, using the latest saved round.
+        """Queue heavy after-round updates once, preserving every saved round id.
 
         The actual CPU-heavy work is delayed and only started while the UI is
         idle. Running the skill calculation immediately after a round can still
         starve Tk's event loop, because that calculation is Python CPU work even
         when it runs on a worker thread.
+
+        Every saved session id stays in a pending list until analytics runs.
+        When the worker finally starts, it writes one as-of skill snapshot for
+        each pending round, while the visible UI panels are still updated only
+        from the newest snapshot.
         """
 
-        session_id = self.pending_after_round_updates_session_id
+        snapshot_ids = self._pending_after_round_snapshot_ids()
 
-        if session_id is None:
+        if not snapshot_ids:
+            self.pending_after_round_updates_session_id = None
+            self.pending_after_round_snapshot_session_ids = []
             return
+
+        session_id = snapshot_ids[-1]
+        self.pending_after_round_updates_session_id = session_id
+        self.pending_after_round_snapshot_session_ids = snapshot_ids
 
         self._cancel_scheduled_after_round_analytics()
         delay_ms = self._analytics_delay_ms(active_reschedule=active_reschedule)
 
         def run_if_idle() -> None:
             self._after_round_analytics_after_id = None
-            latest_session_id = self.pending_after_round_updates_session_id
+            latest_snapshot_ids = self._pending_after_round_snapshot_ids()
 
-            if latest_session_id is None:
+            if not latest_snapshot_ids:
+                self.pending_after_round_updates_session_id = None
+                self.pending_after_round_snapshot_session_ids = []
                 return
+
+            latest_session_id = latest_snapshot_ids[-1]
 
             if self._active_round_or_countdown_running():
                 log_app_event(
@@ -1985,14 +2099,20 @@ class PracticeController:
                     message="After-round analytics was postponed because a round or countdown is active.",
                     context={
                         "session_id": latest_session_id,
+                        "snapshot_session_ids": latest_snapshot_ids,
+                        "snapshot_count": len(latest_snapshot_ids),
                         "delay_ms": self._analytics_delay_ms(active_reschedule=True),
                     },
                 )
                 self._schedule_pending_after_round_updates(active_reschedule=True)
                 return
 
+            self.pending_after_round_snapshot_session_ids = []
             self.pending_after_round_updates_session_id = None
-            self._request_after_round_analytics_async(int(latest_session_id))
+            self._request_after_round_analytics_async(
+                int(latest_session_id),
+                snapshot_session_ids=latest_snapshot_ids,
+            )
 
         try:
             self._after_round_analytics_after_id = self.app.after(delay_ms, run_if_idle)
@@ -2001,6 +2121,8 @@ class PracticeController:
                 message="After-round analytics was scheduled for idle execution.",
                 context={
                     "session_id": session_id,
+                    "snapshot_session_ids": snapshot_ids,
+                    "snapshot_count": len(snapshot_ids),
                     "delay_ms": delay_ms,
                     "active_reschedule": active_reschedule,
                 },
@@ -2008,8 +2130,12 @@ class PracticeController:
         except Exception:
             # If Tk scheduling fails during shutdown, fall back to immediate queueing
             # rather than silently losing the saved-round summaries.
+            self.pending_after_round_snapshot_session_ids = []
             self.pending_after_round_updates_session_id = None
-            self._request_after_round_analytics_async(int(session_id))
+            self._request_after_round_analytics_async(
+                int(session_id),
+                snapshot_session_ids=snapshot_ids,
+            )
 
     def clear_round_input(self) -> None:
         """Clear the current round input and telemetry while preserving the round target."""

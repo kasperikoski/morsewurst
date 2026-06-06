@@ -37,6 +37,7 @@ class StartupSequenceController:
         serial = app.serial_controller
         history = app.history_controller
         practice = app.practice_controller
+        backup = app.backup_controller
 
         app.withdraw()
         self.init_startup_state()
@@ -82,6 +83,12 @@ class StartupSequenceController:
             lifecycle.init_services()
             startup.startup_delay(0.20)
             log_app_event("app.startup.step_completed", context={"step": "init_services"})
+
+            log_app_event("app.startup.step_started", context={"step": "check_backups", "progress": 23})
+            startup.startup_status(app.i18n.t("app.startup.checking_backups"), 23)
+            backup.create_startup_backup_if_due()
+            startup.startup_delay(0.10)
+            log_app_event("app.startup.step_completed", context={"step": "check_backups"})
 
             log_app_event("app.startup.step_started", context={"step": "init_runtime", "progress": 28})
             startup.startup_status(app.i18n.t("app.startup.initializing_app"), 28)

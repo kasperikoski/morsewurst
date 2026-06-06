@@ -196,6 +196,7 @@ def _stored_timing_quality_summary(
     db: Any,
     *,
     recent_rounds: int,
+    max_session_id: int | None = None,
 ) -> dict[str, Any] | None:
     """Return skill timing data from stored per-round timing_score values.
 
@@ -216,6 +217,7 @@ def _stored_timing_quality_summary(
         min_target_chars=MIN_TARGET_CHARS,
         min_accuracy=QUALIFIED_MIN_ACCURACY,
         min_cleanliness=QUALIFIED_MIN_CLEANLINESS,
+        max_session_id=max_session_id,
     )
 
     straight_score = _safe_float(averages.get("straight_timing_score"))
@@ -440,6 +442,8 @@ def _raw_skill_wpm(rows: Sequence[Any]) -> Optional[float]:
 def _source_rows_by_key(
     db: Any,
     recent_rounds: int,
+    *,
+    max_session_id: int | None = None,
 ) -> dict[str, list[Any]]:
     rows: dict[str, list[Any]] = {
         "straight": [],
@@ -453,6 +457,7 @@ def _source_rows_by_key(
         data = db.skill_recent_sessions_by_key_source(
             recent_sessions_per_source=recent_rounds,
             min_target_chars=MIN_TARGET_CHARS,
+            max_session_id=max_session_id,
         )
     except Exception:
         return rows
@@ -939,12 +944,14 @@ def calculate_skill_rating(
     db: Any,
     *,
     recent_rounds: int = DEFAULT_RECENT_ROUNDS,
+    max_session_id: int | None = None,
 ) -> SkillRating:
     recent_rounds = max(1, int(recent_rounds))
 
     session_rows = db.skill_recent_sessions(
         recent_rounds,
         min_target_chars=MIN_TARGET_CHARS,
+        max_session_id=max_session_id,
     )
 
     if not session_rows:
@@ -957,7 +964,7 @@ def calculate_skill_rating(
             recent_rounds,
         )
 
-    source_rows_by_key = _source_rows_by_key(db, recent_rounds)
+    source_rows_by_key = _source_rows_by_key(db, recent_rounds, max_session_id=max_session_id)
 
     key_source_wpm = _key_source_wpm_from_rows(source_rows_by_key)
     key_source_paris_wpm = _key_source_paris_wpm_from_rows(source_rows_by_key)
@@ -982,6 +989,7 @@ def calculate_skill_rating(
     character_rows = db.skill_character_results(
         recent_rounds,
         min_target_chars=MIN_TARGET_CHARS,
+        max_session_id=max_session_id,
     )
     expected_charset = _expected_charset(session_rows)
 
@@ -997,6 +1005,7 @@ def calculate_skill_rating(
             min_target_chars=MIN_TARGET_CHARS,
             min_accuracy=QUALIFIED_MIN_ACCURACY,
             min_cleanliness=QUALIFIED_MIN_CLEANLINESS,
+            max_session_id=max_session_id,
         )
     else:
         full_charset_rows = []
@@ -1012,7 +1021,11 @@ def calculate_skill_rating(
 
     try:
         stored_timing_summary = (
-            _stored_timing_quality_summary(db, recent_rounds=recent_rounds)
+            _stored_timing_quality_summary(
+                db,
+                recent_rounds=recent_rounds,
+                max_session_id=max_session_id,
+            )
             if bool(_cfg("SKILL_RATING_USE_STORED_TIMING_SCORE_AVERAGE", True))
             else None
         )
@@ -1031,6 +1044,7 @@ def calculate_skill_rating(
                 min_target_chars=MIN_TARGET_CHARS,
                 min_accuracy=QUALIFIED_MIN_ACCURACY,
                 min_cleanliness=QUALIFIED_MIN_CLEANLINESS,
+                max_session_id=max_session_id,
             )
 
             timing_stability_factor = float(timing_quality.factor)

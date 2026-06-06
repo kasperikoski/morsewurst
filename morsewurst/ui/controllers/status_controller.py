@@ -8,6 +8,8 @@ from typing import TYPE_CHECKING
 
 from tkinter import ttk
 
+import morsewurst.config as config
+
 if TYPE_CHECKING:
     from morsewurst.ui.app import MorsewurstApp
 
@@ -26,7 +28,7 @@ class StatusController:
         if not hasattr(app, "serial_status_label"):
             return
 
-        self.configure_state_label(app.serial_status_label, state)
+        self.configure_state_label(app.serial_status_label, state, size=9)
 
     def set_main_status(self, text: str, state: str = "normal") -> None:
         app = self.app
@@ -38,15 +40,23 @@ class StatusController:
 
         self.configure_state_label(app.status_label, state)
 
-    def configure_state_label(self, label: ttk.Label, state: str) -> None:
+    def configure_state_label(self, label: ttk.Label, state: str, *, size: int | None = None) -> None:
+        family = str(getattr(config, "UI_MAIN_STATUS_FONT_FAMILY", "Segoe UI"))
+        normal_weight = str(getattr(config, "UI_MAIN_STATUS_FONT_WEIGHT", "normal"))
+        emphasis_weight = str(getattr(config, "UI_MAIN_STATUS_EMPHASIS_WEIGHT", "bold"))
+        if size is None:
+            size = int(getattr(config, "UI_MAIN_STATUS_FONT_SIZE", 10))
+        else:
+            size = int(size)
+
         styles = {
-            "connected": ("#178a2f", ("Segoe UI", 9, "bold")),
-            "success": ("#178a2f", ("Segoe UI", 9, "bold")),
-            "busy": ("#8a5a00", ("Segoe UI", 9, "bold")),
-            "warning": ("#8a5a00", ("Segoe UI", 9, "bold")),
-            "error": ("#b00020", ("Segoe UI", 9, "bold")),
-            "disconnected": ("#b00020", ("Segoe UI", 9, "bold")),
+            "connected": ("#178a2f", (family, size, emphasis_weight)),
+            "success": ("#178a2f", (family, size, emphasis_weight)),
+            "busy": ("#8a5a00", (family, size, emphasis_weight)),
+            "warning": ("#8a5a00", (family, size, emphasis_weight)),
+            "error": ("#b00020", (family, size, emphasis_weight)),
+            "disconnected": ("#b00020", (family, size, emphasis_weight)),
         }
 
-        foreground, font = styles.get(state, ("", ("Segoe UI", 9)))
+        foreground, font = styles.get(state, ("", (family, size, normal_weight)))
         label.configure(foreground=foreground, font=font)

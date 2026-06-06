@@ -880,6 +880,7 @@ def calculate_timing_quality(
     min_target_chars: int,
     min_accuracy: float,
     min_cleanliness: float,
+    max_session_id: int | None = None,
 ) -> TimingQuality:
     if not bool(_cfg("SKILL_RATING_TIMING_QUALITY_ENABLED", True)):
         empty_straight = SourceTimingQuality(
@@ -934,6 +935,7 @@ def calculate_timing_quality(
         min_target_chars=min_target_chars,
         min_accuracy=min_accuracy,
         min_cleanliness=min_cleanliness,
+        max_session_id=max_session_id,
     )
 
     straight = _source_quality_from_events(sessions, "straight")

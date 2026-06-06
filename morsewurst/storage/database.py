@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
+import time
 from dataclasses import asdict, is_dataclass
 from datetime import datetime
 from pathlib import Path
@@ -131,6 +132,46 @@ class Database:
         db.replaced_incompatible_database_path = None
         db.conn = db._connect()
         return db
+
+    def checkpoint_wal(self, *, truncate: bool = True) -> dict[str, Any]:
+        """Checkpoint WAL contents into the main database file.
+
+        This is a best-effort maintenance operation used during clean
+        application shutdown. It keeps the profile folder easier to inspect
+        manually without disabling WAL during normal practice use.
+        """
+
+        mode = "TRUNCATE" if truncate else "PASSIVE"
+        started_at = time.monotonic()
+
+        try:
+            row = self.conn.execute(f"PRAGMA wal_checkpoint({mode})").fetchone()
+        except Exception as exc:
+            log_app_exception(
+                "app.database.wal_checkpoint_failed",
+                exc,
+                level="warning",
+                message="SQLite WAL checkpoint failed.",
+                context={"path": str(self.path), "mode": mode},
+            )
+            raise
+
+        elapsed_ms = round((time.monotonic() - started_at) * 1000.0, 2)
+        values = tuple(row) if row is not None else ()
+        result = {
+            "mode": mode,
+            "busy": values[0] if len(values) > 0 else None,
+            "log_frames": values[1] if len(values) > 1 else None,
+            "checkpointed_frames": values[2] if len(values) > 2 else None,
+            "elapsed_ms": elapsed_ms,
+        }
+
+        log_app_event(
+            "app.database.wal_checkpoint_completed",
+            message="SQLite WAL checkpoint completed.",
+            context={"path": str(self.path), **result},
+        )
+        return result
 
     def close(self) -> None:
         self.conn.close()
@@ -3601,11 +3642,17 @@ class Database:
         self,
         limit: int = 1000,
         min_target_chars: int = 12,
+        max_session_id: int | None = None,
     ) -> List[sqlite3.Row]:
         cur = self.conn.cursor()
+        max_session_clause = "" if max_session_id is None else "AND id <= ?"
+        params: list[Any] = [int(min_target_chars)]
+        if max_session_id is not None:
+            params.append(int(max_session_id))
+        params.append(int(limit))
 
         cur.execute(
-            """
+            f"""
             WITH eligible AS (
                 SELECT
                     *,
@@ -3618,6 +3665,7 @@ class Database:
                     NULLIF(length_target, 0),
                     LENGTH(REPLACE(target, ' ', ''))
                 ) >= ?
+                {max_session_clause}
                 ORDER BY id DESC
                 LIMIT ?
             )
@@ -3669,19 +3717,18 @@ class Database:
             FROM eligible
             ORDER BY id ASC
             """,
-            (
-                int(min_target_chars),
-                int(limit),
-            ),
+            params,
         )
 
         return list(cur.fetchall())
     
 
+
     def skill_recent_sessions_by_key_source(
         self,
         recent_sessions_per_source: int = 1000,
         min_target_chars: int = 12,
+        max_session_id: int | None = None,
     ) -> Dict[str, List[Dict[str, Any]]]:
         """Return recent skill rows split by dominant key source.
 
@@ -3698,9 +3745,13 @@ class Database:
         }
 
         cur = self.conn.cursor()
+        max_session_clause = "" if max_session_id is None else "AND s.id <= ?"
+        params: list[Any] = [int(min_target_chars)]
+        if max_session_id is not None:
+            params.append(int(max_session_id))
 
         cur.execute(
-            """
+            f"""
             SELECT
                 s.id,
                 s.finished_at,
@@ -3755,6 +3806,7 @@ class Database:
                 NULLIF(s.length_target, 0),
                 LENGTH(REPLACE(s.target, ' ', ''))
             ) >= ?
+            {max_session_clause}
             AND s.elapsed_us IS NOT NULL
             AND s.elapsed_us > 0
             AND cr.target_char IS NOT NULL
@@ -3773,9 +3825,7 @@ class Database:
                     ELSE 1
                 END ASC
             """,
-            (
-                int(min_target_chars),
-            ),
+            params,
         )
 
         seen_sessions: set[int] = set()
@@ -3859,15 +3909,22 @@ class Database:
 
         return result
 
+
     def skill_character_results(
         self,
         recent_sessions: int = 1000,
         min_target_chars: int = 12,
+        max_session_id: int | None = None,
     ) -> List[sqlite3.Row]:
         cur = self.conn.cursor()
+        max_session_clause = "" if max_session_id is None else "AND id <= ?"
+        params: list[Any] = [int(min_target_chars)]
+        if max_session_id is not None:
+            params.append(int(max_session_id))
+        params.append(int(recent_sessions))
 
         cur.execute(
-            """
+            f"""
             WITH recent AS (
                 SELECT id
                 FROM sessions
@@ -3875,6 +3932,7 @@ class Database:
                     NULLIF(length_target, 0),
                     LENGTH(REPLACE(target, ' ', ''))
                 ) >= ?
+                {max_session_clause}
                 ORDER BY id DESC
                 LIMIT ?
             )
@@ -3892,14 +3950,12 @@ class Database:
             GROUP BY target_char
             ORDER BY target_char ASC
             """,
-            (
-                int(min_target_chars),
-                int(recent_sessions),
-            ),
+            params,
         )
 
         return list(cur.fetchall())
     
+
 
     def skill_full_charset_character_results(
         self,
@@ -3907,6 +3963,7 @@ class Database:
         min_target_chars: int = 12,
         min_accuracy: float = 90.0,
         min_cleanliness: float = 85.0,
+        max_session_id: int | None = None,
     ) -> List[sqlite3.Row]:
         """Return character evidence for full-character-set level coverage.
 
@@ -3917,9 +3974,14 @@ class Database:
         """
 
         cur = self.conn.cursor()
+        max_session_clause = "" if max_session_id is None else "AND id <= ?"
+        params: list[Any] = [int(min_target_chars)]
+        if max_session_id is not None:
+            params.append(int(max_session_id))
+        params.extend([int(recent_sessions), float(min_accuracy), float(min_cleanliness)])
 
         cur.execute(
-            """
+            f"""
             WITH base_recent AS (
                 SELECT id
                 FROM sessions
@@ -3927,6 +3989,7 @@ class Database:
                     NULLIF(length_target, 0),
                     LENGTH(REPLACE(target, ' ', ''))
                 ) >= ?
+                {max_session_clause}
                 ORDER BY id DESC
                 LIMIT ?
             ),
@@ -3952,15 +4015,11 @@ class Database:
             GROUP BY cr.target_char
             ORDER BY cr.target_char ASC
             """,
-            (
-                int(min_target_chars),
-                int(recent_sessions),
-                float(min_accuracy),
-                float(min_cleanliness),
-            ),
+            params,
         )
 
         return list(cur.fetchall())
+
 
 
     def skill_timing_source_data(
@@ -3969,13 +4028,19 @@ class Database:
         min_target_chars: int = 12,
         min_accuracy: float = 85.0,
         min_cleanliness: float = 80.0,
+        max_session_id: int | None = None,
     ) -> List[Dict[str, Any]]:
         """Return eligible sessions with raw tone telemetry for timing analysis."""
 
         cur = self.conn.cursor()
+        max_session_clause = "" if max_session_id is None else "AND id <= ?"
+        params: list[Any] = [int(min_target_chars)]
+        if max_session_id is not None:
+            params.append(int(max_session_id))
+        params.extend([float(min_accuracy), float(min_cleanliness), int(recent_sessions)])
 
         session_rows = cur.execute(
-            """
+            f"""
             WITH eligible AS (
                 SELECT
                     *,
@@ -3988,6 +4053,7 @@ class Database:
                     NULLIF(length_target, 0),
                     LENGTH(REPLACE(target, ' ', ''))
                 ) >= ?
+                {max_session_clause}
                 AND accuracy >= ?
                 AND cleanliness >= ?
                 ORDER BY id DESC
@@ -4007,12 +4073,7 @@ class Database:
             FROM eligible
             ORDER BY id ASC
             """,
-            (
-                int(min_target_chars),
-                float(min_accuracy),
-                float(min_cleanliness),
-                int(recent_sessions),
-            ),
+            params,
         ).fetchall()
 
         if not session_rows:
@@ -4075,12 +4136,14 @@ class Database:
         return result
     
 
+
     def skill_timing_score_average_by_key_source(
         self,
         recent_sessions: int | None = None,
         min_target_chars: int = 12,
         min_accuracy: float = 85.0,
         min_cleanliness: float = 80.0,
+        max_session_id: int | None = None,
     ) -> Dict[str, Any]:
         """Return average stored round timing_score by dominant key source."""
 
@@ -4095,8 +4158,14 @@ class Database:
             ),
         )
 
+        max_session_clause = "" if max_session_id is None else "AND id <= ?"
+        params: list[Any] = [int(min_target_chars)]
+        if max_session_id is not None:
+            params.append(int(max_session_id))
+        params.extend([float(min_accuracy), float(min_cleanliness), recent_limit])
+
         rows = cur.execute(
-            """
+            f"""
             WITH eligible AS (
                 SELECT
                     id,
@@ -4106,6 +4175,7 @@ class Database:
                     NULLIF(length_target, 0),
                     LENGTH(REPLACE(target, ' ', ''))
                 ) >= ?
+                {max_session_clause}
                 AND accuracy >= ?
                 AND cleanliness >= ?
                 AND timing_score IS NOT NULL
@@ -4136,12 +4206,7 @@ class Database:
                     ELSE 1
                 END ASC
             """,
-            (
-                int(min_target_chars),
-                float(min_accuracy),
-                float(min_cleanliness),
-                recent_limit,
-            ),
+            params,
         ).fetchall()
 
         values_by_source: dict[str, list[float]] = {
@@ -4188,6 +4253,7 @@ class Database:
             "straight_used_rounds": len(straight_values),
             "iambic_used_rounds": len(iambic_values),
         }
+
 
 
     def save_skill_rating_snapshot(self, session_id: int | None, rating: Any) -> int:

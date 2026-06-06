@@ -305,7 +305,7 @@ class SerialController:
         )
         app.status_controller.set_main_status(
             app.i18n.t("serial.message.device_connected", "Serial device connected."),
-            state="normal",
+            state="success",
         )
         log_app_event(
             "app.serial.connect_success",

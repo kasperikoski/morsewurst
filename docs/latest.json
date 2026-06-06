@@ -1,18 +1,16 @@
 {
   "app": "Morsewurst",
-  "latest_version": "0.99.13",
+  "latest_version": "0.99.14",
   "release_date": "2026-06-06",
-  "release_url": "https://github.com/kasperikoski/morsewurst/releases/tag/v0.99.13",
+  "release_url": "https://github.com/kasperikoski/morsewurst/releases/tag/v0.99.14",
   "download_url": "https://kasperikoski.fi/morsewurst",
   "release_notes": [
-    "Massively improved post-round performance by moving practice saving, history refreshes and heavier analytics work out of the immediate UI path.",
-    "Practice rounds are now saved in the background, and recent-round history is updated incrementally instead of repainting the entire table after each round.",
-    "Improved UI responsiveness after finishing a round or practice series. Users can now start the next practice immediately without waiting for timing profile refreshes, skill rating calculations, problem character analysis, effective WPM suggestions or history summaries.",
-    "Added safer background processing for post-round analytics, including latest-result-wins logic so older background results cannot overwrite newer UI data.",
-    "Improved SQLite background access by using separate worker connections and WAL-friendly concurrency settings.",
-    "Optimized long-term skill panel updates by using stored per-round timing scores for the rolling timing component, avoiding expensive re-analysis of thousands of raw keying events after every round.",
-    "Kept round scoring behaviour unchanged: accuracy, cleanliness, WPM, timing score and saved round results continue to use the existing scoring logic.",
-    "Added more detailed structured performance logging for practice start, background saving, analytics scheduling, history updates and skill-rating refreshes.",
-    "Because the UI now remains smooth during large background calculations, the default recent-round analysis window has been restored to the last 1000 rounds for history, problem character, effective WPM and skill calculations."
+    "Improved the skill rating snapshot system so skill history is now recorded per completed round instead of only after a practice series using the latest round.",
+    "Historical skill calculations now support accurate as-of snapshots, making the skill development chart more precise and useful over time.",
+    "Added profile-specific automatic and manual backup management, including backup listing, manifest metadata, restore confirmation and pre-restore safety backups.",
+    "Improved SQLite shutdown handling by checkpointing WAL data during clean application shutdown.",
+    "Polished the main control/status area and backup window layout for a cleaner and more readable user interface.",
+    "Added and updated regression tests for backup handling, per-round skill snapshots, serial status behaviour and related UI changes.",
+    "Includes general bug fixes and small UI improvements around status messages, serial connection display and statistics-related behaviour."
   ]
 }

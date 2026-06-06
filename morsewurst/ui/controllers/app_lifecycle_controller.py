@@ -85,6 +85,47 @@ class AppLifecycleController:
             },
         )
 
+
+    def _checkpoint_and_close_database(self, *, reason: str) -> None:
+        """Best-effort WAL checkpoint and close for clean shutdown/restart."""
+
+        app = self.app
+        db = getattr(app, "db", None)
+        if db is None:
+            return
+
+        try:
+            result = db.checkpoint_wal(truncate=True)
+            log_app_event(
+                "app.shutdown.database_checkpoint_completed",
+                message="Database WAL was checkpointed during clean application shutdown.",
+                context={"reason": reason, **result},
+            )
+        except Exception as exc:
+            log_app_exception(
+                "app.shutdown.database_checkpoint_failed",
+                exc,
+                level="warning",
+                message="Database WAL checkpoint failed during application shutdown.",
+                context={"reason": reason},
+            )
+
+        try:
+            db.close()
+            log_app_event(
+                "app.shutdown.database_closed",
+                message="Database connection closed during application shutdown.",
+                context={"reason": reason},
+            )
+        except Exception as exc:
+            log_app_exception(
+                "app.shutdown.database_close_failed",
+                exc,
+                level="warning",
+                message="Database close failed during application shutdown.",
+                context={"reason": reason},
+            )
+
     def restart_application(self) -> None:
         """Restart the current Morsewurst process."""
 
@@ -152,6 +193,8 @@ class AppLifecycleController:
                 level="warning",
                 message="Network manager stop during restart failed.",
             )
+
+        self._checkpoint_and_close_database(reason="restart")
 
         if getattr(sys, "frozen", False):
             args = [sys.executable, *sys.argv[1:]]
@@ -262,6 +305,8 @@ class AppLifecycleController:
                 level="warning",
                 message="Network manager stop during shutdown failed.",
             )
+
+        self._checkpoint_and_close_database(reason="close")
 
         log_app_event(
             "app.shutdown.completed",

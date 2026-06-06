@@ -399,7 +399,7 @@ def test_connect_serial_port_success_sets_connected_state_and_syncs_connection_i
     assert app.input_controller.drain_calls == 1
     assert app.status_controller.serial_statuses[-1][0].startswith("COM6 @")
     assert app.status_controller.serial_statuses[-1][1] == "connected"
-    assert app.status_controller.main_statuses[-1] == ("Serial device connected.", "normal")
+    assert app.status_controller.main_statuses[-1] == ("Serial device connected.", "success")
     assert app.audio_controller.played == ["serial_connected"]
     assert app.app_lifecycle_controller.focus_calls == [True]
     assert any(log["event"] == "app.serial.event_queue_drained" for log in captured_logs)

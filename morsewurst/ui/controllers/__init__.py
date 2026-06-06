@@ -7,6 +7,7 @@ from __future__ import annotations
 
 from morsewurst.ui.controllers.app_lifecycle_controller import AppLifecycleController
 from morsewurst.ui.controllers.audio_controller import AudioController
+from morsewurst.ui.controllers.backup_controller import BackupController
 from morsewurst.ui.controllers.challenge_settings_controller import ChallengeSettingsController
 from morsewurst.ui.controllers.debug_controller import DebugController
 from morsewurst.ui.controllers.decoder_controller import DecoderController
@@ -32,6 +33,7 @@ from morsewurst.ui.controllers.wxmor_controller import WxmorController
 __all__ = [
     "AppLifecycleController",
     "AudioController",
+    "BackupController",
     "ChallengeSettingsController",
     "DebugController",
     "DecoderController",

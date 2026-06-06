@@ -144,6 +144,13 @@ HELP_DOCUMENT_SPEC: list[dict[str, str]] = [
     {"type": "paragraph", "key": "help.content.profiles.language"},
     {"type": "paragraph", "key": "help.content.profiles.storage"},
 
+    {"type": "heading", "key": "help.content.backups.heading"},
+    {"type": "paragraph", "key": "help.content.backups.intro"},
+    {"type": "paragraph", "key": "help.content.backups.automatic"},
+    {"type": "paragraph", "key": "help.content.backups.manual"},
+    {"type": "paragraph", "key": "help.content.backups.restore"},
+    {"type": "note", "key": "help.content.backups.note"},
+
     {"type": "heading", "key": "help.content.troubleshooting.heading"},
     {"type": "paragraph", "key": "help.content.troubleshooting.intro"},
     {"type": "paragraph", "key": "help.content.troubleshooting.serial"},

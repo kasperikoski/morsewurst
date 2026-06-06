@@ -9,7 +9,7 @@ import sys
 from pathlib import Path
 
 APP_NAME = "Morsewurst"
-APP_VERSION = "0.99.13"
+APP_VERSION = "0.99.14"
 
 # ============================================================
 # Update check
@@ -106,6 +106,18 @@ SOUND_FILES = {
 LOG_DIRNAME = "logs"
 LOG_MAX_BYTES = 2 * 1024 * 1024
 LOG_BACKUP_COUNT = 50
+
+# ============================================================
+# Profile backups
+# ============================================================
+PROFILE_BACKUP_DIRNAME = "backups"
+PROFILE_BACKUP_AUTO_ENABLED = True
+PROFILE_BACKUP_INTERVAL_HOURS = 24
+PROFILE_BACKUP_MAX_TOTAL = 200
+PROFILE_BACKUP_KEEP_ALWAYS_LAST = 10
+PROFILE_BACKUP_KEEP_DAILY_DAYS = 30
+PROFILE_BACKUP_KEEP_WEEKLY_WEEKS = 12
+PROFILE_BACKUP_KEEP_MONTHLY_MONTHS = 12
 
 # ============================================================
 # SQLite concurrency
@@ -227,6 +239,16 @@ UI_SETTINGS_WINDOW_MIN_HEIGHT = 780
 
 UI_MAX_SERIAL_EVENTS_PER_POLL = 8
 UI_SERIAL_POLL_BACKLOG_DELAY_MS = 1
+
+# Main action/status strip. These affect only the bottom status message next to
+# the main practice control buttons, not scoring or serial-panel labels.
+# Adjust UI_MAIN_STATUS_FONT_SIZE to tune the visible message size.
+UI_MAIN_STATUS_FONT_FAMILY = "Segoe UI"
+UI_MAIN_STATUS_FONT_SIZE = 15
+UI_MAIN_STATUS_FONT_WEIGHT = "normal"
+UI_MAIN_STATUS_EMPHASIS_WEIGHT = "bold"
+UI_MAIN_STATUS_WRAP_MIN_PX = 260
+UI_MAIN_STATUS_WRAP_PADDING_PX = 20
 
 HISTORY_VISIBLE_ROWS = 10
 # Number of saved rounds loaded for the compact Recent rounds table.
