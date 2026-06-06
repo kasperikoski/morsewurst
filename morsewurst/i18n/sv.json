@@ -61,6 +61,8 @@
   "practice.status.series_complete_upper": "ÖVNINGSSERIEN ÄR KLAR",
   "practice.status.auto_saving_round": "Rundan sparas automatiskt.",
   "practice.status.saved_round": "Sparade runda #{session_id}",
+  "practice.status.save_not_queued": "Rundan kunde inte läggas i kö för sparande eftersom programmet stängs.",
+  "practice.status.save_failed": "Kunde inte spara rundan: {error}",
   "practice.status.saved_round_skill_failed": "Sparade runda #{session_id}, men kunde inte spara färdighetsnivån: {error}",
   "practice.status.saved_round_summary_failed": "Sparade runda #{session_id}, men kunde inte uppdatera sammanfattningar: {error}",
   "practice.status.input_cleared": "Inmatningen rensades.",

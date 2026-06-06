@@ -1008,12 +1008,12 @@ class AdvancedSettingsWindow(tk.Toplevel):
         try:
             recent_sessions = self.app.ui_helpers_controller.safe_int_var(
                 self.app.decoder_profile_recent_rounds_var,
-                default=int(getattr(config, "DECODER_PROFILE_RECENT_ROUNDS", 300)),
+                default=int(getattr(config, "DECODER_PROFILE_RECENT_ROUNDS", 1000)),
                 minimum=required_rounds,
                 maximum=100000,
             )
         except Exception:
-            recent_sessions = int(getattr(config, "DECODER_PROFILE_RECENT_ROUNDS", 300))
+            recent_sessions = int(getattr(config, "DECODER_PROFILE_RECENT_ROUNDS", 1000))
 
         try:
             min_accuracy = float(self.app.decoder_profile_min_accuracy_var.get())
@@ -1050,7 +1050,7 @@ class AdvancedSettingsWindow(tk.Toplevel):
                 good_rounds = int(getattr(profile, "sample_rounds", 0) or 0)
 
             confidence_full_rounds = int(
-                getattr(config, "DECODER_PROFILE_CONFIDENCE_FULL_ROUNDS", 300)
+                getattr(config, "DECODER_PROFILE_CONFIDENCE_FULL_ROUNDS", 1000)
             )
 
             confidence_value = (

@@ -93,10 +93,47 @@ class Database:
         )
 
     def _connect(self) -> sqlite3.Connection:
-        conn = sqlite3.connect(self.path)
+        busy_timeout_ms = max(100, int(getattr(config, "DATABASE_BUSY_TIMEOUT_MS", 5000)))
+        conn = sqlite3.connect(self.path, timeout=busy_timeout_ms / 1000.0)
         conn.row_factory = sqlite3.Row
+        conn.execute(f"PRAGMA busy_timeout = {busy_timeout_ms}")
+
+        if bool(getattr(config, "DATABASE_ENABLE_WAL", True)):
+            try:
+                conn.execute("PRAGMA journal_mode = WAL")
+                synchronous = str(getattr(config, "DATABASE_WAL_SYNCHRONOUS", "NORMAL") or "NORMAL").upper()
+                if synchronous not in {"OFF", "NORMAL", "FULL", "EXTRA"}:
+                    synchronous = "NORMAL"
+                conn.execute(f"PRAGMA synchronous = {synchronous}")
+            except Exception as exc:
+                log_app_exception(
+                    "app.database.wal_enable_failed",
+                    exc,
+                    level="warning",
+                    message="Enabling SQLite WAL mode failed; database will continue with the default journal mode.",
+                    context={"path": str(self.path)},
+                )
+
         return conn
-    
+
+    @classmethod
+    def open_background(cls, path: Path) -> "Database":
+        """Open a lightweight database handle for background workers.
+
+        This intentionally avoids normal application startup maintenance such
+        as marking in-progress practices interrupted. Background jobs use it
+        only after the foreground application has already opened and migrated
+        the profile database.
+        """
+
+        db = cls.__new__(cls)
+        db.path = Path(path)
+        db.replaced_incompatible_database_path = None
+        db.conn = db._connect()
+        return db
+
+    def close(self) -> None:
+        self.conn.close()
 
     def _table_exists(self, table: str) -> bool:
         cur = self.conn.cursor()
@@ -748,7 +785,7 @@ class Database:
                 ("koch_session_id", "koch_session_id INTEGER"),
                 ("created_at", "created_at TEXT NOT NULL DEFAULT ''"),
                 ("model_version", "model_version INTEGER NOT NULL DEFAULT 2"),
-                ("recent_limit", "recent_limit INTEGER NOT NULL DEFAULT 300"),
+                ("recent_limit", "recent_limit INTEGER NOT NULL DEFAULT 1000"),
                 ("sessions_used", "sessions_used INTEGER NOT NULL DEFAULT 0"),
                 ("required_sessions", "required_sessions INTEGER NOT NULL DEFAULT 30"),
                 ("displayable", "displayable INTEGER NOT NULL DEFAULT 0"),
@@ -1230,6 +1267,13 @@ class Database:
 
         cur.execute(
             """
+            CREATE INDEX IF NOT EXISTS idx_events_session_index
+            ON events(session_id, event_index)
+            """
+        )
+
+        cur.execute(
+            """
             CREATE TABLE IF NOT EXISTS char_results (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 session_id INTEGER NOT NULL,
@@ -1262,6 +1306,13 @@ class Database:
             """
             CREATE INDEX IF NOT EXISTS idx_char_results_session_source_result
             ON char_results(session_id, source, result)
+            """
+        )
+
+        cur.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_char_results_session_target_result
+            ON char_results(session_id, target_char, result)
             """
         )
 
@@ -2547,7 +2598,7 @@ class Database:
                 koch_session_id,
                 created_at,
                 int(getattr(config, "KOCH_SKILL_MODEL_VERSION", 2)),
-                int(getattr(config, "DEFAULT_KOCH_SKILL_RECENT_ROUNDS", 300)),
+                int(getattr(config, "DEFAULT_KOCH_SKILL_RECENT_ROUNDS", 1000)),
                 int(getattr(summary, "sessions_used", 0) or 0),
                 int(getattr(summary, "required_sessions", 30) or 30),
                 1 if bool(getattr(summary, "displayable", False)) else 0,
@@ -2593,7 +2644,7 @@ class Database:
 
     def koch_character_stats(
         self,
-        recent_sessions: int = 300,
+        recent_sessions: int = 1000,
         limit: int = 50,
     ) -> List[sqlite3.Row]:
         self.ensure_koch_schema()
@@ -2632,11 +2683,10 @@ class Database:
         ).fetchall()
 
 
-    def recent_sessions(self, limit: int = 10) -> List[sqlite3.Row]:
-        cur = self.conn.cursor()
+    def _session_history_select_sql(self) -> str:
+        """Return the lightweight SELECT list used by the Recent rounds table."""
 
-        cur.execute(
-            """
+        return """
             SELECT
                 id,
                 finished_at,
@@ -2672,6 +2722,14 @@ class Database:
 
                 time_ok
             FROM sessions
+        """
+
+    def recent_sessions(self, limit: int = 10) -> List[sqlite3.Row]:
+        cur = self.conn.cursor()
+
+        cur.execute(
+            self._session_history_select_sql()
+            + """
             ORDER BY id DESC
             LIMIT ?
             """,
@@ -2679,6 +2737,18 @@ class Database:
         )
 
         return list(cur.fetchall())
+
+    def session_history_row(self, session_id: int) -> sqlite3.Row | None:
+        """Return one lightweight row in the same shape as recent_sessions()."""
+
+        cur = self.conn.cursor()
+        return cur.execute(
+            self._session_history_select_sql()
+            + """
+            WHERE id = ?
+            """,
+            (int(session_id),),
+        ).fetchone()
     
     def session_details(self, session_id: int) -> dict[str, Any] | None:
         """
@@ -3194,7 +3264,7 @@ class Database:
             "produced_chars_total": int(char_row["produced_chars_total"] or 0) if char_row is not None else 0,
         }
 
-    def stats_summary(self, recent_sessions: int = 300) -> Dict[str, Any]:
+    def stats_summary(self, recent_sessions: int = 1000) -> Dict[str, Any]:
         recent_sessions = max(1, int(recent_sessions))
 
         cur = self.conn.cursor()
@@ -3346,7 +3416,7 @@ class Database:
 
     def optimized_wpm_from_recent_sessions(
         self,
-        recent_sessions: int = 300,
+        recent_sessions: int = 1000,
         min_accuracy: float = 90.0,
         min_cleanliness: float = 85.0,
         min_target_chars: int | None = None,
@@ -3529,7 +3599,7 @@ class Database:
 
     def skill_recent_sessions(
         self,
-        limit: int = 300,
+        limit: int = 1000,
         min_target_chars: int = 12,
     ) -> List[sqlite3.Row]:
         cur = self.conn.cursor()
@@ -3610,7 +3680,7 @@ class Database:
 
     def skill_recent_sessions_by_key_source(
         self,
-        recent_sessions_per_source: int = 300,
+        recent_sessions_per_source: int = 1000,
         min_target_chars: int = 12,
     ) -> Dict[str, List[Dict[str, Any]]]:
         """Return recent skill rows split by dominant key source.
@@ -3791,7 +3861,7 @@ class Database:
 
     def skill_character_results(
         self,
-        recent_sessions: int = 300,
+        recent_sessions: int = 1000,
         min_target_chars: int = 12,
     ) -> List[sqlite3.Row]:
         cur = self.conn.cursor()
@@ -3833,7 +3903,7 @@ class Database:
 
     def skill_full_charset_character_results(
         self,
-        recent_sessions: int = 300,
+        recent_sessions: int = 1000,
         min_target_chars: int = 12,
         min_accuracy: float = 90.0,
         min_cleanliness: float = 85.0,
@@ -3895,7 +3965,7 @@ class Database:
 
     def skill_timing_source_data(
         self,
-        recent_sessions: int = 300,
+        recent_sessions: int = 1000,
         min_target_chars: int = 12,
         min_accuracy: float = 85.0,
         min_cleanliness: float = 80.0,
@@ -4021,7 +4091,7 @@ class Database:
             int(
                 recent_sessions
                 if recent_sessions is not None
-                else getattr(config, "DEFAULT_SKILL_RATING_RECENT_ROUNDS", 300)
+                else getattr(config, "DEFAULT_SKILL_RATING_RECENT_ROUNDS", 1000)
             ),
         )
 
@@ -4942,7 +5012,7 @@ class Database:
         self,
         source: str,
         *,
-        recent_sessions: int = 300,
+        recent_sessions: int = 1000,
         min_accuracy: float = 90.0,
         min_cleanliness: float = 85.0,
         min_timing_score: Optional[float] = None,
@@ -5139,7 +5209,7 @@ class Database:
         self,
         source: str,
         *,
-        recent_sessions: int = 300,
+        recent_sessions: int = 1000,
         min_accuracy: float = 90.0,
         min_cleanliness: float = 85.0,
         min_timing_score: Optional[float] = None,
@@ -5206,7 +5276,7 @@ class Database:
     def load_timing_profiles(
         self,
         *,
-        recent_sessions: int = 300,
+        recent_sessions: int = 1000,
         min_accuracy: float = 90.0,
         min_cleanliness: float = 85.0,
         min_timing_score: Optional[float] = None,

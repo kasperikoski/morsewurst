@@ -9,7 +9,7 @@ import sys
 from pathlib import Path
 
 APP_NAME = "Morsewurst"
-APP_VERSION = "0.99.12.2"
+APP_VERSION = "0.99.13"
 
 # ============================================================
 # Update check
@@ -106,6 +106,20 @@ SOUND_FILES = {
 LOG_DIRNAME = "logs"
 LOG_MAX_BYTES = 2 * 1024 * 1024
 LOG_BACKUP_COUNT = 50
+
+# ============================================================
+# SQLite concurrency
+# ============================================================
+DATABASE_BUSY_TIMEOUT_MS = 5000
+DATABASE_ENABLE_WAL = True
+DATABASE_WAL_SYNCHRONOUS = "NORMAL"
+
+# Heavy after-round analytics is intentionally delayed and only started when
+# no round/countdown is active. Some skill calculations are CPU-bound Python
+# work, so starting them immediately can still starve Tk's event loop even when
+# they run in a background thread.
+AFTER_ROUND_ANALYTICS_DELAY_MS = 1500
+AFTER_ROUND_ANALYTICS_ACTIVE_RESCHEDULE_MS = 1000
 
 
 # ============================================================
@@ -215,6 +229,17 @@ UI_MAX_SERIAL_EVENTS_PER_POLL = 8
 UI_SERIAL_POLL_BACKLOG_DELAY_MS = 1
 
 HISTORY_VISIBLE_ROWS = 10
+# Number of saved rounds loaded for the compact Recent rounds table.
+# Rendering is chunked on the Tk thread, so this can be raised without
+# freezing the whole application while the table is repainted.
+HISTORY_TABLE_RECENT_SESSIONS = 1000
+HISTORY_TABLE_RENDER_INSERT_CHUNK_SIZE = 40
+HISTORY_TABLE_RENDER_DELETE_CHUNK_SIZE = 200
+HISTORY_TABLE_RENDER_CHUNK_DELAY_MS = 10
+# After a saved round, update the Recent rounds table incrementally instead of
+# clearing and repainting the whole table. This keeps the table from flashing
+# and prevents large history limits from delaying the next Start action.
+HISTORY_TABLE_INCREMENTAL_AFTER_ROUND = True
 PROBLEM_VISIBLE_ROWS = 8
 DELETE_SESSIONS_VISIBLE_ROWS = 14
 PROBLEM_CHARACTER_DISPLAY_LIMIT = 10_000
@@ -366,7 +391,7 @@ WXMOR_LOCATIONS: list[str] = []
 # ============================================================
 # Problem character practice
 # ============================================================
-DEFAULT_PROBLEM_RECENT_ROUNDS = 300
+DEFAULT_PROBLEM_RECENT_ROUNDS = 1000
 DEFAULT_PROBLEM_CHAR_WEIGHT_PERCENT = 30
 DEFAULT_PROBLEM_CHAR_LIMIT = 12
 DEFAULT_PROBLEM_CHAR_CANDIDATE_LIMIT = 50
@@ -375,7 +400,7 @@ DEFAULT_PROBLEM_CHAR_CANDIDATE_LIMIT = 50
 # ============================================================
 # Effective WPM suggestion
 # ============================================================
-DEFAULT_EFFECTIVE_WPM_RECENT_ROUNDS = 300
+DEFAULT_EFFECTIVE_WPM_RECENT_ROUNDS = 1000
 DEFAULT_EFFECTIVE_WPM_MIN_ACCURACY = 90
 DEFAULT_EFFECTIVE_WPM_MIN_CLEANLINESS = 85
 EFFECTIVE_WPM_MIN_ROUNDS_REQUIRED = 3
@@ -605,7 +630,7 @@ ROUND_NET_WPM_TIMING_MAX_FACTOR = 1.00
 # Timing quality scoring
 # ============================================================
 SKILL_RATING_CAP_BY_TARGET_WPM = True
-DEFAULT_SKILL_RATING_RECENT_ROUNDS = 300
+DEFAULT_SKILL_RATING_RECENT_ROUNDS = 1000
 SKILL_RATING_MODEL_VERSION = 1
 SKILL_RATING_MIN_TARGET_CHARS = 12
 SKILL_RATING_MIN_QUALIFIED_ROUNDS = 50
@@ -633,6 +658,10 @@ SKILL_RATING_MASTERY_ADJUSTMENT_MAX = 1.05
 SKILL_RATING_TIMING_MIN_FACTOR = 0.85
 SKILL_RATING_TIMING_MAX_FACTOR = 1.05
 SKILL_RATING_TIMING_QUALITY_ENABLED = True
+# The rolling skill panel normally uses stored per-round timing_score values
+# for its long-term timing component. This avoids re-decoding thousands of raw
+# tone events after every round while keeping the round scoring itself unchanged.
+SKILL_RATING_USE_STORED_TIMING_SCORE_AVERAGE = True
 SKILL_RATING_TIMING_MIN_ELEMENTS = 8
 SKILL_RATING_TIMING_MIN_DOTS = 3
 SKILL_RATING_TIMING_MIN_DASHES = 3

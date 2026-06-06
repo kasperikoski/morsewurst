@@ -106,6 +106,16 @@ class AppLifecycleController:
                 message="Active practice shutdown failed during restart.",
             )
 
+        try:
+            app.practice_controller.shutdown_background_worker(wait_seconds=5.0)
+        except Exception as exc:
+            log_app_exception(
+                "app.restart.practice_background_shutdown_failed",
+                exc,
+                level="warning",
+                message="Practice background worker shutdown failed during restart.",
+            )
+
         app.audio_controller.stop_morse_speed_preview()
 
         try:
@@ -205,6 +215,16 @@ class AppLifecycleController:
                 exc,
                 level="warning",
                 message="Active practice shutdown failed during application close.",
+            )
+
+        try:
+            app.practice_controller.shutdown_background_worker(wait_seconds=5.0)
+        except Exception as exc:
+            log_app_exception(
+                "app.shutdown.practice_background_shutdown_failed",
+                exc,
+                level="warning",
+                message="Practice background worker shutdown failed during application close.",
             )
 
         app.audio_controller.stop_morse_speed_preview()

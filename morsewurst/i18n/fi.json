@@ -61,6 +61,8 @@
   "practice.status.series_complete_upper": "HARJOITUSSARJA VALMIS",
   "practice.status.auto_saving_round": "Kierros tallennetaan automaattisesti.",
   "practice.status.saved_round": "Tallennettu kierros #{session_id}",
+  "practice.status.save_not_queued": "Kierrosta ei voitu lisätä tallennusjonoon, koska sovellus sulkeutuu.",
+  "practice.status.save_failed": "Kierroksen tallennus epäonnistui: {error}",
   "practice.status.saved_round_skill_failed": "Tallennettu kierros #{session_id}, mutta taitotason tallennus epäonnistui: {error}",
   "practice.status.saved_round_summary_failed": "Tallennettu kierros #{session_id}, mutta yhteenvetojen päivitys epäonnistui: {error}",
   "practice.status.input_cleared": "Syöte tyhjennetty.",

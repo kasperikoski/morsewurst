@@ -94,7 +94,7 @@ def _cfg(name: str, default: Any) -> Any:
 
 MODEL_VERSION = int(_cfg("SKILL_RATING_MODEL_VERSION", 1))
 
-DEFAULT_RECENT_ROUNDS = int(_cfg("DEFAULT_SKILL_RATING_RECENT_ROUNDS", 300))
+DEFAULT_RECENT_ROUNDS = int(_cfg("DEFAULT_SKILL_RATING_RECENT_ROUNDS", 1000))
 MIN_TARGET_CHARS = int(_cfg("SKILL_RATING_MIN_TARGET_CHARS", 12))
 MIN_QUALIFIED_ROUNDS = int(_cfg("SKILL_RATING_MIN_QUALIFIED_ROUNDS", 50))
 
@@ -155,6 +155,99 @@ def _safe_mean(values: Iterable[float]) -> Optional[float]:
         return None
 
     return float(mean(cleaned))
+
+
+def _weighted_average(parts: Iterable[tuple[Optional[float], float]]) -> Optional[float]:
+    numerator = 0.0
+    denominator = 0.0
+
+    for value, weight in parts:
+        if value is None:
+            continue
+
+        weight = max(0.0, float(weight))
+        if weight <= 0.0:
+            continue
+
+        numerator += float(value) * weight
+        denominator += weight
+
+    if denominator <= 0.0:
+        return None
+
+    return numerator / denominator
+
+
+def _skill_timing_factor_from_score(score: Optional[float]) -> float:
+    min_factor = float(_cfg("SKILL_RATING_TIMING_MIN_FACTOR", 0.85))
+    max_factor = float(_cfg("SKILL_RATING_TIMING_MAX_FACTOR", 1.05))
+
+    if score is None:
+        return 1.0
+
+    return _clamp(
+        min_factor + ((float(score) / 100.0) * (max_factor - min_factor)),
+        min_factor,
+        max_factor,
+    )
+
+
+def _stored_timing_quality_summary(
+    db: Any,
+    *,
+    recent_rounds: int,
+) -> dict[str, Any] | None:
+    """Return skill timing data from stored per-round timing_score values.
+
+    The older rolling skill timing path re-decoded raw telemetry for every
+    eligible historical round. That preserves detail, but it can become several
+    seconds of CPU-bound Python work and starve Tk's event loop after every
+    completed round. The round-level timing_score is already calculated and
+    stored when the round is saved, so using its recent source-weighted average
+    keeps the skill formula responsive without changing round scoring.
+    """
+
+    loader = getattr(db, "skill_timing_score_average_by_key_source", None)
+    if not callable(loader):
+        return None
+
+    averages = loader(
+        recent_sessions=recent_rounds,
+        min_target_chars=MIN_TARGET_CHARS,
+        min_accuracy=QUALIFIED_MIN_ACCURACY,
+        min_cleanliness=QUALIFIED_MIN_CLEANLINESS,
+    )
+
+    straight_score = _safe_float(averages.get("straight_timing_score"))
+    iambic_score = _safe_float(averages.get("iambic_timing_score"))
+
+    combined_score = _weighted_average(
+        [
+            (
+                straight_score,
+                float(_cfg("SKILL_RATING_STRAIGHT_TIMING_SOURCE_WEIGHT", 1.00)),
+            ),
+            (
+                iambic_score,
+                float(_cfg("SKILL_RATING_IAMBIC_TIMING_SOURCE_WEIGHT", 0.60)),
+            ),
+        ]
+    )
+
+    if combined_score is None:
+        return None
+
+    straight_used_rounds = max(0, int(averages.get("straight_used_rounds") or 0))
+    iambic_used_rounds = max(0, int(averages.get("iambic_used_rounds") or 0))
+
+    return {
+        "combined_score": round(float(combined_score), 2),
+        "factor": round(_skill_timing_factor_from_score(combined_score), 4),
+        "straight_score": None if straight_score is None else round(float(straight_score), 2),
+        "iambic_score": None if iambic_score is None else round(float(iambic_score), 2),
+        "used_rounds": max(straight_used_rounds, iambic_used_rounds),
+        "reason": "Rytmianalyysi perustuu tallennettuihin kierroskohtaisiin ajoituspisteisiin.",
+    }
 
 
 def _target_wpm_from_settings_json(settings_json: str) -> Optional[float]:
@@ -918,36 +1011,36 @@ def calculate_skill_rating(
     timing_reason = ""
 
     try:
-        timing_quality = calculate_timing_quality(
-            db,
-            recent_rounds=recent_rounds,
-            min_target_chars=MIN_TARGET_CHARS,
-            min_accuracy=QUALIFIED_MIN_ACCURACY,
-            min_cleanliness=QUALIFIED_MIN_CLEANLINESS,
+        stored_timing_summary = (
+            _stored_timing_quality_summary(db, recent_rounds=recent_rounds)
+            if bool(_cfg("SKILL_RATING_USE_STORED_TIMING_SCORE_AVERAGE", True))
+            else None
         )
 
-        timing_stability_factor = float(timing_quality.factor)
-        timing_quality_score = timing_quality.total_score
-
-        straight_timing_score = timing_quality.straight.total_score
-        iambic_timing_score = timing_quality.iambic.total_score
-
-        if hasattr(db, "skill_timing_score_average_by_key_source"):
-            timing_score_averages = db.skill_timing_score_average_by_key_source(
-                recent_sessions=recent_rounds,
+        if stored_timing_summary is not None:
+            timing_stability_factor = float(stored_timing_summary["factor"])
+            timing_quality_score = stored_timing_summary["combined_score"]
+            straight_timing_score = stored_timing_summary["straight_score"]
+            iambic_timing_score = stored_timing_summary["iambic_score"]
+            timing_used_rounds = int(stored_timing_summary["used_rounds"])
+            timing_reason = str(stored_timing_summary["reason"] or "")
+        else:
+            timing_quality = calculate_timing_quality(
+                db,
+                recent_rounds=recent_rounds,
                 min_target_chars=MIN_TARGET_CHARS,
                 min_accuracy=QUALIFIED_MIN_ACCURACY,
                 min_cleanliness=QUALIFIED_MIN_CLEANLINESS,
             )
 
-            if timing_score_averages.get("straight_timing_score") is not None:
-                straight_timing_score = float(timing_score_averages["straight_timing_score"])
+            timing_stability_factor = float(timing_quality.factor)
+            timing_quality_score = timing_quality.total_score
 
-            if timing_score_averages.get("iambic_timing_score") is not None:
-                iambic_timing_score = float(timing_score_averages["iambic_timing_score"])
+            straight_timing_score = timing_quality.straight.total_score
+            iambic_timing_score = timing_quality.iambic.total_score
 
-        timing_used_rounds = int(timing_quality.used_rounds)
-        timing_reason = str(timing_quality.reason or "")
+            timing_used_rounds = int(timing_quality.used_rounds)
+            timing_reason = str(timing_quality.reason or "")
 
     except Exception as exc:
         # Fallback to the older coarse timing calculation.

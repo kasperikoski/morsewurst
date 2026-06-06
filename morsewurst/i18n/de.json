@@ -61,6 +61,8 @@
   "practice.status.series_complete_upper": "ÜBUNGSREIHE ABGESCHLOSSEN",
   "practice.status.auto_saving_round": "Durchgang wird automatisch gespeichert.",
   "practice.status.saved_round": "Durchgang #{session_id} gespeichert",
+  "practice.status.save_not_queued": "Durchgang konnte nicht zum Speichern eingereiht werden, weil die Anwendung beendet wird.",
+  "practice.status.save_failed": "Speichern des Durchgangs fehlgeschlagen: {error}",
   "practice.status.saved_round_skill_failed": "Durchgang #{session_id} wurde gespeichert, aber das Speichern der Fertigkeitsbewertung ist fehlgeschlagen: {error}",
   "practice.status.saved_round_summary_failed": "Durchgang #{session_id} wurde gespeichert, aber die Zusammenfassungen konnten nicht aktualisiert werden: {error}",
   "practice.status.input_cleared": "Eingabe geleert.",

@@ -61,6 +61,8 @@
   "practice.status.series_complete_upper": "PRACTICE SERIES COMPLETE",
   "practice.status.auto_saving_round": "Round is being saved automatically.",
   "practice.status.saved_round": "Saved round #{session_id}",
+  "practice.status.save_not_queued": "Round could not be queued for saving because the application is shutting down.",
+  "practice.status.save_failed": "Round save failed: {error}",
   "practice.status.saved_round_skill_failed": "Saved round #{session_id}, but saving the skill rating failed: {error}",
   "practice.status.saved_round_summary_failed": "Saved round #{session_id}, but updating summaries failed: {error}",
   "practice.status.input_cleared": "Input cleared.",

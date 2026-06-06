@@ -318,7 +318,7 @@ class KochController:
             window.update_character_grid(settings)
             window.update_progress_summary(settings)
             window.load_recent_sessions(service.recent_sessions(limit=25))
-            window.load_character_stats(service.character_stats(recent_sessions=300, limit=50))
+            window.load_character_stats(service.character_stats(recent_sessions=1000, limit=50))
             window.update_skill_summary(
                 service.skill_summary(),
                 self.koch_sequence_progress_items(service),

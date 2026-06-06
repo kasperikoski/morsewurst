@@ -746,13 +746,13 @@ class SettingsController:
             ),
             "skill_recent_rounds": helpers.safe_int_var(
                 app.skill_recent_rounds_var,
-                default=getattr(config, "DEFAULT_SKILL_RATING_RECENT_ROUNDS", 300),
+                default=getattr(config, "DEFAULT_SKILL_RATING_RECENT_ROUNDS", 1000),
                 minimum=1,
                 maximum=100000,
             ),
             "effective_wpm_recent_rounds": helpers.safe_int_var(
                 app.effective_wpm_recent_rounds_var,
-                default=getattr(config, "DEFAULT_EFFECTIVE_WPM_RECENT_ROUNDS", 300),
+                default=getattr(config, "DEFAULT_EFFECTIVE_WPM_RECENT_ROUNDS", 1000),
                 minimum=1,
                 maximum=100000,
             ),

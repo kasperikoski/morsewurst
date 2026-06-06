@@ -4,9 +4,12 @@
 
 from __future__ import annotations
 
+import copy
+import queue
+import threading
 import time
 from datetime import datetime
-from typing import TYPE_CHECKING, Any, Dict, Optional
+from typing import TYPE_CHECKING, Any, Callable, Dict, Optional
 
 import tkinter as tk
 
@@ -26,6 +29,7 @@ from morsewurst.core.app_logging import (
 )
 from morsewurst.core.skill_rating import calculate_skill_rating
 from morsewurst.models import RoundState
+from morsewurst.storage.database import Database
 from morsewurst.ui.controllers.results_controller import SOURCE_ADAPTIVE_TELEMETRY
 
 FINISH_REASON_USER_STOPPED = "user_stopped"
@@ -44,14 +48,37 @@ if TYPE_CHECKING:
     from morsewurst.ui.app import MorsewurstApp
 
 
+def _elapsed_ms(started_monotonic: float) -> float:
+    """Return elapsed milliseconds for compact performance log contexts."""
+
+    return round(max(0.0, (time.monotonic() - float(started_monotonic)) * 1000.0), 2)
+
+
 class PracticeController:
     """Owns practice series lifecycle, round completion and practice timers."""
 
     def __init__(self, app: "MorsewurstApp") -> None:
         self.app = app
         self.current_practice_id: Optional[int] = None
+        self.current_practice_token: Optional[int] = None
+        self.current_practice_started_at: Optional[datetime] = None
         self.pending_after_round_updates_session_id: Optional[int] = None
         self._last_round_generation_context: dict[str, Any] = {}
+        self._practice_token_counter = 0
+        self._practice_token_lock = threading.Lock()
+        self._practice_db_ids_by_token: dict[int, int] = {}
+        self._practice_problem_chars_cache: list[str] = []
+        self._practice_problem_chars_cache_key: Optional[tuple[int, int]] = None
+        self._practice_problem_chars_generation = 0
+
+        self._background_queue: queue.Queue[tuple[str, float, Callable[[], None]] | None] = queue.Queue()
+        self._background_worker_thread: Optional[threading.Thread] = None
+        self._background_worker_lock = threading.Lock()
+        self._background_shutdown = False
+        self._background_save_generation = 0
+        self._after_round_analytics_generation = 0
+        self._after_round_analytics_after_id: Optional[str] = None
+        self._timing_profile_refresh_generation = 0
 
         self.inter_round_countdown_running = False
         self.inter_round_countdown_after_id: Optional[str] = None
@@ -112,9 +139,924 @@ class PracticeController:
         """Update practice button states from an external controller."""
         self._update_practice_buttons()
 
+    # ------------------------------------------------------------
+    # Background persistence and analytics
+    # ------------------------------------------------------------
+
+    def _new_practice_token(self, *, started_at: datetime) -> int:
+        """Create an in-memory practice token without touching SQLite.
+
+        The actual practices row is created lazily in the background save path.
+        This keeps the Start button and countdown path independent from any
+        long-running read or write that may still be happening on another
+        SQLite connection after the previous round.
+        """
+
+        self._practice_token_counter += 1
+        token = self._practice_token_counter
+        self.current_practice_token = token
+        self.current_practice_started_at = started_at
+
+        with self._practice_token_lock:
+            self._practice_db_ids_by_token.pop(token, None)
+
+        return token
+
+    def _practice_db_id_for_token(self, token: Optional[int]) -> Optional[int]:
+        if token is None:
+            return None
+
+        with self._practice_token_lock:
+            return self._practice_db_ids_by_token.get(int(token))
+
+    def _remember_practice_db_id_for_token(self, token: Optional[int], practice_id: int) -> None:
+        if token is None:
+            return
+
+        token = int(token)
+        practice_id = int(practice_id)
+
+        with self._practice_token_lock:
+            self._practice_db_ids_by_token[token] = practice_id
+
+        def apply_if_current() -> None:
+            if self.current_practice_token == token and self.current_practice_id is None:
+                self.current_practice_id = practice_id
+
+        self._schedule_on_main_thread(apply_if_current)
+
+    def _clear_current_practice_reference(self) -> None:
+        self.current_practice_id = None
+        self.current_practice_token = None
+        self.current_practice_started_at = None
+
+    def _cancel_low_priority_history_render(self) -> None:
+        try:
+            self.app.history_controller.cancel_history_table_render()
+        except Exception:
+            pass
+
+    def _cancel_scheduled_after_round_analytics(self) -> None:
+        after_id = self._after_round_analytics_after_id
+        self._after_round_analytics_after_id = None
+
+        if after_id is None:
+            return
+
+        try:
+            self.app.after_cancel(after_id)
+        except Exception:
+            pass
+
+    def _analytics_delay_ms(self, *, active_reschedule: bool = False) -> int:
+        setting_name = (
+            "AFTER_ROUND_ANALYTICS_ACTIVE_RESCHEDULE_MS"
+            if active_reschedule
+            else "AFTER_ROUND_ANALYTICS_DELAY_MS"
+        )
+        default = 1000 if active_reschedule else 1500
+
+        try:
+            return max(1, int(getattr(config, setting_name, default)))
+        except Exception:
+            return default
+
+    def shutdown_background_worker(self, *, wait_seconds: float = 5.0) -> None:
+        """Ask the practice background worker to finish queued work and stop."""
+        self._background_shutdown = True
+
+        with self._background_worker_lock:
+            worker = self._background_worker_thread
+
+        if worker is None:
+            return
+
+        self._background_queue.put(None)
+        worker.join(timeout=max(0.0, float(wait_seconds)))
+
+    def _ensure_background_worker(self) -> None:
+        with self._background_worker_lock:
+            worker = self._background_worker_thread
+
+            if worker is not None and worker.is_alive():
+                return
+
+            self._background_shutdown = False
+            worker = threading.Thread(
+                target=self._background_worker_loop,
+                name="MorsewurstPracticeWorker",
+                daemon=True,
+            )
+            self._background_worker_thread = worker
+            worker.start()
+
+    def _background_queue_size(self) -> int | None:
+        try:
+            return int(self._background_queue.qsize())
+        except Exception:
+            return None
+
+    def _enqueue_background_job(self, label: str, job: Callable[[], None]) -> bool:
+        if self._background_shutdown:
+            log_app_event(
+                "app.practice.background_job_skipped_shutdown",
+                level="warning",
+                message="Practice background job was skipped because shutdown has started.",
+                context={"label": label},
+            )
+            return False
+
+        queued_at = time.monotonic()
+        queue_size_before = self._background_queue_size()
+        self._ensure_background_worker()
+        self._background_queue.put((label, queued_at, job))
+        log_app_event(
+            "app.practice.background_job_queued",
+            message="Practice background job was queued.",
+            context={
+                "label": label,
+                "queue_size_before": queue_size_before,
+                "queue_size_after": self._background_queue_size(),
+            },
+        )
+        return True
+
+    def _background_worker_loop(self) -> None:
+        while True:
+            item = self._background_queue.get()
+            label = "shutdown"
+            job_started_at = time.monotonic()
+
+            try:
+                if item is None:
+                    return
+
+                label, queued_at, job = item
+                job_started_at = time.monotonic()
+                log_app_event(
+                    "app.practice.background_job_started",
+                    message="Practice background job started.",
+                    context={
+                        "label": label,
+                        "queue_wait_ms": round(max(0.0, (job_started_at - queued_at) * 1000.0), 2),
+                        "queue_size_remaining": self._background_queue_size(),
+                    },
+                )
+                job()
+                log_app_event(
+                    "app.practice.background_job_completed",
+                    message="Practice background job completed.",
+                    context={
+                        "label": label,
+                        "elapsed_ms": _elapsed_ms(job_started_at),
+                        "queue_size_remaining": self._background_queue_size(),
+                    },
+                )
+            except Exception as exc:
+                log_app_exception(
+                    "app.practice.background_job_failed",
+                    exc,
+                    message="Practice background job failed.",
+                    context={
+                        "label": label,
+                        "elapsed_ms": _elapsed_ms(job_started_at),
+                        "queue_size_remaining": self._background_queue_size(),
+                    },
+                )
+            finally:
+                self._background_queue.task_done()
+
+    def _schedule_on_main_thread(self, callback: Callable[[], None]) -> None:
+        try:
+            self.app.after(0, callback)
+        except Exception:
+            pass
+
+    def _active_round_or_countdown_running(self) -> bool:
+        app = self.app
+        return bool(
+            getattr(app, "practice_running", False)
+            or getattr(app, "start_countdown_running", False)
+            or getattr(getattr(app, "round", None), "active", False)
+            or getattr(getattr(app, "round", None), "accepting_input", False)
+        )
+
+    def _can_apply_decoder_profile_update(self) -> bool:
+        return not self._active_round_or_countdown_running()
+
+    def _timing_profile_parameters_from_ui(self) -> dict[str, Any]:
+        app = self.app
+        helpers = app.ui_helpers_controller
+
+        try:
+            use_profile = bool(app.use_timing_profile_var.get())
+        except Exception:
+            use_profile = bool(getattr(config, "DECODER_USE_TIMING_PROFILE_DEFAULT", True))
+
+        try:
+            recent_sessions = helpers.safe_int_var(
+                app.decoder_profile_recent_rounds_var,
+                default=int(getattr(config, "DECODER_PROFILE_RECENT_ROUNDS", 300)),
+                minimum=int(getattr(config, "DECODER_PROFILE_MIN_ROUNDS_REQUIRED", 100)),
+                maximum=100000,
+            )
+        except Exception:
+            recent_sessions = int(getattr(config, "DECODER_PROFILE_RECENT_ROUNDS", 300))
+
+        try:
+            min_accuracy = float(app.decoder_profile_min_accuracy_var.get())
+        except Exception:
+            min_accuracy = float(getattr(config, "DECODER_PROFILE_MIN_ACCURACY", 90.0))
+
+        try:
+            min_cleanliness = float(app.decoder_profile_min_cleanliness_var.get())
+        except Exception:
+            min_cleanliness = float(getattr(config, "DECODER_PROFILE_MIN_CLEANLINESS", 85.0))
+
+        return {
+            "use_profile": use_profile,
+            "recent_sessions": recent_sessions,
+            "min_accuracy": min_accuracy,
+            "min_cleanliness": min_cleanliness,
+            "min_timing_score": float(getattr(config, "DECODER_PROFILE_MIN_TIMING_SCORE", 30.0)),
+        }
+
+    def _request_timing_profile_refresh_async(self, *, reason: str) -> None:
+        app = self.app
+        params = self._timing_profile_parameters_from_ui()
+
+        if not bool(params.get("use_profile")):
+            app.timing_profiles = app.decoder_controller.default_timing_profiles()
+            return
+
+        self._timing_profile_refresh_generation += 1
+        generation = self._timing_profile_refresh_generation
+        db_path = app.db.path
+        log_app_event(
+            "app.timing_profile.async_requested",
+            message="Async timing profile refresh was requested.",
+            context={"generation": generation, "reason": reason, "params": params},
+        )
+
+        def worker() -> None:
+            worker_started_at = time.monotonic()
+            profiles: Any = None
+            error: Exception | None = None
+            db: Database | None = None
+            perf: dict[str, Any] = {}
+
+            try:
+                step_started_at = time.monotonic()
+                db = Database.open_background(db_path)
+                perf["db_open_elapsed_ms"] = _elapsed_ms(step_started_at)
+
+                step_started_at = time.monotonic()
+                profiles = db.load_timing_profiles(
+                    recent_sessions=int(params["recent_sessions"]),
+                    min_accuracy=float(params["min_accuracy"]),
+                    min_cleanliness=float(params["min_cleanliness"]),
+                    min_timing_score=float(params["min_timing_score"]),
+                )
+                perf["load_elapsed_ms"] = _elapsed_ms(step_started_at)
+            except Exception as exc:
+                error = exc
+            finally:
+                perf["worker_elapsed_ms"] = _elapsed_ms(worker_started_at)
+                log_app_event(
+                    "app.timing_profile.async_worker_completed",
+                    message="Async timing profile refresh worker completed.",
+                    context={
+                        "generation": generation,
+                        "reason": reason,
+                        "error": str(error) if error is not None else None,
+                        "perf": perf,
+                    },
+                )
+                if db is not None:
+                    db.close()
+
+            self._schedule_on_main_thread(
+                lambda: self._apply_timing_profile_refresh_result(
+                    generation=generation,
+                    reason=reason,
+                    profiles=profiles,
+                    error=error,
+                )
+            )
+
+        self._enqueue_background_job("timing_profile_refresh", worker)
+
+    def _request_problem_chars_prefetch_async(
+        self,
+        *,
+        limit: int,
+        recent_rounds: int,
+        reason: str,
+    ) -> None:
+        """Refresh problem-character practice candidates without blocking start."""
+
+        app = self.app
+        limit = max(1, int(limit))
+        recent_rounds = max(1, int(recent_rounds))
+        cache_key = (limit, recent_rounds)
+
+        self._practice_problem_chars_generation += 1
+        generation = self._practice_problem_chars_generation
+        db_path = app.db.path
+        log_app_event(
+            "app.practice.problem_chars_prefetch_requested",
+            message="Problem-character practice prefetch was requested.",
+            context={
+                "generation": generation,
+                "reason": reason,
+                "limit": limit,
+                "recent_rounds": recent_rounds,
+                "cache_key": cache_key,
+            },
+        )
+
+        def worker() -> None:
+            worker_started_at = time.monotonic()
+            chars: list[str] = []
+            error: Exception | None = None
+            db: Database | None = None
+            perf: dict[str, Any] = {}
+
+            try:
+                step_started_at = time.monotonic()
+                db = Database.open_background(db_path)
+                perf["db_open_elapsed_ms"] = _elapsed_ms(step_started_at)
+
+                step_started_at = time.monotonic()
+                chars = [
+                    str(char)
+                    for char in db.problem_chars_for_practice(limit, recent_rounds)
+                    if str(char or "").strip()
+                ]
+                perf["load_elapsed_ms"] = _elapsed_ms(step_started_at)
+            except Exception as exc:
+                error = exc
+            finally:
+                perf["worker_elapsed_ms"] = _elapsed_ms(worker_started_at)
+                log_app_event(
+                    "app.practice.problem_chars_prefetch_worker_completed",
+                    message="Problem-character practice prefetch worker completed.",
+                    context={
+                        "generation": generation,
+                        "reason": reason,
+                        "limit": limit,
+                        "recent_rounds": recent_rounds,
+                        "count": len(chars),
+                        "error": str(error) if error is not None else None,
+                        "perf": perf,
+                    },
+                )
+                if db is not None:
+                    db.close()
+
+            def apply() -> None:
+                if generation != self._practice_problem_chars_generation:
+                    log_app_event(
+                        "app.practice.problem_chars_prefetch_stale_skipped",
+                        message="Stale problem-character practice prefetch was skipped.",
+                        context={
+                            "generation": generation,
+                            "latest": self._practice_problem_chars_generation,
+                            "reason": reason,
+                            "limit": limit,
+                            "recent_rounds": recent_rounds,
+                        },
+                    )
+                    return
+
+                if error is not None:
+                    log_app_exception(
+                        "app.practice.problem_chars_prefetch_failed",
+                        error,
+                        level="warning",
+                        message="Problem-character practice prefetch failed.",
+                        context={
+                            "generation": generation,
+                            "reason": reason,
+                            "limit": limit,
+                            "recent_rounds": recent_rounds,
+                        },
+                    )
+                    return
+
+                apply_started_at = time.monotonic()
+                self._practice_problem_chars_cache = list(chars)
+                self._practice_problem_chars_cache_key = cache_key
+                log_app_event(
+                    "app.practice.problem_chars_prefetched",
+                    message="Problem-character practice candidates were prefetched.",
+                    context={
+                        "generation": generation,
+                        "reason": reason,
+                        "limit": limit,
+                        "recent_rounds": recent_rounds,
+                        "count": len(chars),
+                        "apply_elapsed_ms": _elapsed_ms(apply_started_at),
+                    },
+                )
+
+            self._schedule_on_main_thread(apply)
+
+        self._enqueue_background_job("problem_chars_prefetch", worker)
+
+    def _update_problem_chars_practice_cache_from_rows(
+        self,
+        rows: list[Any],
+        *,
+        limit: int,
+        recent_rounds: int,
+    ) -> None:
+        limit = max(1, int(limit))
+        recent_rounds = max(1, int(recent_rounds))
+        chars: list[str] = []
+
+        for row in rows:
+            try:
+                char = row["char"]
+            except Exception:
+                try:
+                    char = row.get("char")
+                except Exception:
+                    char = None
+
+            char_text = str(char or "")
+            if char_text and not char_text.isspace():
+                chars.append(char_text)
+
+            if len(chars) >= limit:
+                break
+
+        self._practice_problem_chars_cache = chars
+        self._practice_problem_chars_cache_key = (limit, recent_rounds)
+
+    def _apply_timing_profile_refresh_result(
+        self,
+        *,
+        generation: int,
+        reason: str,
+        profiles: Any,
+        error: Exception | None,
+    ) -> None:
+        app = self.app
+
+        if generation != self._timing_profile_refresh_generation:
+            log_app_event(
+                "app.timing_profile.async_stale_skipped",
+                message="Stale async timing profile refresh result was skipped.",
+                context={"generation": generation, "latest": self._timing_profile_refresh_generation, "reason": reason},
+            )
+            return
+
+        if error is not None:
+            log_app_exception(
+                "app.timing_profile.async_failed",
+                error,
+                level="warning",
+                message="Async timing profile refresh failed.",
+                context={"generation": generation, "reason": reason},
+            )
+            if self._can_apply_decoder_profile_update():
+                app.timing_profiles = app.decoder_controller.default_timing_profiles()
+            return
+
+        if profiles is None:
+            return
+
+        if not self._can_apply_decoder_profile_update():
+            log_app_event(
+                "app.timing_profile.async_apply_deferred",
+                message="Async timing profile result was not applied during active practice.",
+                context={"generation": generation, "reason": reason},
+            )
+            return
+
+        app.timing_profiles = profiles
+        log_app_event(
+            "app.timing_profile.async_applied",
+            message="Async timing profile refresh result was applied.",
+            context={"generation": generation, "reason": reason},
+        )
+
+    def _after_round_analytics_parameters_from_ui(self) -> dict[str, Any]:
+        app = self.app
+        helpers = app.ui_helpers_controller
+        timing = self._timing_profile_parameters_from_ui()
+
+        return {
+            "timing": timing,
+            "skill_recent_rounds": helpers.safe_int_var(
+                app.skill_recent_rounds_var,
+                default=getattr(config, "DEFAULT_SKILL_RATING_RECENT_ROUNDS", 1000),
+                minimum=1,
+                maximum=100000,
+            ),
+            "history_recent_sessions": int(getattr(config, "HISTORY_TABLE_RECENT_SESSIONS", 1000)),
+            "problem_limit": int(getattr(config, "PROBLEM_CHARACTER_DISPLAY_LIMIT", 10000)),
+            "problem_recent_rounds": helpers.safe_int_var(
+                app.problem_recent_rounds_var,
+                default=config.DEFAULT_PROBLEM_RECENT_ROUNDS,
+                minimum=1,
+                maximum=100000,
+            ),
+            "stats_recent_rounds": helpers.safe_int_var(
+                app.stats_recent_rounds_var,
+                default=1000,
+                minimum=1,
+                maximum=100000,
+            ),
+            "effective_recent_rounds": helpers.safe_int_var(
+                app.effective_wpm_recent_rounds_var,
+                default=getattr(config, "DEFAULT_EFFECTIVE_WPM_RECENT_ROUNDS", 1000),
+                minimum=1,
+                maximum=100000,
+            ),
+            "effective_min_accuracy": helpers.safe_int_var(
+                app.effective_wpm_min_accuracy_var,
+                default=getattr(config, "DEFAULT_EFFECTIVE_WPM_MIN_ACCURACY", 90),
+                minimum=0,
+                maximum=100,
+            ),
+            "effective_min_cleanliness": helpers.safe_int_var(
+                app.effective_wpm_min_cleanliness_var,
+                default=getattr(config, "DEFAULT_EFFECTIVE_WPM_MIN_CLEANLINESS", 85),
+                minimum=0,
+                maximum=100,
+            ),
+        }
+
+    def _request_after_round_analytics_async(self, session_id: int) -> None:
+        app = self.app
+        params = self._after_round_analytics_parameters_from_ui()
+        db_path = app.db.path
+
+        self._after_round_analytics_generation += 1
+        generation = self._after_round_analytics_generation
+        log_app_event(
+            "app.practice.after_round_analytics_requested",
+            message="Background after-round analytics was requested.",
+            context={
+                "session_id": session_id,
+                "generation": generation,
+                "params": params,
+                "active_round_or_countdown": self._active_round_or_countdown_running(),
+            },
+        )
+
+        def worker() -> None:
+            worker_started_at = time.monotonic()
+            payload: dict[str, Any] = {"errors": {}, "perf": {}}
+            db: Database | None = None
+
+            def record_step(step: str, started_at: float, extra: dict[str, Any] | None = None) -> None:
+                elapsed = _elapsed_ms(started_at)
+                payload["perf"][f"{step}_elapsed_ms"] = elapsed
+                context: dict[str, Any] = {
+                    "session_id": session_id,
+                    "generation": generation,
+                    "step": step,
+                    "elapsed_ms": elapsed,
+                }
+                if extra:
+                    context.update(extra)
+                log_app_event(
+                    "app.practice.after_round_analytics_step",
+                    message="Background after-round analytics step completed.",
+                    context=context,
+                )
+
+            try:
+                step_started_at = time.monotonic()
+                db = Database.open_background(db_path)
+                record_step("db_open", step_started_at)
+
+                timing = dict(params.get("timing") or {})
+                if bool(timing.get("use_profile")):
+                    try:
+                        step_started_at = time.monotonic()
+                        payload["timing_profiles"] = db.load_timing_profiles(
+                            recent_sessions=int(timing["recent_sessions"]),
+                            min_accuracy=float(timing["min_accuracy"]),
+                            min_cleanliness=float(timing["min_cleanliness"]),
+                            min_timing_score=float(timing["min_timing_score"]),
+                        )
+                        record_step("timing_profiles", step_started_at)
+                    except Exception as exc:
+                        payload["errors"]["timing_profiles"] = str(exc)
+                        log_app_exception(
+                            "app.timing_profile.background_refresh_failed",
+                            exc,
+                            level="warning",
+                            message="Background timing profile refresh failed after round.",
+                            context={"session_id": session_id, "generation": generation},
+                        )
+
+                try:
+                    step_started_at = time.monotonic()
+                    rating = calculate_skill_rating(
+                        db,
+                        recent_rounds=int(params["skill_recent_rounds"]),
+                    )
+                    record_step(
+                        "skill_rating_calculate",
+                        step_started_at,
+                        {"rating": summarize_rating(rating)},
+                    )
+                    payload["rating"] = rating
+
+                    step_started_at = time.monotonic()
+                    db.save_skill_rating_snapshot(session_id, rating)
+                    record_step("skill_rating_snapshot", step_started_at)
+                except Exception as exc:
+                    payload["errors"]["skill_rating"] = str(exc)
+                    log_app_exception(
+                        "app.skill_rating.background_failed",
+                        exc,
+                        message="Background skill rating calculation or snapshot save failed after round.",
+                        context={"session_id": session_id, "generation": generation},
+                    )
+
+                try:
+                    step_started_at = time.monotonic()
+                    payload["history_rows"] = [
+                        dict(row)
+                        for row in db.recent_sessions(int(params["history_recent_sessions"]))
+                    ]
+                    record_step(
+                        "history_rows",
+                        step_started_at,
+                        {"row_count": len(payload["history_rows"])},
+                    )
+                except Exception as exc:
+                    payload["errors"]["history_rows"] = str(exc)
+                    log_app_exception(
+                        "app.history.background_table_failed",
+                        exc,
+                        message="Background recent sessions load failed after round.",
+                        context={"session_id": session_id, "generation": generation},
+                    )
+
+                try:
+                    step_started_at = time.monotonic()
+                    payload["problem_rows"] = [
+                        dict(row)
+                        for row in db.problem_characters(
+                            int(params["problem_limit"]),
+                            int(params["problem_recent_rounds"]),
+                        )
+                    ]
+                    record_step(
+                        "problem_rows",
+                        step_started_at,
+                        {"row_count": len(payload["problem_rows"])},
+                    )
+                except Exception as exc:
+                    payload["errors"]["problem_rows"] = str(exc)
+                    log_app_exception(
+                        "app.history.background_problem_table_failed",
+                        exc,
+                        message="Background problem-character load failed after round.",
+                        context={"session_id": session_id, "generation": generation},
+                    )
+
+                try:
+                    step_started_at = time.monotonic()
+                    payload["stats"] = db.stats_summary(int(params["stats_recent_rounds"]))
+                    record_step(
+                        "stats",
+                        step_started_at,
+                        {"rounds": (payload["stats"] or {}).get("rounds")},
+                    )
+                except Exception as exc:
+                    payload["errors"]["stats"] = str(exc)
+                    log_app_exception(
+                        "app.history.background_stats_failed",
+                        exc,
+                        message="Background stats summary load failed after round.",
+                        context={"session_id": session_id, "generation": generation},
+                    )
+
+                try:
+                    step_started_at = time.monotonic()
+                    payload["effective_wpm_result"] = db.optimized_wpm_from_recent_sessions(
+                        recent_sessions=int(params["effective_recent_rounds"]),
+                        min_accuracy=int(params["effective_min_accuracy"]),
+                        min_cleanliness=int(params["effective_min_cleanliness"]),
+                    )
+                    result = payload["effective_wpm_result"] or {}
+                    record_step(
+                        "effective_wpm",
+                        step_started_at,
+                        {"ok": bool(result.get("ok")), "used_rounds": result.get("used_rounds")},
+                    )
+                except Exception as exc:
+                    payload["errors"]["effective_wpm"] = str(exc)
+                    log_app_exception(
+                        "app.effective_wpm.background_indicator_failed",
+                        exc,
+                        level="warning",
+                        message="Background effective WPM indicator calculation failed after round.",
+                        context={"session_id": session_id, "generation": generation},
+                    )
+            finally:
+                payload["perf"]["worker_elapsed_ms"] = _elapsed_ms(worker_started_at)
+                log_app_event(
+                    "app.practice.after_round_analytics_worker_completed",
+                    message="Background after-round analytics worker completed.",
+                    context={
+                        "session_id": session_id,
+                        "generation": generation,
+                        "errors": dict(payload.get("errors") or {}),
+                        "perf": dict(payload.get("perf") or {}),
+                    },
+                )
+                if db is not None:
+                    db.close()
+
+            self._schedule_on_main_thread(
+                lambda: self._apply_after_round_analytics_result(
+                    generation=generation,
+                    session_id=session_id,
+                    params=params,
+                    payload=payload,
+                )
+            )
+
+        self._enqueue_background_job("after_round_analytics", worker)
+
+    def _apply_after_round_analytics_result(
+        self,
+        *,
+        generation: int,
+        session_id: int,
+        params: dict[str, Any],
+        payload: dict[str, Any],
+    ) -> None:
+        app = self.app
+
+        if generation != self._after_round_analytics_generation:
+            log_app_event(
+                "app.practice.after_round_analytics_stale_skipped",
+                message="Stale after-round analytics result was skipped.",
+                context={"session_id": session_id, "generation": generation, "latest": self._after_round_analytics_generation},
+            )
+            return
+
+        apply_started_at = time.monotonic()
+        ui_perf: dict[str, Any] = {}
+
+        def record_ui_step(step: str, started_at: float, extra: dict[str, Any] | None = None) -> None:
+            elapsed = _elapsed_ms(started_at)
+            ui_perf[f"{step}_elapsed_ms"] = elapsed
+            context: dict[str, Any] = {
+                "session_id": session_id,
+                "generation": generation,
+                "step": step,
+                "elapsed_ms": elapsed,
+            }
+            if extra:
+                context.update(extra)
+            log_app_event(
+                "app.practice.after_round_analytics_ui_step",
+                message="After-round analytics UI step completed.",
+                context=context,
+            )
+
+        log_app_event(
+            "app.practice.after_round_analytics_apply_started",
+            message="Background after-round analytics apply started on the UI thread.",
+            context={
+                "session_id": session_id,
+                "generation": generation,
+                "worker_perf": dict(payload.get("perf") or {}),
+                "active_round_or_countdown": self._active_round_or_countdown_running(),
+                "history_row_count": len(payload.get("history_rows") or []),
+                "problem_row_count": len(payload.get("problem_rows") or []),
+            },
+        )
+
+        try:
+            profiles = payload.get("timing_profiles")
+            if profiles is not None and self._can_apply_decoder_profile_update():
+                step_started_at = time.monotonic()
+                app.timing_profiles = profiles
+                record_ui_step("timing_profiles_apply", step_started_at)
+
+            if "history_rows" in payload:
+                history_rows = list(payload.get("history_rows") or [])
+                step_started_at = time.monotonic()
+                incremental_done = False
+
+                if bool(getattr(config, "HISTORY_TABLE_INCREMENTAL_AFTER_ROUND", True)) and history_rows:
+                    incremental_done = app.history_controller.update_recent_history_table_incremental(
+                        history_rows[0],
+                        limit=int(params["history_recent_sessions"]),
+                    )
+
+                if not incremental_done:
+                    app.history_controller.load_history_table(rows=history_rows)
+
+                record_ui_step(
+                    "history_table_incremental_update" if incremental_done else "history_table_schedule",
+                    step_started_at,
+                    {
+                        "row_count": len(history_rows),
+                        "incremental": incremental_done,
+                    },
+                )
+
+            if "problem_rows" in payload:
+                problem_rows = payload["problem_rows"]
+                step_started_at = time.monotonic()
+                app.history_controller.load_problem_table(rows=problem_rows)
+                record_ui_step("problem_table_apply", step_started_at, {"row_count": len(problem_rows)})
+
+                step_started_at = time.monotonic()
+                self._update_problem_chars_practice_cache_from_rows(
+                    problem_rows,
+                    limit=int(getattr(config, "DEFAULT_PROBLEM_CHAR_CANDIDATE_LIMIT", 50)),
+                    recent_rounds=int(params["problem_recent_rounds"]),
+                )
+                record_ui_step("problem_practice_cache_update", step_started_at, {"row_count": len(problem_rows)})
+
+            if "stats" in payload:
+                step_started_at = time.monotonic()
+                app.history_controller.update_stats_summary(
+                    stats=payload["stats"],
+                    recent_rounds=int(params["stats_recent_rounds"]),
+                )
+                record_ui_step("stats_summary_apply", step_started_at)
+
+            rating = payload.get("rating")
+            if rating is not None:
+                step_started_at = time.monotonic()
+                app.history_controller.update_skill_rating_summary(
+                    cached_rating=rating,
+                    allow_level_up_sound=True,
+                    allow_recalculate=False,
+                )
+                record_ui_step("skill_summary_apply", step_started_at, {"rating": summarize_rating(rating)})
+
+            if "effective_wpm_result" in payload:
+                step_started_at = time.monotonic()
+                app.history_controller.update_target_wpm_suggestion_indicator(
+                    result=payload["effective_wpm_result"],
+                )
+                result = payload.get("effective_wpm_result") or {}
+                record_ui_step(
+                    "effective_wpm_indicator_apply",
+                    step_started_at,
+                    {"ok": bool(result.get("ok")), "used_rounds": result.get("used_rounds")},
+                )
+
+            if not self._active_round_or_countdown_running():
+                step_started_at = time.monotonic()
+                app.history_controller.refresh_stats_window_if_open()
+                record_ui_step("stats_window_refresh", step_started_at)
+
+            ui_perf["total_apply_elapsed_ms"] = _elapsed_ms(apply_started_at)
+            log_app_event(
+                "app.practice.after_round_analytics_applied",
+                message="Background after-round analytics result was applied.",
+                context={
+                    "session_id": session_id,
+                    "generation": generation,
+                    "errors": dict(payload.get("errors") or {}),
+                    "worker_perf": dict(payload.get("perf") or {}),
+                    "ui_perf": ui_perf,
+                },
+            )
+        except Exception as exc:
+            log_app_exception(
+                "app.practice.after_round_analytics_apply_failed",
+                exc,
+                message="Applying background after-round analytics failed.",
+                context={
+                    "session_id": session_id,
+                    "generation": generation,
+                    "worker_perf": dict(payload.get("perf") or {}),
+                    "ui_perf": ui_perf,
+                    "elapsed_ms": _elapsed_ms(apply_started_at),
+                },
+            )
+            if not self._active_round_or_countdown_running():
+                app.status_var.set(
+                    app.i18n.t(
+                        "practice.status.saved_round_summary_failed",
+                        "Saved round #{session_id}, but updating summaries failed: {error}",
+                        session_id=session_id,
+                        error=exc,
+                    )
+                )
+
     def start_practice(self) -> None:
         """Start a full practice series from the current UI settings."""
         app = self.app
+        start_started_at = time.monotonic()
 
         if app.start_countdown_running:
             self._cancel_start_countdown(restore_state_text=False)
@@ -128,24 +1070,26 @@ class PracticeController:
             },
         )
 
+        self._cancel_low_priority_history_render()
+
         app.serial_controller.request_auto_connect_scan()
         app.settings = app.challenge_settings_controller.settings_from_ui()
-        app.decoder_controller.refresh_timing_profiles()
+        self._request_timing_profile_refresh_async(reason="start_practice")
         app.practice_running = True
         app.current_round_number = 0
         app.total_rounds = max(1, int(app.settings.practice_rounds))
         app.practice_summaries = []
+        self._reschedule_pending_after_round_analytics(reason="start_practice")
 
-        self.current_practice_id = app.db.create_practice(
-            datetime.now(),
-            app.total_rounds,
-            app.settings,
-        )
+        practice_started_at = datetime.now()
+        practice_token = self._new_practice_token(started_at=practice_started_at)
+        self.current_practice_id = None
         log_app_event(
             "app.practice.started",
-            message="Practice series started.",
+            message="Practice series started in the UI; database practice row creation is deferred until the first background save.",
             context={
-                "practice_id": self.current_practice_id,
+                "practice_token": practice_token,
+                "practice_id": None,
                 "total_rounds": app.total_rounds,
                 "settings": summarize_challenge_settings(app.settings),
             },
@@ -153,8 +1097,14 @@ class PracticeController:
 
         self.pending_after_round_updates_session_id = None
 
+        step_started_at = time.monotonic()
         self._update_practice_buttons()
         app.results_controller.update_practice_series_summary()
+        log_app_event(
+            "app.practice.start_ui_prepared",
+            message="Practice start UI preparation completed.",
+            context={"elapsed_ms": _elapsed_ms(step_started_at), "practice_token": practice_token},
+        )
         app.status_controller.set_main_status(
             app.i18n.t(
                 "practice.status.starting",
@@ -164,6 +1114,15 @@ class PracticeController:
             state="normal",
         )
         self._start_next_round()
+        log_app_event(
+            "app.practice.start_completed",
+            message="Practice start completed on the UI thread.",
+            context={
+                "practice_token": practice_token,
+                "total_rounds": app.total_rounds,
+                "elapsed_ms": _elapsed_ms(start_started_at),
+            },
+        )
 
     def stop_practice(self) -> None:
         """Stop the current practice series or cancel a pending countdown."""
@@ -207,8 +1166,14 @@ class PracticeController:
                 message="Practice series was stopped.",
                 context={"practice_id": stopped_practice_id},
             )
-            self.current_practice_id = None
+        elif self.current_practice_token is not None:
+            log_app_event(
+                "app.practice.stopped_ui_only",
+                message="Practice series was stopped before its database practice row had been created.",
+                context={"practice_token": self.current_practice_token},
+            )
 
+        self._clear_current_practice_reference()
         self._schedule_pending_after_round_updates()
 
         app.round_state_var.set(
@@ -236,7 +1201,9 @@ class PracticeController:
             return
 
         app.current_round_number += 1
+        target_generation_started_at = time.monotonic()
         target = self._generate_round_target()
+        target_generation_elapsed_ms = _elapsed_ms(target_generation_started_at)
         generation_context = dict(self._last_round_generation_context)
         log_app_event(
             "app.practice.round_target_generated",
@@ -246,6 +1213,7 @@ class PracticeController:
                 "round_number": app.current_round_number,
                 "total_rounds": app.total_rounds,
                 "target_length": len(target),
+                "target_generation_elapsed_ms": target_generation_elapsed_ms,
                 **generation_context,
             },
         )
@@ -324,15 +1292,30 @@ class PracticeController:
             minimum=1,
             maximum=100000,
         )
-        problem_chars = app.db.problem_chars_for_practice(
-            getattr(config, "DEFAULT_PROBLEM_CHAR_CANDIDATE_LIMIT", 50),
-            problem_recent_rounds,
-        )
+        problem_limit = int(getattr(config, "DEFAULT_PROBLEM_CHAR_CANDIDATE_LIMIT", 50))
+        problem_chars_enabled = bool(getattr(app.settings, "practice_problem_chars", False))
+        problem_chars: list[str] = []
+        problem_cache_hit = False
+
+        if problem_chars_enabled:
+            cache_key = (problem_limit, problem_recent_rounds)
+
+            if self._practice_problem_chars_cache_key == cache_key:
+                problem_chars = list(self._practice_problem_chars_cache)
+                problem_cache_hit = True
+            else:
+                self._request_problem_chars_prefetch_async(
+                    limit=problem_limit,
+                    recent_rounds=problem_recent_rounds,
+                    reason="start_round_target_generation",
+                )
+
         self._last_round_generation_context = {
             "wxmor": False,
-            "problem_chars_enabled": bool(getattr(app.settings, "practice_problem_chars", False)),
+            "problem_chars_enabled": problem_chars_enabled,
             "problem_recent_rounds": problem_recent_rounds,
             "problem_char_candidates_count": len(problem_chars),
+            "problem_char_cache_hit": problem_cache_hit,
             "settings": summarize_challenge_settings(app.settings),
         }
 
@@ -352,8 +1335,14 @@ class PracticeController:
                 message="Practice series completed.",
                 context={"practice_id": completed_practice_id, "total_rounds": app.total_rounds},
             )
-            self.current_practice_id = None
+        elif self.current_practice_token is not None:
+            log_app_event(
+                "app.practice.series_completed_ui_only",
+                message="Practice series was completed before its database practice row had been created.",
+                context={"practice_token": self.current_practice_token, "total_rounds": app.total_rounds},
+            )
 
+        self._clear_current_practice_reference()
         self._schedule_pending_after_round_updates()
 
         app.round_state_var.set(
@@ -458,20 +1447,17 @@ class PracticeController:
             )
             app.input_entry.configure(state=tk.DISABLED)
 
-            if self.current_practice_id is None:
-                self.current_practice_id = app.db.create_practice(
-                    app.round.started_at or datetime.now(),
-                    app.total_rounds,
-                    app.settings,
-                )
-
             round_started_at = app.round.started_at or datetime.now()
             app.round.started_at = round_started_at
 
             round_summary = app.last_summary
+            round_settings = copy.deepcopy(app.settings)
             round_events = [dict(event) for event in app.round.events]
             round_char_results = list(app.last_char_results)
-            round_practice_id = int(self.current_practice_id)
+            round_practice_id = self.current_practice_id
+            round_practice_token = self.current_practice_token
+            round_practice_started_at = self.current_practice_started_at or round_started_at
+            round_total_rounds = int(app.total_rounds)
             round_number = int(app.round.round_number)
 
             should_continue_to_next_round = (
@@ -493,9 +1479,13 @@ class PracticeController:
                     show_saved_status=not should_continue_to_next_round,
                     started_at=round_started_at,
                     summary=round_summary,
+                    settings_snapshot=round_settings,
                     events=round_events,
                     char_results=round_char_results,
                     practice_id=round_practice_id,
+                    practice_token=round_practice_token,
+                    practice_started_at=round_practice_started_at,
+                    practice_planned_rounds=round_total_rounds,
                     round_number=round_number,
                 ),
             )
@@ -526,7 +1516,7 @@ class PracticeController:
         app.live_ui_dirty = False
         app.live_result_dirty = False
 
-    def _advance_after_finished_round(self) -> None:
+    def _advance_after_finished_round(self, *, finish_database: bool = True) -> None:
         """Continue to the next round or finish the whole practice series."""
         app = self.app
 
@@ -538,15 +1528,31 @@ class PracticeController:
 
         if self.current_practice_id is not None:
             completed_practice_id = self.current_practice_id
-            app.db.finish_practice(completed_practice_id, "completed")
-            log_app_event(
-                "app.practice.series_completed",
-                message="Practice series completed after final round.",
-                context={"practice_id": completed_practice_id, "total_rounds": app.total_rounds},
-            )
-            self.current_practice_id = None
 
-        self._schedule_pending_after_round_updates()
+            if finish_database:
+                app.db.finish_practice(completed_practice_id, "completed")
+                log_app_event(
+                    "app.practice.series_completed",
+                    message="Practice series completed after final round.",
+                    context={"practice_id": completed_practice_id, "total_rounds": app.total_rounds},
+                )
+            else:
+                log_app_event(
+                    "app.practice.series_completed_ui_only",
+                    message="Practice series was completed in the UI; database finish is queued in the background.",
+                    context={"practice_id": completed_practice_id, "total_rounds": app.total_rounds},
+                )
+        elif self.current_practice_token is not None:
+            log_app_event(
+                "app.practice.series_completed_ui_only",
+                message="Practice series was completed in the UI before its database practice row had been created.",
+                context={"practice_token": self.current_practice_token, "total_rounds": app.total_rounds},
+            )
+
+        self._clear_current_practice_reference()
+
+        if finish_database:
+            self._schedule_pending_after_round_updates()
 
         app.status_controller.set_main_status(
             app.i18n.t(
@@ -574,6 +1580,8 @@ class PracticeController:
         self._cancel_inter_round_countdown(restore_state_text=False)
 
         if self.current_practice_id is None:
+            self._clear_current_practice_reference()
+            app.practice_running = False
             return
 
         try:
@@ -585,7 +1593,7 @@ class PracticeController:
                 context={"practice_id": interrupted_practice_id},
             )
         finally:
-            self.current_practice_id = None
+            self._clear_current_practice_reference()
             app.practice_running = False
 
     def _save_finished_round(
@@ -595,13 +1603,18 @@ class PracticeController:
         show_saved_status: bool = True,
         started_at: Optional[datetime] = None,
         summary: Any = None,
+        settings_snapshot: Optional[Any] = None,
         events: Optional[list[Dict[str, Any]]] = None,
         char_results: Optional[list[Any]] = None,
         practice_id: Optional[int] = None,
+        practice_token: Optional[int] = None,
+        practice_started_at: Optional[datetime] = None,
+        practice_planned_rounds: Optional[int] = None,
         round_number: Optional[int] = None,
     ) -> None:
-        """Persist a finished round from an immutable round snapshot."""
+        """Queue persistence for a finished round from an immutable snapshot."""
         app = self.app
+        prepare_started_at = time.monotonic()
 
         summary = summary if summary is not None else app.last_summary
 
@@ -611,81 +1624,280 @@ class PracticeController:
             return
 
         started_at = started_at or app.round.started_at or datetime.now()
-        events = (
+        events = copy.deepcopy(
             events
             if events is not None
             else [dict(event) for event in app.round.events]
         )
-        char_results = (
+        char_results = copy.deepcopy(
             char_results
             if char_results is not None
             else list(app.last_char_results)
         )
+        summary = copy.deepcopy(summary)
+        settings = copy.deepcopy(settings_snapshot if settings_snapshot is not None else app.settings)
+
+        if practice_token is None:
+            practice_token = self.current_practice_token
 
         if practice_id is None:
-            if self.current_practice_id is None:
-                self.current_practice_id = app.db.create_practice(
-                    started_at,
-                    app.total_rounds,
-                    app.settings,
-                )
+            practice_id = self._practice_db_id_for_token(practice_token)
 
-            practice_id = int(self.current_practice_id)
+        practice_started_at = practice_started_at or self.current_practice_started_at or started_at
+        practice_planned_rounds = max(
+            1,
+            int(practice_planned_rounds if practice_planned_rounds is not None else app.total_rounds),
+        )
 
         if round_number is None:
             round_number = int(app.round.round_number)
 
+        self._background_save_generation += 1
+        save_generation = self._background_save_generation
+        db_path = app.db.path
+
+        finish_practice_status: str | None = None
+        should_finish_practice_in_background = bool(
+            auto_continue
+            and app.practice_running
+            and int(round_number) >= int(app.total_rounds)
+        )
+
+        if should_finish_practice_in_background:
+            finish_practice_status = "completed"
+
         log_app_event(
-            "app.practice.round_save_started",
-            message="Finished practice round save started.",
+            "app.practice.round_save_queued",
+            message="Finished practice round save was queued for the background worker.",
             context={
                 "practice_id": practice_id,
+                "practice_token": practice_token,
                 "round_number": round_number,
+                "save_generation": save_generation,
+                "finish_practice_status": finish_practice_status,
                 "event_count": len(events),
                 "char_result_count": len(char_results),
+                "prepare_elapsed_ms": _elapsed_ms(prepare_started_at),
                 "summary": summarize_score_summary(summary),
             },
         )
 
         try:
-            session_id = app.db.save_session(
-                started_at,
-                summary,
-                app.settings,
-                events,
-                char_results,
-                practice_id=int(practice_id),
-                round_number=int(round_number),
-            )
+            app.debug_controller.write_round_snapshot_if_enabled()
         except Exception as exc:
             log_app_exception(
-                "app.practice.round_save_failed",
+                "app.debug.snapshot_write_after_round_failed",
                 exc,
-                message="Finished practice round save failed.",
+                level="warning",
+                message="Round debug snapshot write failed before background save.",
+                context={"practice_id": practice_id, "practice_token": practice_token, "round_number": round_number},
+            )
+
+        def worker() -> None:
+            session_id: int | None = None
+            saved_practice_id: int | None = None
+            history_row: dict[str, Any] | None = None
+            error: Exception | None = None
+            db: Database | None = None
+            worker_started_at = time.monotonic()
+            perf: dict[str, Any] = {}
+
+            try:
+                log_app_event(
+                    "app.practice.round_save_started",
+                    message="Finished practice round save started in the background worker.",
+                    context={
+                        "practice_id": practice_id,
+                        "practice_token": practice_token,
+                        "round_number": round_number,
+                        "save_generation": save_generation,
+                        "event_count": len(events),
+                        "char_result_count": len(char_results),
+                        "prepare_elapsed_ms": _elapsed_ms(prepare_started_at),
+                        "summary": summarize_score_summary(summary),
+                    },
+                )
+                step_started_at = time.monotonic()
+                db = Database.open_background(db_path)
+                perf["db_open_elapsed_ms"] = _elapsed_ms(step_started_at)
+
+                saved_practice_id = None if practice_id is None else int(practice_id)
+
+                if saved_practice_id is None:
+                    saved_practice_id = self._practice_db_id_for_token(practice_token)
+
+                if saved_practice_id is None:
+                    step_started_at = time.monotonic()
+                    saved_practice_id = db.create_practice(
+                        practice_started_at,
+                        int(practice_planned_rounds),
+                        settings,
+                    )
+                    perf["create_practice_elapsed_ms"] = _elapsed_ms(step_started_at)
+                    self._remember_practice_db_id_for_token(practice_token, saved_practice_id)
+                    log_app_event(
+                        "app.practice.background_practice_created",
+                        message="Deferred practice row was created in the background worker.",
+                        context={
+                            "practice_id": saved_practice_id,
+                            "practice_token": practice_token,
+                            "planned_rounds": int(practice_planned_rounds),
+                        },
+                    )
+
+                step_started_at = time.monotonic()
+                session_id = db.save_session(
+                    started_at,
+                    summary,
+                    settings,
+                    events,
+                    char_results,
+                    practice_id=int(saved_practice_id),
+                    round_number=int(round_number),
+                )
+                perf["save_session_elapsed_ms"] = _elapsed_ms(step_started_at)
+
+                step_started_at = time.monotonic()
+                try:
+                    row = db.session_history_row(int(session_id))
+                    history_row = None if row is None else dict(row)
+                finally:
+                    perf["history_row_elapsed_ms"] = _elapsed_ms(step_started_at)
+
+                step_started_at = time.monotonic()
+                db.refresh_practice_progress(int(saved_practice_id))
+                perf["refresh_practice_progress_elapsed_ms"] = _elapsed_ms(step_started_at)
+
+                if finish_practice_status is not None:
+                    step_started_at = time.monotonic()
+                    db.finish_practice(int(saved_practice_id), finish_practice_status)
+                    perf["finish_practice_elapsed_ms"] = _elapsed_ms(step_started_at)
+
+            except Exception as exc:
+                error = exc
+            finally:
+                perf["worker_elapsed_ms"] = _elapsed_ms(worker_started_at)
+                log_app_event(
+                    "app.practice.round_save_worker_completed",
+                    message="Finished practice round save worker completed.",
+                    context={
+                        "session_id": session_id,
+                        "practice_id": saved_practice_id,
+                        "practice_token": practice_token,
+                        "round_number": round_number,
+                        "save_generation": save_generation,
+                        "error": str(error) if error is not None else None,
+                        "perf": perf,
+                    },
+                )
+                if db is not None:
+                    db.close()
+
+            self._schedule_on_main_thread(
+                lambda: self._apply_finished_round_save_result(
+                    save_generation=save_generation,
+                    session_id=session_id,
+                    error=error,
+                    show_saved_status=show_saved_status,
+                    events=events,
+                    char_results=char_results,
+                    practice_id=saved_practice_id,
+                    practice_token=practice_token,
+                    round_number=int(round_number),
+                    summary=summary,
+                    history_row=history_row,
+                )
+            )
+
+        queued = self._enqueue_background_job("save_finished_round", worker)
+
+        if should_finish_practice_in_background:
+            self._advance_after_finished_round(finish_database=False)
+        elif auto_continue and app.practice_running:
+            self._advance_after_finished_round()
+
+        if not queued and not self._active_round_or_countdown_running():
+            app.status_var.set(
+                app.i18n.t(
+                    "practice.status.save_not_queued",
+                    "Round could not be queued for saving because the application is shutting down.",
+                )
+            )
+
+    def _apply_finished_round_save_result(
+        self,
+        *,
+        save_generation: int,
+        session_id: int | None,
+        error: Exception | None,
+        show_saved_status: bool,
+        events: list[Dict[str, Any]],
+        char_results: list[Any],
+        practice_id: Optional[int],
+        practice_token: Optional[int],
+        round_number: int,
+        summary: Any,
+        history_row: Optional[dict[str, Any]] = None,
+    ) -> None:
+        app = self.app
+
+        if error is not None or session_id is None:
+            log_app_exception(
+                "app.practice.round_save_failed",
+                error or RuntimeError("Background save did not return a session id."),
+                message="Finished practice round background save failed.",
                 context={
                     "practice_id": practice_id,
+                    "practice_token": practice_token,
                     "round_number": round_number,
+                    "save_generation": save_generation,
                     "event_count": len(events),
                     "char_result_count": len(char_results),
                     "summary": summarize_score_summary(summary),
                 },
             )
-            raise
+            if not self._active_round_or_countdown_running():
+                app.status_controller.set_main_status(
+                    app.i18n.t(
+                        "practice.status.save_failed",
+                        "Round save failed: {error}",
+                        error=error,
+                    ),
+                    state="error",
+                )
+            return
+
+        if practice_id is None:
+            log_app_exception(
+                "app.practice.round_save_missing_practice_id",
+                RuntimeError("Background save completed without a practice id."),
+                message="Finished practice round background save returned no practice id.",
+                context={
+                    "session_id": session_id,
+                    "practice_token": practice_token,
+                    "round_number": round_number,
+                    "save_generation": save_generation,
+                },
+            )
+            return
+
+        if practice_token is not None:
+            self._remember_practice_db_id_for_token(practice_token, int(practice_id))
 
         log_app_event(
             "app.practice.round_saved",
-            message="Finished practice round saved.",
+            message="Finished practice round background save completed.",
             context={
                 "session_id": session_id,
                 "practice_id": practice_id,
+                "practice_token": practice_token,
                 "round_number": round_number,
+                "save_generation": save_generation,
                 "event_count": len(events),
                 "char_result_count": len(char_results),
                 "summary": summarize_score_summary(summary),
             },
         )
-
-        app.db.refresh_practice_progress(int(practice_id))
 
         try:
             app.history_controller.increment_keying_event_summary_from_round(events, char_results)
@@ -698,11 +1910,22 @@ class PracticeController:
                 context={"session_id": session_id},
             )
 
-        self.pending_after_round_updates_session_id = session_id
+        if history_row is not None and bool(getattr(config, "HISTORY_TABLE_INCREMENTAL_AFTER_ROUND", True)):
+            try:
+                app.history_controller.update_recent_history_table_incremental(
+                    history_row,
+                    limit=int(getattr(config, "HISTORY_TABLE_RECENT_SESSIONS", 1000)),
+                )
+            except Exception as exc:
+                log_app_exception(
+                    "app.history.table_incremental_after_save_failed",
+                    exc,
+                    level="warning",
+                    message="Saved round could not be inserted into the Recent rounds table immediately.",
+                    context={"session_id": session_id},
+                )
 
-        app.debug_controller.write_round_snapshot_if_enabled()
-
-        if show_saved_status:
+        if show_saved_status and not self._active_round_or_countdown_running():
             app.status_var.set(
                 app.i18n.t(
                     "practice.status.saved_round",
@@ -711,147 +1934,82 @@ class PracticeController:
                 )
             )
 
-        if auto_continue and app.practice_running:
-            self._advance_after_finished_round()
+        self.pending_after_round_updates_session_id = int(session_id)
+        self._schedule_pending_after_round_updates()
 
-    
-    def _schedule_pending_after_round_updates(self) -> None:
-        """Schedule heavy after-round updates once, using the latest saved round."""
-        app = self.app
+    def _reschedule_pending_after_round_analytics(self, *, reason: str) -> None:
+        """Keep a pending after-round analytics job pending while practice is active."""
+
+        if self.pending_after_round_updates_session_id is None:
+            return
+
+        self._cancel_scheduled_after_round_analytics()
+        log_app_event(
+            "app.practice.after_round_analytics_rescheduled",
+            message="Pending after-round analytics was rescheduled.",
+            context={
+                "session_id": self.pending_after_round_updates_session_id,
+                "reason": reason,
+                "active_round_or_countdown": self._active_round_or_countdown_running(),
+            },
+        )
+        self._schedule_pending_after_round_updates(active_reschedule=True)
+
+    def _schedule_pending_after_round_updates(self, *, active_reschedule: bool = False) -> None:
+        """Queue heavy after-round updates once, using the latest saved round.
+
+        The actual CPU-heavy work is delayed and only started while the UI is
+        idle. Running the skill calculation immediately after a round can still
+        starve Tk's event loop, because that calculation is Python CPU work even
+        when it runs on a worker thread.
+        """
 
         session_id = self.pending_after_round_updates_session_id
 
         if session_id is None:
             return
 
-        self.pending_after_round_updates_session_id = None
+        self._cancel_scheduled_after_round_analytics()
+        delay_ms = self._analytics_delay_ms(active_reschedule=active_reschedule)
 
-        app.after(
-            150,
-            lambda session_id=session_id: self._run_deferred_after_round_updates(session_id),
-        )
+        def run_if_idle() -> None:
+            self._after_round_analytics_after_id = None
+            latest_session_id = self.pending_after_round_updates_session_id
 
+            if latest_session_id is None:
+                return
 
-    def _run_deferred_after_round_updates(self, session_id: int) -> None:
-        """Run heavier updates after the practice has stopped or completed."""
-        app = self.app
+            if self._active_round_or_countdown_running():
+                log_app_event(
+                    "app.practice.after_round_analytics_postponed_active",
+                    message="After-round analytics was postponed because a round or countdown is active.",
+                    context={
+                        "session_id": latest_session_id,
+                        "delay_ms": self._analytics_delay_ms(active_reschedule=True),
+                    },
+                )
+                self._schedule_pending_after_round_updates(active_reschedule=True)
+                return
 
-        try:
-            log_app_event(
-                "app.timing_profile.refresh_started",
-                message="Timing profile refresh started after round save.",
-                context={"session_id": session_id},
-            )
-            app.decoder_controller.refresh_timing_profiles()
-            log_app_event(
-                "app.timing_profile.refresh_completed",
-                message="Timing profile refresh completed after round save.",
-                context={"session_id": session_id},
-            )
-        except Exception as exc:
-            log_app_exception(
-                "app.timing_profile.refresh_failed",
-                exc,
-                level="warning",
-                message="Timing profile refresh failed after round save.",
-                context={"session_id": session_id},
-            )
-
-        self._deferred_after_round_updates(session_id)
-        
-
-    def _deferred_after_round_updates(self, session_id: int) -> None:
-        """Update skill, history, problem tables and summaries after saving."""
-        app = self.app
-        helpers = app.ui_helpers_controller
-        rating = None
-
-        log_app_event(
-            "app.practice.after_round_updates_started",
-            message="Deferred after-round updates started.",
-            context={"session_id": session_id},
-        )
+            self.pending_after_round_updates_session_id = None
+            self._request_after_round_analytics_async(int(latest_session_id))
 
         try:
-            recent_rounds = helpers.safe_int_var(
-                app.skill_recent_rounds_var,
-                default=getattr(config, "DEFAULT_SKILL_RATING_RECENT_ROUNDS", 300),
-                minimum=1,
-                maximum=100000,
-            )
-
-            rating = calculate_skill_rating(
-                app.db,
-                recent_rounds=recent_rounds,
-            )
-
-            app.db.save_skill_rating_snapshot(session_id, rating)
+            self._after_round_analytics_after_id = self.app.after(delay_ms, run_if_idle)
             log_app_event(
-                "app.skill_rating.snapshot_saved",
-                message="Skill rating snapshot saved after round.",
+                "app.practice.after_round_analytics_scheduled",
+                message="After-round analytics was scheduled for idle execution.",
                 context={
                     "session_id": session_id,
-                    "recent_rounds": recent_rounds,
-                    "rating": summarize_rating(rating),
+                    "delay_ms": delay_ms,
+                    "active_reschedule": active_reschedule,
                 },
             )
-
-        except Exception as exc:
-            log_app_exception(
-                "app.skill_rating.failed",
-                exc,
-                message="Skill rating calculation or snapshot save failed after round.",
-                context={"session_id": session_id},
-            )
-            app.status_var.set(
-                app.i18n.t(
-                    "practice.status.saved_round_skill_failed",
-                    "Saved round #{session_id}, but saving the skill rating failed: {error}",
-                    session_id=session_id,
-                    error=exc,
-                )
-            )
-
-        try:
-            log_app_event(
-                "app.history.refresh_after_round_started",
-                message="History and summary refresh started after round.",
-                context={"session_id": session_id},
-            )
-            app.history_controller.load_history_table()
-            app.history_controller.load_problem_table()
-            app.history_controller.update_stats_summary()
-
-            if rating is not None:
-                app.history_controller.update_skill_rating_summary(
-                    cached_rating=rating,
-                    allow_level_up_sound=True,
-                )
-
-            if not bool(getattr(app, "practice_running", False)):
-                app.history_controller.update_target_wpm_suggestion_indicator()
-            app.history_controller.refresh_stats_window_if_open()
-            log_app_event(
-                "app.history.refresh_after_round_completed",
-                message="History and summary refresh completed after round.",
-                context={"session_id": session_id},
-            )
-
-        except Exception as exc:
-            log_app_exception(
-                "app.history.refresh_after_round_failed",
-                exc,
-                message="History and summary refresh failed after round.",
-                context={"session_id": session_id},
-            )
-            app.status_var.set(
-                app.i18n.t(
-                    "practice.status.saved_round_summary_failed",
-                    "Saved round #{session_id}, but updating summaries failed: {error}",
-                    session_id=session_id,
-                    error=exc,
-                )
-            )
+        except Exception:
+            # If Tk scheduling fails during shutdown, fall back to immediate queueing
+            # rather than silently losing the saved-round summaries.
+            self.pending_after_round_updates_session_id = None
+            self._request_after_round_analytics_async(int(session_id))
 
     def clear_round_input(self) -> None:
         """Clear the current round input and telemetry while preserving the round target."""
@@ -1049,6 +2207,7 @@ class PracticeController:
         if app.practice_running or app.start_countdown_running:
             return
 
+        self._cancel_low_priority_history_render()
         self._cancel_pending_countdown_callback()
         app.start_trigger_timestamps.clear()
         app.start_countdown_running = True

@@ -351,12 +351,12 @@ class RuntimeController:
             value=getattr(config, "DEFAULT_PROBLEM_CHAR_LIMIT", 12)
         )
 
-        app.stats_recent_rounds_var = tk.IntVar(value=300)
+        app.stats_recent_rounds_var = tk.IntVar(value=1000)
         app.skill_recent_rounds_var = tk.IntVar(
-            value=getattr(config, "DEFAULT_SKILL_RATING_RECENT_ROUNDS", 300)
+            value=getattr(config, "DEFAULT_SKILL_RATING_RECENT_ROUNDS", 1000)
         )
         app.effective_wpm_recent_rounds_var = tk.IntVar(
-            value=getattr(config, "DEFAULT_EFFECTIVE_WPM_RECENT_ROUNDS", 300)
+            value=getattr(config, "DEFAULT_EFFECTIVE_WPM_RECENT_ROUNDS", 1000)
         )
         app.effective_wpm_min_accuracy_var = tk.IntVar(
             value=getattr(config, "DEFAULT_EFFECTIVE_WPM_MIN_ACCURACY", 90)

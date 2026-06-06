@@ -6,6 +6,7 @@ from __future__ import annotations
 
 from datetime import datetime
 import threading
+import time
 from typing import TYPE_CHECKING, Any, Optional
 
 import tkinter as tk
@@ -21,12 +22,35 @@ if TYPE_CHECKING:
     from morsewurst.ui.app import MorsewurstApp
 
 
+def _elapsed_ms(started_monotonic: float) -> float:
+    return round(max(0.0, (time.monotonic() - float(started_monotonic)) * 1000.0), 2)
+
+
 class HistoryController:
     """Owns history tables, saved-round viewing, problem table and skill summaries."""
 
     def __init__(self, app: "MorsewurstApp") -> None:
         self.app = app
         self._last_seen_skill_level: Optional[int] = None
+        self._history_table_render_generation = 0
+        self._history_table_render_after_id: Optional[str] = None
+
+    def cancel_history_table_render(self) -> None:
+        """Cancel any low-priority Recent rounds repaint that is still queued."""
+
+        app = self.app
+        self._history_table_render_generation += 1
+
+        after_id = self._history_table_render_after_id
+        self._history_table_render_after_id = None
+
+        if after_id is None:
+            return
+
+        try:
+            app.after_cancel(after_id)
+        except Exception:
+            pass
 
     def load_tables(self, *, skill_rating: Optional[Any] = None) -> None:
         log_app_event(
@@ -353,30 +377,283 @@ class HistoryController:
 
         return f"~ {text}"
 
-    def load_history_table(self) -> None:
+    def load_history_table(
+        self,
+        rows: Optional[list[Any]] = None,
+        *,
+        chunked: bool = True,
+    ) -> None:
         app = self.app
+        load_started_at = time.monotonic()
+        rows_from_cache = rows is not None
 
-        try:
-            rows = app.db.recent_sessions(300)
-        except Exception as exc:
-            log_app_exception(
-                "app.history.table_load_failed",
-                exc,
-                message="Recent sessions table load failed.",
-            )
-            raise
+        if rows is None:
+            try:
+                rows = app.db.recent_sessions(
+                    int(getattr(config, "HISTORY_TABLE_RECENT_SESSIONS", 1000))
+                )
+            except Exception as exc:
+                log_app_exception(
+                    "app.history.table_load_failed",
+                    exc,
+                    message="Recent sessions table load failed.",
+                )
+                raise
+
+        conversion_started_at = time.monotonic()
+        row_values = [self.history_row_values(row) for row in rows]
+        conversion_elapsed_ms = _elapsed_ms(conversion_started_at)
+        log_app_event(
+            "app.history.table_rows_prepared",
+            message="Recent sessions table rows were prepared for rendering.",
+            context={
+                "row_count": len(row_values),
+                "rows_from_cache": rows_from_cache,
+                "conversion_elapsed_ms": conversion_elapsed_ms,
+                "load_elapsed_ms": _elapsed_ms(load_started_at),
+                "chunked": chunked,
+            },
+        )
+
+        if chunked:
+            self.render_history_table_values_chunked(row_values)
+        else:
+            self.render_history_table_values_now(row_values)
+
+    def render_history_table_values_now(self, row_values: list[tuple[Any, ...]]) -> None:
+        app = self.app
+        self.cancel_history_table_render()
 
         for row_id in app.history_tree.get_children():
             app.history_tree.delete(row_id)
 
-        for row in rows:
-            app.history_tree.insert("", tk.END, values=self.history_row_values(row))
+        for values in row_values:
+            app.history_tree.insert("", tk.END, values=values)
 
         log_app_event(
             "app.history.table_loaded",
             message="Recent sessions table loaded.",
-            context={"row_count": len(rows)},
+            context={"row_count": len(row_values), "chunked": False},
         )
+
+    def render_history_table_values_chunked(self, row_values: list[tuple[Any, ...]]) -> None:
+        """Replace the Recent rounds table without monopolising Tk's event loop.
+
+        Inserting hundreds or thousands of Treeview rows in one tight loop can
+        still freeze the application even when the database query itself has
+        already been moved to a worker thread. This renderer breaks the UI work
+        into small Tk-thread chunks so countdowns, button presses and live input
+        can be processed between table repaint batches.
+        """
+
+        app = self.app
+        self.cancel_history_table_render()
+        generation = self._history_table_render_generation
+        render_started_at = time.monotonic()
+
+        try:
+            delete_ids = list(app.history_tree.get_children())
+        except Exception:
+            return
+
+        insert_index = 0
+        delete_index = 0
+        insert_chunk_size = max(1, int(getattr(config, "HISTORY_TABLE_RENDER_INSERT_CHUNK_SIZE", 40)))
+        delete_chunk_size = max(1, int(getattr(config, "HISTORY_TABLE_RENDER_DELETE_CHUNK_SIZE", 200)))
+
+        log_app_event(
+            "app.history.table_render_scheduled",
+            message="Recent sessions table render was scheduled in UI chunks.",
+            context={
+                "generation": generation,
+                "delete_count": len(delete_ids),
+                "row_count": len(row_values),
+                "insert_chunk_size": insert_chunk_size,
+                "delete_chunk_size": delete_chunk_size,
+            },
+        )
+
+        def still_current() -> bool:
+            return generation == self._history_table_render_generation
+
+        def schedule_next(callback: Any) -> None:
+            try:
+                delay_ms = max(1, int(getattr(config, "HISTORY_TABLE_RENDER_CHUNK_DELAY_MS", 10)))
+                self._history_table_render_after_id = app.after(delay_ms, callback)
+            except Exception:
+                self._history_table_render_after_id = None
+
+        def delete_chunk() -> None:
+            nonlocal delete_index
+
+            if not still_current():
+                return
+
+            try:
+                end_index = min(delete_index + delete_chunk_size, len(delete_ids))
+                for row_id in delete_ids[delete_index:end_index]:
+                    try:
+                        app.history_tree.delete(row_id)
+                    except Exception:
+                        pass
+                delete_index = end_index
+            except Exception as exc:
+                log_app_exception(
+                    "app.history.table_delete_chunk_failed",
+                    exc,
+                    level="warning",
+                    message="Deleting a Recent rounds table chunk failed.",
+                    context={"generation": generation},
+                )
+                return
+
+            if delete_index < len(delete_ids):
+                schedule_next(delete_chunk)
+                return
+
+            schedule_next(insert_chunk)
+
+        def insert_chunk() -> None:
+            nonlocal insert_index
+
+            if not still_current():
+                return
+
+            try:
+                end_index = min(insert_index + insert_chunk_size, len(row_values))
+                for values in row_values[insert_index:end_index]:
+                    app.history_tree.insert("", tk.END, values=values)
+                insert_index = end_index
+            except Exception as exc:
+                log_app_exception(
+                    "app.history.table_insert_chunk_failed",
+                    exc,
+                    level="warning",
+                    message="Inserting a Recent rounds table chunk failed.",
+                    context={"generation": generation},
+                )
+                return
+
+            if insert_index < len(row_values):
+                schedule_next(insert_chunk)
+                return
+
+            self._history_table_render_after_id = None
+            log_app_event(
+                "app.history.table_loaded",
+                message="Recent sessions table loaded.",
+                context={
+                    "row_count": len(row_values),
+                    "chunked": True,
+                    "generation": generation,
+                    "delete_count": len(delete_ids),
+                    "elapsed_ms": _elapsed_ms(render_started_at),
+                    "insert_chunk_size": insert_chunk_size,
+                    "delete_chunk_size": delete_chunk_size,
+                },
+            )
+
+        schedule_next(delete_chunk)
+
+    def update_recent_history_table_incremental(
+        self,
+        row: Any,
+        *,
+        limit: Optional[int] = None,
+    ) -> bool:
+        """Insert or update one Recent rounds row without repainting the table.
+
+        After-round analytics already knows the newest session row. Replacing
+        all 1500 visible rows just to show that one new row causes a visible
+        flash and can monopolise the Tk event loop. This method keeps the table
+        stable: an existing row is updated in place, otherwise the new row is
+        inserted at the top and old bottom rows are trimmed.
+        """
+
+        app = self.app
+        started_at = time.monotonic()
+        self.cancel_history_table_render()
+
+        try:
+            values = self.history_row_values(row)
+        except Exception as exc:
+            log_app_exception(
+                "app.history.table_incremental_prepare_failed",
+                exc,
+                level="warning",
+                message="Preparing an incremental Recent rounds row update failed.",
+            )
+            return False
+
+        try:
+            session_id = str(values[0])
+        except Exception:
+            session_id = ""
+
+        if not session_id:
+            return False
+
+        updated_existing = False
+
+        try:
+            children = list(app.history_tree.get_children())
+        except Exception as exc:
+            log_app_exception(
+                "app.history.table_incremental_children_failed",
+                exc,
+                level="warning",
+                message="Reading Recent rounds table children failed during incremental update.",
+            )
+            return False
+
+        try:
+            for item_id in children:
+                item_values = app.history_tree.item(item_id, "values")
+                if item_values and str(item_values[0]) == session_id:
+                    app.history_tree.item(item_id, values=values)
+                    if children and item_id != children[0]:
+                        app.history_tree.move(item_id, "", 0)
+                    updated_existing = True
+                    break
+
+            if not updated_existing:
+                app.history_tree.insert("", 0, values=values)
+
+            try:
+                visible_limit = max(1, int(limit if limit is not None else getattr(config, "HISTORY_TABLE_RECENT_SESSIONS", 1000)))
+            except Exception:
+                visible_limit = max(1, int(getattr(config, "HISTORY_TABLE_RECENT_SESSIONS", 1000)))
+
+            children_after = list(app.history_tree.get_children())
+            trimmed = 0
+            for item_id in children_after[visible_limit:]:
+                try:
+                    app.history_tree.delete(item_id)
+                    trimmed += 1
+                except Exception:
+                    pass
+
+            log_app_event(
+                "app.history.table_incremental_updated",
+                message="Recent sessions table was updated incrementally.",
+                context={
+                    "session_id": session_id,
+                    "updated_existing": updated_existing,
+                    "visible_limit": visible_limit,
+                    "trimmed": trimmed,
+                    "elapsed_ms": _elapsed_ms(started_at),
+                },
+            )
+            return True
+        except Exception as exc:
+            log_app_exception(
+                "app.history.table_incremental_update_failed",
+                exc,
+                level="warning",
+                message="Incremental Recent rounds table update failed.",
+                context={"session_id": session_id},
+            )
+            return False
 
     def history_row_values(self, row: Any) -> tuple[Any, ...]:
         elapsed_us = self.row_get(row, "elapsed_us")
@@ -698,22 +975,31 @@ class HistoryController:
         except Exception:
             return None
 
-    def load_problem_table(self) -> None:
+    def load_problem_table(self, rows: Optional[list[Any]] = None) -> None:
         app = self.app
         helpers = app.ui_helpers_controller
+        started_at = time.monotonic()
+        rows_from_cache = rows is not None
 
+        delete_started_at = time.monotonic()
+        delete_count = 0
         for row_id in app.problem_tree.get_children():
             app.problem_tree.delete(row_id)
+            delete_count += 1
+        delete_elapsed_ms = _elapsed_ms(delete_started_at)
 
-        rows = app.db.problem_characters(
-            getattr(config, "PROBLEM_CHARACTER_DISPLAY_LIMIT", 10000),
-            helpers.safe_int_var(
-                app.problem_recent_rounds_var,
-                default=config.DEFAULT_PROBLEM_RECENT_ROUNDS,
-                minimum=1,
-                maximum=100000,
-            ),
-        )
+        if rows is None:
+            rows = app.db.problem_characters(
+                getattr(config, "PROBLEM_CHARACTER_DISPLAY_LIMIT", 10000),
+                helpers.safe_int_var(
+                    app.problem_recent_rounds_var,
+                    default=config.DEFAULT_PROBLEM_RECENT_ROUNDS,
+                    minimum=1,
+                    maximum=100000,
+                ),
+            )
+
+        insert_started_at = time.monotonic()
         for row in rows:
             app.problem_tree.insert(
                 "",
@@ -729,7 +1015,14 @@ class HistoryController:
         log_app_event(
             "app.history.problem_table_loaded",
             message="Problem character table loaded.",
-            context={"row_count": len(rows)},
+            context={
+                "row_count": len(rows),
+                "rows_from_cache": rows_from_cache,
+                "delete_count": delete_count,
+                "delete_elapsed_ms": delete_elapsed_ms,
+                "insert_elapsed_ms": _elapsed_ms(insert_started_at),
+                "elapsed_ms": _elapsed_ms(started_at),
+            },
         )
 
     def refresh_stats_window_if_open(self) -> None:
@@ -743,19 +1036,29 @@ class HistoryController:
         except Exception:
             pass
 
-    def update_stats_summary(self) -> None:
+    def update_stats_summary(
+        self,
+        *,
+        stats: Optional[dict[str, Any]] = None,
+        recent_rounds: Optional[int] = None,
+    ) -> None:
         app = self.app
         helpers = app.ui_helpers_controller
+        update_started_at = time.monotonic()
+        stats_from_cache = stats is not None
 
         try:
-            recent_rounds = helpers.safe_int_var(
-                app.stats_recent_rounds_var,
-                default=300,
-                minimum=1,
-                maximum=100000,
-            )
+            if recent_rounds is None:
+                recent_rounds = helpers.safe_int_var(
+                    app.stats_recent_rounds_var,
+                    default=1000,
+                    minimum=1,
+                    maximum=100000,
+                )
 
-            stats = app.db.stats_summary(recent_rounds)
+            if stats is None:
+                stats = app.db.stats_summary(recent_rounds)
+
             rounds = int(stats.get("rounds") or 0)
 
         except Exception as exc:
@@ -795,7 +1098,12 @@ class HistoryController:
         log_app_event(
             "app.history.stats_summary_updated",
             message="History statistics summary updated.",
-            context={"recent_rounds": recent_rounds, "rounds": rounds},
+            context={
+                "recent_rounds": recent_rounds,
+                "rounds": rounds,
+                "stats_from_cache": stats_from_cache,
+                "elapsed_ms": _elapsed_ms(update_started_at),
+            },
         )
 
     def reset_history_summary_vars(self, rounds_text: str) -> None:
@@ -817,13 +1125,14 @@ class HistoryController:
         *,
         cached_rating: Optional[Any] = None,
         allow_level_up_sound: bool = False,
+        allow_recalculate: bool = True,
     ) -> None:
         app = self.app
         helpers = app.ui_helpers_controller
 
         recent_rounds = helpers.safe_int_var(
             app.skill_recent_rounds_var,
-            default=getattr(config, "DEFAULT_SKILL_RATING_RECENT_ROUNDS", 300),
+            default=getattr(config, "DEFAULT_SKILL_RATING_RECENT_ROUNDS", 1000),
             minimum=1,
             maximum=100000,
         )
@@ -831,6 +1140,17 @@ class HistoryController:
         if cached_rating is not None and int(getattr(cached_rating, "recent_rounds", -1)) == recent_rounds:
             rating = cached_rating
         else:
+            if not allow_recalculate:
+                log_app_event(
+                    "app.skill_summary.cached_rating_skipped",
+                    message="Cached skill rating was skipped because it no longer matches current settings.",
+                    context={
+                        "current_recent_rounds": recent_rounds,
+                        "cached_recent_rounds": getattr(cached_rating, "recent_rounds", None),
+                    },
+                )
+                return
+
             try:
                 rating = calculate_skill_rating(app.db, recent_rounds=recent_rounds)
             except Exception as exc:
@@ -1079,11 +1399,15 @@ class HistoryController:
 
         return " ".join(parts)
 
-    def update_target_wpm_suggestion_indicator(self) -> None:
+    def update_target_wpm_suggestion_indicator(
+        self,
+        *,
+        result: Optional[dict[str, Any]] = None,
+    ) -> None:
         app = self.app
         helpers = app.ui_helpers_controller
 
-        if (
+        if result is None and (
             bool(getattr(app, "practice_running", False))
             or bool(getattr(app, "start_countdown_running", False))
             or bool(getattr(getattr(app, "round", None), "accepting_input", False))
@@ -1094,26 +1418,27 @@ class HistoryController:
             return
 
         try:
-            result = app.db.optimized_wpm_from_recent_sessions(
-                recent_sessions=helpers.safe_int_var(
-                    app.effective_wpm_recent_rounds_var,
-                    default=getattr(config, "DEFAULT_EFFECTIVE_WPM_RECENT_ROUNDS", 300),
-                    minimum=1,
-                    maximum=100000,
-                ),
-                min_accuracy=helpers.safe_int_var(
-                    app.effective_wpm_min_accuracy_var,
-                    default=getattr(config, "DEFAULT_EFFECTIVE_WPM_MIN_ACCURACY", 90),
-                    minimum=0,
-                    maximum=100,
-                ),
-                min_cleanliness=helpers.safe_int_var(
-                    app.effective_wpm_min_cleanliness_var,
-                    default=getattr(config, "DEFAULT_EFFECTIVE_WPM_MIN_CLEANLINESS", 85),
-                    minimum=0,
-                    maximum=100,
-                ),
-            )
+            if result is None:
+                result = app.db.optimized_wpm_from_recent_sessions(
+                    recent_sessions=helpers.safe_int_var(
+                        app.effective_wpm_recent_rounds_var,
+                        default=getattr(config, "DEFAULT_EFFECTIVE_WPM_RECENT_ROUNDS", 1000),
+                        minimum=1,
+                        maximum=100000,
+                    ),
+                    min_accuracy=helpers.safe_int_var(
+                        app.effective_wpm_min_accuracy_var,
+                        default=getattr(config, "DEFAULT_EFFECTIVE_WPM_MIN_ACCURACY", 90),
+                        minimum=0,
+                        maximum=100,
+                    ),
+                    min_cleanliness=helpers.safe_int_var(
+                        app.effective_wpm_min_cleanliness_var,
+                        default=getattr(config, "DEFAULT_EFFECTIVE_WPM_MIN_CLEANLINESS", 85),
+                        minimum=0,
+                        maximum=100,
+                    ),
+                )
         except Exception:
             self.clear_target_wpm_suggestion_indicator()
             return

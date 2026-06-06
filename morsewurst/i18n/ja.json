@@ -61,6 +61,8 @@
   "practice.status.series_complete_upper": "練習シリーズ完了",
   "practice.status.auto_saving_round": "ラウンドを自動保存しています。",
   "practice.status.saved_round": "ラウンド #{session_id} を保存しました",
+  "practice.status.save_not_queued": "アプリケーションの終了中のため、ラウンドを保存キューに追加できませんでした。",
+  "practice.status.save_failed": "ラウンドの保存に失敗しました: {error}",
   "practice.status.saved_round_skill_failed": "ラウンド #{session_id} は保存しましたが、スキル評価の保存に失敗しました: {error}",
   "practice.status.saved_round_summary_failed": "ラウンド #{session_id} は保存しましたが、サマリーの更新に失敗しました: {error}",
   "practice.status.input_cleared": "入力をクリアしました。",
