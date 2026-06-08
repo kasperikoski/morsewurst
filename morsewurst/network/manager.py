@@ -26,6 +26,7 @@ from morsewurst.network.protocol import (
     make_client_hello,
     make_client_ping,
     make_lobby_hello,
+    make_key_message,
     make_tone_message,
     new_id,
 )
@@ -548,6 +549,39 @@ class NetworkManager:
         )
         self._status("info", "Verkkoyhteys pysäytetty.")
 
+    def publish_local_key(self, event: Dict[str, Any]) -> None:
+        if not self.is_running:
+            return
+        if not self._settings.transmit_enabled:
+            return
+        if event.get("type") != "key":
+            return
+        if self._loop is None:
+            return
+
+        self._seq += 1
+        try:
+            message = make_key_message(
+                key_event=event,
+                sender_id=self.client_id,
+                sender_name=self._settings.callsign,
+                seq=self._seq,
+                stream_id=self.stream_id,
+            )
+        except ProtocolError as exc:
+            log_exception(
+                "network",
+                "network.key.send_failed",
+                exc,
+                level="warning",
+                message="Local V1 key message could not be created.",
+                context={"mode": self._mode, "event_type": event.get("type")},
+            )
+            self._status("warning", f"Key-viestiä ei lähetetty: {exc}")
+            return
+
+        asyncio.run_coroutine_threadsafe(self._send_tone_message(message), self._loop)
+
     def publish_local_tone(self, event: Dict[str, Any]) -> None:
         if not self.is_running:
             return
@@ -570,7 +604,7 @@ class NetworkManager:
         except ProtocolError as exc:
             log_exception(
                 "network",
-                "network.tone.send_failed",
+                "network.telemetry.send_failed",
                 exc,
                 level="warning",
                 message="Local tone message could not be created.",
@@ -1248,6 +1282,10 @@ class NetworkManager:
             message = decode_message(raw)
             message_type = str(message.get("type") or "")
 
+            if message_type == "key":
+                self._handle_remote_key(message)
+                continue
+
             if message_type == "tone":
                 self._handle_remote_tone(message)
                 continue
@@ -1375,31 +1413,36 @@ class NetworkManager:
                 if not sent:
                     log_event(
                         "network",
-                        "network.tone.send_queue_failed",
+                        "network.telemetry.send_queue_failed",
                         level="warning",
-                        message="Local tone message could not be queued for sending.",
+                        message="Local telemetry message could not be queued for sending.",
                         context={"mode": self._mode, "message_type": _message_type(message)},
                     )
                 return
 
             log_event(
                 "network",
-                "network.tone.send_skipped",
+                "network.telemetry.send_skipped",
                 level="debug",
-                message="Local tone message was not sent because networking is not in a sending mode.",
+                message="Local telemetry message was not sent because networking is not in a sending mode.",
                 context={"mode": self._mode, "message_type": _message_type(message)},
             )
         except Exception as exc:
             log_exception(
                 "network",
-                "network.tone.send_failed",
+                "network.telemetry.send_failed",
                 exc,
                 level="warning",
-                message="Local tone message send failed.",
+                message="Local telemetry message send failed.",
                 context={"mode": self._mode, "message_type": _message_type(message)},
             )
 
     def _handle_remote_tone(self, message: Dict[str, Any]) -> None:
+        if str(message.get("sender_id") or "") == self.client_id:
+            return
+        self.jitter_buffer.push_message(message)
+
+    def _handle_remote_key(self, message: Dict[str, Any]) -> None:
         if str(message.get("sender_id") or "") == self.client_id:
             return
         self.jitter_buffer.push_message(message)

@@ -267,7 +267,8 @@ def make_client_hello(
             "installation_id": sanitize_installation_id(installation_id),
             "client_version": str(client_version or "")[:40],
             "capabilities": {
-                "tone_events": True,
+                "key_events": True,
+                "tone_events": False,
                 "decoded_text": False,
                 "audio_playback": True,
                 "dynamic_private_rooms": True,
@@ -613,6 +614,86 @@ def sanitize_tone_event(event: Dict[str, Any]) -> Dict[str, Any]:
         clean["src"] = str(clean["src"] or "unknown").lower()[:32]
 
     return clean
+
+
+def sanitize_key_event(event: Dict[str, Any]) -> Dict[str, Any]:
+    """Return a network-safe V1 key down/up event."""
+
+    if not isinstance(event, dict):
+        raise ProtocolError("Key event must be an object.")
+
+    if event.get("type") != "key":
+        raise ProtocolError("Only V1 key events can be sent as key telemetry.")
+
+    t = _as_int(event.get("t"))
+    if t is None:
+        raise ProtocolError("V1 key event must include integer t.")
+
+    state = str(event.get("state") or "").strip().lower()
+    if state not in {"down", "up"}:
+        raise ProtocolError("V1 key event state must be down or up.")
+
+    clean: Dict[str, Any] = {
+        "v": 1,
+        "type": "key",
+        "src": str(event.get("src") or "unknown").lower()[:32],
+        "state": state,
+        "t": int(t),
+    }
+
+    optional_keys = (
+        "el",
+        "unit",
+        "wpm",
+        "dit",
+        "device",
+        "mode",
+        "key",
+        "pin",
+    )
+
+    for key in optional_keys:
+        if key in event:
+            value = event.get(key)
+            if isinstance(value, (str, int, float, bool)) or value is None:
+                clean[key] = value
+
+    if clean.get("el") not in {".", "-", None}:
+        clean.pop("el", None)
+
+    return clean
+
+
+def make_key_message(
+    *,
+    key_event: Dict[str, Any],
+    sender_id: str,
+    sender_name: str,
+    seq: int,
+    stream_id: str,
+) -> Dict[str, Any]:
+    message = base_message("key")
+    message.update(
+        {
+            "sender_id": str(sender_id),
+            "sender_name": normalize_callsign(sender_name),
+            "seq": int(seq),
+            "stream_id": str(stream_id),
+            "key": sanitize_key_event(key_event),
+        }
+    )
+    return message
+
+
+def validate_key_message(message: Dict[str, Any]) -> Dict[str, Any]:
+    if message.get("type") != "key":
+        raise ProtocolError("Message is not a key message.")
+
+    key = message.get("key")
+    if not isinstance(key, dict):
+        raise ProtocolError("Key message does not contain key object.")
+
+    return sanitize_key_event(key)
 
 
 def make_tone_message(

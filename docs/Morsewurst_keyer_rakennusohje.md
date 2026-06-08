@@ -13,7 +13,7 @@ Laite voi toimia myös USB-näppäimistönä. Tällöin se kirjoittaa puretut me
 Ohjelmakoodi ladataan Arduino IDE:llä tiedostosta:
 
 ```text
-morsewurst_keyer_\*_\*.ino
+morsewurst_keyer_1_1.ino
 ```
 
 3D-tulostettava kotelo on tiedosto:
@@ -295,7 +295,6 @@ Jos käytät tavallista 3,5 mm kuulokeliitintä ilman tunnistuskytkintä, koko t
 
 Tällöin tavallinen kuulokeliitin toimii normaalisti ilman tunnistuskytkentää.
 
-
 ## 3D-tulostettava kotelo
 
 Kotelotiedosto:
@@ -318,38 +317,65 @@ Näyttö asennetaan koteloon fyysisesti ylösalaisin, koska kotelon sisäinen ti
 
 ## Telemetria Morsewurstille
 
-Laite lähettää ajoitustapahtumat USB CDC Serial -yhteyden kautta JSON-muodossa. Morsewurst lukee nämä rivit ja käyttää niitä harjoituksen ajoituksen, rytmin ja dekoodauksen analysointiin.
+Laite lähettää ajoitustapahtumat USB CDC Serial -yhteyden kautta JSON-muodossa. Morsewurst lukee nämä rivit ja käyttää niitä harjoituksen ajoituksen, rytmin, raakatelemetrian ja dekoodauksen analysointiin.
 
-Esimerkki tone-tapahtumasta:
+Morsewurst Keyer 1.1 lähettää painalluksen tai keyerin tuottaman elementin alun heti `key`-tapahtumana ja lopun toisena `key`-tapahtumana. Näin Morsewurst voi näyttää ja välittää käynnissä olevan syötteen heti, eikä sen tarvitse odottaa valmiin painalluksen tai valmiin elementin päättymistä ennen kuin data näkyy ohjelmassa.
+
+Suoran avaimen key down -tapahtuma:
 
 ```json
 {
   "v": 1,
-  "type": "tone",
+  "type": "key",
   "src": "straight",
-  "t0": 123456789,
-  "t1": 123556789,
-  "dur": 100000
+  "state": "down",
+  "t": 123456789
 }
 ```
 
-Iambic-tilassa mukana voi olla myös elementti ja yksikköpituus:
+Suoran avaimen key up -tapahtuma:
 
 ```json
 {
   "v": 1,
-  "type": "tone",
+  "type": "key",
+  "src": "straight",
+  "state": "up",
+  "t": 123556789
+}
+```
+
+Iambic-tilassa keyer tietää tuotetun elementin jo elementin alkaessa, joten mukana voi olla myös `el`, `unit` ja `wpm`:
+
+```json
+{
+  "v": 1,
+  "type": "key",
   "src": "iambic",
   "el": ".",
-  "t0": 123456789,
-  "t1": 123516789,
-  "dur": 60000,
+  "state": "down",
+  "t": 123456789,
   "unit": 60000,
   "wpm": 20.0
 }
 ```
 
-Tärkeää on, että `t0`, `t1` ja `dur` ovat ESP32:n mittaamia arvoja. USB:n ja Pythonin viive vaikuttaa siihen, milloin tapahtuma näkyy tietokoneella, mutta ei muuta näitä ESP32:n jo mittaamia arvoja.
+```json
+{
+  "v": 1,
+  "type": "key",
+  "src": "iambic",
+  "el": ".",
+  "state": "up",
+  "t": 123516789,
+  "unit": 60000,
+  "wpm": 20.0
+}
+```
+
+Tärkeää on, että `t` on ESP32:n mittaama mikrosekuntiaikaleima. USB:n ja Pythonin viive vaikuttaa siihen, milloin tapahtuma näkyy tietokoneella, mutta ei muuta ESP32:n jo mittaamia arvoja.
+
+Morsewurst muodostaa dekoodauksen, pisteen ja viivan luokittelun, scoringin ja ajoitusanalyysin tarvitsemat valmiit tone-tiedot näistä samoista down/up-tapahtumista. Suoralla avaimella piste tai viiva päätellään vasta, kun `up`-tapahtuma on saatu ja painalluksen kesto tunnetaan.
 
 ## Mittaustarkkuus
 
@@ -417,7 +443,6 @@ Tilan voi ottaa käyttöön tai pois laitteen asetuksista.
 | Morsewurst_keyer.stl       | 3D-tulostettava kotelo |
 | Morsewurst                 | Harjoitteluun          |
 
-
 ## Yhteenveto
 
 Tein Morsewurst Keyerin alun perin omaan morseharjoitteluun. Koko projektin suunnittelufilosofia oli siinä, että halusin tehdä omasta morsetuksesta mahdollisimman mitattavaa, analysoitavaa ja visualisoitavaa sen sijaan, että harjoittelu olisi kuolemaakin tylsempää naputtelua vailla mitään tietoa siitä, kuinka hyvin pärjää.
@@ -454,7 +479,6 @@ U8G2_SH1106_128X64_NONAME_F_HW_I2C u8g2(
 
 Tällöin näyttöä ei enää käännetä ohjelmallisesti.
 
-
 ## Serial API yhteensopiville laitteille
 
 Morsewurstin tärkein laiterajapinta on USB CDC Serial -yhteyden kautta lähetettävä rivipohjainen JSON-telemetria.
@@ -490,7 +514,7 @@ Tunnistuksen kannalta hyödyllisiä viestejä ovat:
 ```text
 hello
 heartbeat
-tone
+key
 ```
 
 Hyvä yhteensopiva laite lähettää `hello`-viestin käynnistyksen tai sarjayhteyden avaamisen jälkeen ja `heartbeat`-viestin säännöllisesti myös silloin, kun avainta ei paineta.
@@ -504,19 +528,19 @@ Tämä auttaa Morsewurstia löytämään oikean COM-portin tai serial-portin my�
 Esimerkki:
 
 ```json
-{"v":1,"type":"hello","app":"morsewurst","device":"Morsewurst Keyer","fw":"1.0","mode":"raw_timing"}
+{"v":1,"type":"hello","app":"morsewurst","device":"Morsewurst Keyer","fw":"1.1","mode":"raw_timing"}
 ```
 
 Kentät:
 
-| Kenttä   | Tyyppi | Merkitys                                           |
-| -------- | ------ | -------------------------------------------------- |
-| `v`      | number | Protokollaversio. Nykyinen versio on `1`.          |
-| `type`   | string | Viestin tyyppi. Tässä `hello`.                     |
-| `app`    | string | Sovellustunniste. Suositeltu arvo on `morsewurst`. |
-| `device` | string | Laitteen nimi.                                     |
-| `fw`     | string | Firmware- tai ohjelmistoversio.                    |
-| `mode`   | string | Telemetriatila. Suositeltu arvo on `raw_timing`.   |
+| Kenttä   | Tyyppi | Merkitys                                                                                                                      |
+| -------- | ------ | ----------------------------------------------------------------------------------------------------------------------------- |
+| `v`      | number | Protokollaversio. Nykyinen versio on `1`.                                                                                     |
+| `type`   | string | Viestin tyyppi. Tässä `hello`.                                                                                                |
+| `app`    | string | Sovellustunniste. Suositeltu arvo on `morsewurst`.                                                                            |
+| `device` | string | Laitteen nimi.                                                                                                                |
+| `fw`     | string | Firmware- tai ohjelmistoversio. Morsewurst 0.99.15 ja uudemmat käyttävät virallisen keyerin kanssa versiota 1.1 tai uudempaa. |
+| `mode`   | string | Telemetriatila. Suositeltu arvo on `raw_timing`.                                                                              |
 
 ### Heartbeat-viesti
 
@@ -527,7 +551,7 @@ Suositeltu lähetysväli on noin 5 sekuntia.
 Esimerkki:
 
 ```json
-{"v":1,"type":"heartbeat","app":"morsewurst","device":"morsewurst","fw":"1.0","mode":"raw_timing","uptime":5000000,"wpm":20,"telemetry":true}
+{"v":1,"type":"heartbeat","app":"morsewurst","device":"morsewurst","fw":"1.1","mode":"raw_timing","uptime":5000000,"wpm":20,"telemetry":true}
 ```
 
 Kentät:
@@ -544,32 +568,32 @@ Kentät:
 | `wpm`       | number  | Laitteen tämänhetkinen WPM-asetus, jos sellainen on olemassa.    |
 | `telemetry` | boolean | `true`, kun raw timing -telemetria on käytössä.                  |
 
-`heartbeat` ei korvaa varsinaisia ajoitustapahtumia, mutta se on tärkeä käytännön yhteensopivuuden kannalta. Ilman sitä Morsewurst voi löytää laitteen vasta silloin, kun laitteesta tulee ensimmäinen `tone`-tapahtuma.
+`heartbeat` ei korvaa varsinaisia ajoitustapahtumia, mutta se on tärkeä käytännön yhteensopivuuden kannalta. Ilman sitä Morsewurst voi löytää laitteen vasta silloin, kun laitteesta tulee ensimmäinen `key`-tapahtuma.
 
-### Tone-viesti
+### Key-viesti
 
-Morsewurstin ajoitusanalyysin kannalta tärkein viesti on `tone`.
+Morsewurstin ajoitusanalyysin ensisijainen ajoitusviesti on `key`.
 
-`tone` kertoo yhden äänen, painalluksen tai morse-elementin ajoituksen.
+`key` kertoo avaimen tai keyerin tuottaman elementin tilan reaaliaikaisena down/up-tapahtumana. Tapahtuma lähetetään heti, kun painallus tai elementti alkaa, ja uudelleen heti, kun se päättyy.
 
-Vähimmäismuoto:
+Suoran avaimen vähimmäismuoto:
 
 ```json
-{"v":1,"type":"tone","src":"straight","t0":1000000,"t1":1100000,"dur":100000}
+{"v":1,"type":"key","src":"straight","state":"down","t":1000000}
+{"v":1,"type":"key","src":"straight","state":"up","t":1100000}
 ```
 
 Kentät:
 
-| Kenttä | Tyyppi | Pakollinen | Merkitys                                               |
-| ------ | ------ | ---------- | ------------------------------------------------------ |
-| `v`    | number | kyllä      | Protokollaversio. Nykyinen versio on `1`.              |
-| `type` | string | kyllä      | Viestin tyyppi. Ajoitustapahtumassa arvo on `tone`.    |
-| `src`  | string | kyllä      | Tapahtuman lähde, esimerkiksi `straight` tai `iambic`. |
-| `t0`   | number | kyllä      | Painalluksen tai äänen alkuhetki mikrosekunteina.      |
-| `t1`   | number | kyllä      | Painalluksen tai äänen loppuhetki mikrosekunteina.     |
-| `dur`  | number | kyllä      | Kesto mikrosekunteina. Yleensä `t1 - t0`.              |
+| Kenttä  | Tyyppi | Pakollinen | Merkitys                                                       |
+| ------- | ------ | ---------- | -------------------------------------------------------------- |
+| `v`     | number | kyllä      | Protokollaversio. Nykyinen versio on `1`.                      |
+| `type`  | string | kyllä      | Viestin tyyppi. Ajoitustapahtumassa arvo on `key`.             |
+| `src`   | string | kyllä      | Tapahtuman lähde, esimerkiksi `straight` tai `iambic`.         |
+| `state` | string | kyllä      | `down`, kun ääni tai painallus alkaa, ja `up`, kun se päättyy. |
+| `t`     | number | kyllä      | Tapahtuman aikaleima mikrosekunteina.                          |
 
-Jos laite lähettää vain suoran avaimen painallusten raw timing -dataa, tämä vähimmäismuoto riittää.
+Morsewurst muodostaa dekooderin ja analytiikan tarvitsemat valmiit kestotiedot näistä down/up-pareista.
 
 ### Aikaleimat
 
@@ -607,19 +631,20 @@ Suoralla avaimella suositeltu lähdearvo on:
 straight
 ```
 
-Suoran avaimen tapauksessa laitteen ei tarvitse itse päättää, onko painallus piste vai viiva. Riittää, että se lähettää painalluksen alkuajan, loppuajan ja keston.
+Suoran avaimen tapauksessa laitteen ei tarvitse itse päättää, onko painallus piste vai viiva. Riittää, että se lähettää painalluksen alun ja lopun omilla `key`-tapahtumillaan.
 
 Esimerkki:
 
 ```json
-{"v":1,"type":"tone","src":"straight","t0":123456789,"t1":123556789,"dur":100000}
+{"v":1,"type":"key","src":"straight","state":"down","t":123456789}
+{"v":1,"type":"key","src":"straight","state":"up","t":123556789}
 ```
 
 Morsewurst voi tämän jälkeen arvioida ajoituksesta, oliko kyseessä piste, viiva, kirjainväli tai sanaväli.
 
 ### Iambic-avaimen tapahtumat
 
-Jos laite tekee itse iambic-keyerin logiikan, se voi lähettää myös tiedon siitä, oliko tuotettu elementti piste vai viiva.
+Jos laite tekee itse iambic-keyerin logiikan, sen kannattaa lähettää keyerin tuottaman äänelementin alku ja loppu `key`-tapahtumina.
 
 Iambic-avaimelle suositeltu lähdearvo on:
 
@@ -630,13 +655,15 @@ iambic
 Esimerkki pisteestä:
 
 ```json
-{"v":1,"type":"tone","src":"iambic","el":".","t0":1000000,"t1":1060000,"dur":60000,"unit":60000,"wpm":20.0}
+{"v":1,"type":"key","src":"iambic","el":".","state":"down","t":1000000,"unit":60000,"wpm":20.0}
+{"v":1,"type":"key","src":"iambic","el":".","state":"up","t":1060000,"unit":60000,"wpm":20.0}
 ```
 
 Esimerkki viivasta:
 
 ```json
-{"v":1,"type":"tone","src":"iambic","el":"-","t0":1200000,"t1":1380000,"dur":180000,"unit":60000,"wpm":20.0}
+{"v":1,"type":"key","src":"iambic","el":"-","state":"down","t":1200000,"unit":60000,"wpm":20.0}
+{"v":1,"type":"key","src":"iambic","el":"-","state":"up","t":1380000,"unit":60000,"wpm":20.0}
 ```
 
 Lisäkentät:
@@ -688,8 +715,9 @@ Jokainen JSON-objekti pitää lähettää omalla rivillään.
 Oikein:
 
 ```text
-{"v":1,"type":"heartbeat","app":"morsewurst","device":"Morsewurst Keyer","fw":"1.0","mode":"raw_timing","uptime":5000000,"wpm":20,"telemetry":true}
-{"v":1,"type":"tone","src":"straight","t0":6000000,"t1":6100000,"dur":100000}
+{"v":1,"type":"heartbeat","app":"morsewurst","device":"Morsewurst Keyer","fw":"1.1","mode":"raw_timing","uptime":5000000,"wpm":20,"telemetry":true}
+{"v":1,"type":"key","src":"straight","state":"down","t":6000000}
+{"v":1,"type":"key","src":"straight","state":"up","t":6100000}
 ```
 
 ### Käytännön vähimmäistoteutus
@@ -702,14 +730,15 @@ Yksinkertaisin yhteensopiva laite tekee tämän:
 4. Mittaa avaimen painalluksen alkuhetken mikrosekunteina
 5. Mittaa avaimen vapautushetken mikrosekunteina
 6. Laskee painalluksen keston mikrosekunteina
-7. Lähettää jokaisesta painalluksesta yhden `tone`-viestin
+7. Lähettää painalluksen alussa `key` down -viestin ja vapautuksessa `key` up -viestin
 
 Vähimmäisesimerkki:
 
 ```json
-{"v":1,"type":"hello","app":"morsewurst","device":"Morsewurst Keyer","fw":"1.0","mode":"raw_timing"}
-{"v":1,"type":"heartbeat","app":"morsewurst","device":"Morsewurst Keyer","fw":"1.0","mode":"raw_timing","uptime":5000000,"wpm":20,"telemetry":true}
-{"v":1,"type":"tone","src":"straight","t0":6000000,"t1":6100000,"dur":100000}
+{"v":1,"type":"hello","app":"morsewurst","device":"Morsewurst Keyer","fw":"1.1","mode":"raw_timing"}
+{"v":1,"type":"heartbeat","app":"morsewurst","device":"Morsewurst Keyer","fw":"1.1","mode":"raw_timing","uptime":5000000,"wpm":20,"telemetry":true}
+{"v":1,"type":"key","src":"straight","state":"down","t":6000000}
+{"v":1,"type":"key","src":"straight","state":"up","t":6100000}
 ```
 
 ### Tekstimuotoinen serial output ei riitä
@@ -755,12 +784,12 @@ Morsewurstin kannalta USB HID Keyboard -tila ei ole tarpeellinen. Varsinainen yh
 Hyvä Morsewurst-yhteensopiva laite lähettää esimerkiksi tällaisen sarjan:
 
 ```json
-{"v":1,"type":"hello","app":"morsewurst","device":"Morsewurst Keyer","fw":"1.0","mode":"raw_timing"}
-{"v":1,"type":"heartbeat","app":"morsewurst","device":"Morsewurst Keyer","fw":"1.0","mode":"raw_timing","uptime":5000000,"wpm":20,"telemetry":true}
+{"v":1,"type":"hello","app":"morsewurst","device":"Morsewurst Keyer","fw":"1.1","mode":"raw_timing"}
+{"v":1,"type":"heartbeat","app":"morsewurst","device":"Morsewurst Keyer","fw":"1.1","mode":"raw_timing","uptime":5000000,"wpm":20,"telemetry":true}
 {"v":1,"type":"tone","src":"straight","t0":6000000,"t1":6060000,"dur":60000}
 {"v":1,"type":"tone","src":"straight","t0":6120000,"t1":6300000,"dur":180000}
 {"v":1,"type":"tone","src":"straight","t0":6360000,"t1":6420000,"dur":60000}
-{"v":1,"type":"heartbeat","app":"morsewurst","device":"Morsewurst Keyer","fw":"1.0","mode":"raw_timing","uptime":10000000,"wpm":20,"telemetry":true}
+{"v":1,"type":"heartbeat","app":"morsewurst","device":"Morsewurst Keyer","fw":"1.1","mode":"raw_timing","uptime":10000000,"wpm":20,"telemetry":true}
 ```
 
 Kun laite lähettää tällaisia rivejä USB CDC Serial -yhteyden kautta, Morsewurst voi lukea tapahtumat, tunnistaa laitteen ja analysoida morseajoitusta riippumatta siitä, millä mikrokontrollerilla tai elektroniikalla laite on toteutettu.

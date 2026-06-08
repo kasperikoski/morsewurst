@@ -211,7 +211,7 @@ class RoomServer:
 
                 message_type = str(message.get("type") or "")
 
-                if message_type == "tone":
+                if message_type in {"key", "tone"}:
                     message["via_server_id"] = self.server_id
                     if self.remote_tone_callback is not None:
                         self.remote_tone_callback(message)

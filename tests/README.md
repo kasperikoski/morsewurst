@@ -2,7 +2,7 @@
 
 This folder contains a pytest-based regression suite for Morsewurst. It focuses on pure or lightweight code paths where possible, and also includes local WebSocket relay integration tests that start a temporary relay server during the test run.
 
-Covered areas include i18n service (language selection), language flag asset validation, challenge generation, text scoring normalization, adaptive decoding, adaptive timing, round scoring, timing profiles, Koch receive-practice target generation, dynamic target-length minimums, active-character coverage, text and time-aware alignment diagnostics, Koch pass/fail scoring, new-stage-character evidence gates, Koch target scheduling and Farnsworth-style spacing, Koch WAV rendering, Koch session persistence, guided-progress updates, problem-character statistics, Koch UI view import structure, WX-MOR generation and validation, database WPM source calculations, uncapped PARIS WPM display values, capped skill-rating evidence, strict full-character-set level coverage, keying/tone-event history totals, per-key-source practice speed suggestions, statistics WPM source series, structured app logging helpers, app logging context summaries, logging-service JSONL output, sensitive context masking, serial controller resilience, serial port refresh handling, serial auto-connect behaviour, serial reconnect cleanup, optional live Morsewurst hardware probing, network protocol message sanitation, network settings persistence, network radio-channel noise settings, continuous radio-noise generation, live TonePlayer radio-noise block rendering, radio-noise profile sanitization and persistence, TX/RX noise-ducking configuration, public room client-side handling, user profile storage, legacy data migration into the default profile, per-profile data directory selection, profile creation, activation, renaming, deletion, backup handling and profile registry recovery, profile backup creation, manifest metadata, retention pruning and restore-safe backup handling, per-round skill-rating snapshot generation, historical as-of skill-rating calculations, jitter-buffer scheduling logic with a fake tone player, network manager client-side behaviour, network UI package/import structure, network radio-noise tone preset behaviour, TX/RX noise-ducking behaviour, and real local WebSocket relay behaviour including room joins, private rooms, ping/server-info handling, tone broadcast, slow-client protection, relay cleanup and logging.
+Covered areas include i18n service (language selection), language flag asset validation, challenge generation, text scoring normalization, adaptive decoding, adaptive timing, telemetry event normalization, key down/up to derived tone creation, round scoring, timing profiles, Koch receive-practice target generation, dynamic target-length minimums, active-character coverage, text and time-aware alignment diagnostics, Koch pass/fail scoring, new-stage-character evidence gates, Koch target scheduling and Farnsworth-style spacing, Koch WAV rendering, Koch session persistence, guided-progress updates, problem-character statistics, Koch UI view import structure, WX-MOR generation and validation, database WPM source calculations, uncapped PARIS WPM display values, capped skill-rating evidence, strict full-character-set level coverage, keying/tone-event history totals, per-key-source practice speed suggestions, statistics WPM source series, structured app logging helpers, app logging context summaries, logging-service JSONL output, sensitive context masking, serial controller resilience, serial port refresh handling, serial auto-connect behaviour, serial reconnect cleanup, optional live Morsewurst hardware probing, network protocol message sanitation, network key-message validation, network settings persistence, network radio-channel noise settings, continuous radio-noise generation, live TonePlayer radio-noise block rendering, live TonePlayer key-tone rendering, radio-noise profile sanitization and persistence, TX/RX noise-ducking configuration, public room client-side handling, user profile storage, legacy data migration into the default profile, per-profile data directory selection, profile creation, activation, renaming, deletion, backup handling and profile registry recovery, profile backup creation, manifest metadata, retention pruning and restore-safe backup handling, per-round skill-rating snapshot generation, historical as-of skill-rating calculations, jitter-buffer scheduling logic with a fake tone player, jitter-buffered key down/up playback, network manager client-side behaviour, network UI package/import structure, network radio-noise tone preset behaviour, TX/RX noise-ducking behaviour, and real local WebSocket relay behaviour including room joins, private rooms, ping/server-info handling, key/tone relay broadcast, slow-client protection, relay cleanup and logging.
 
 ## Install test dependencies
 
@@ -19,7 +19,6 @@ python -m pip install pytest websockets
 ```
 
 If you run the network-related tests in an environment that does not have the full project dependencies installed, `tests/conftest.py` provides a small fallback stub for `websockets` so the pure protocol tests can still import. The relay integration tests require the real `websockets` package and are skipped if it is not available.
-
 
 ## Where to place the files
 
@@ -58,12 +57,14 @@ tests/
   test_network_radio_noise_tone_presets.py
   test_network_relay_integration.py
   test_network_relay_privacy.py
+  test_network_tone_player_live_tones.py
   test_network_ui_imports.py
   test_profile_store.py
   test_scoring.py
   test_serial_controller.py
   test_settings_store.py
   test_skill_rating_as_of.py
+  test_telemetry.py
   test_timing_profile.py
   test_wxmor.py
   README.md

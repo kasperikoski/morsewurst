@@ -196,7 +196,7 @@ class SerialReader:
                     event_type = str(event.get("type", ""))
                     result["last_event_type"] = event_type
 
-                    if event_type not in {"hello", "heartbeat", "tone"}:
+                    if event_type not in {"hello", "heartbeat", "key"}:
                         continue
 
                     result["candidate_events_seen"] = int(result["candidate_events_seen"]) + 1
@@ -227,11 +227,11 @@ class SerialReader:
                             "plain_heartbeat",
                         )
 
-                    if event_type == "tone":
+                    if event_type == "key":
                         return SerialReader._matched_probe_result(
                             result,
                             event,
-                            "tone",
+                            "key",
                         )
 
         except Exception as exc:

@@ -74,7 +74,7 @@ class ClientOutbound:
 
 
 class RelayServer:
-    """Headless multi-room WebSocket relay for Morsewurst tone telemetry."""
+    """Headless multi-room WebSocket relay for Morsewurst V1 key and tone telemetry."""
 
     def __init__(self, config: RelayServerConfig) -> None:
         self.config = config
@@ -203,7 +203,7 @@ class RelayServer:
                 session.last_seen_at = time.time()
                 session.message_count += 1
 
-                if message_type == "tone":
+                if message_type in {"key", "tone"}:
                     session.tone_count += 1
                     session.last_tone_at = time.time()
                     message["via_server_id"] = self.server_id

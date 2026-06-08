@@ -9,7 +9,7 @@ import sys
 from pathlib import Path
 
 APP_NAME = "Morsewurst"
-APP_VERSION = "0.99.14"
+APP_VERSION = "0.99.15"
 
 # ============================================================
 # Update check
@@ -191,6 +191,12 @@ KEYBOARD_MORSE_KEY_OPTIONS = (
 
 # Ignore accidental extremely short key taps below this duration.
 KEYBOARD_MORSE_MIN_TONE_US = 1_000
+
+# Ignore mechanical contact bounce from the physical straight key when
+# deriving decoder/scoring tones from V1 key down/up telemetry.
+# Raw V1 key events are still kept and displayed; only the derived tone
+# used by the decoder is suppressed when it is shorter than this.
+SERIAL_STRAIGHT_KEY_MIN_TONE_US = 10_000
 
 
 # ============================================================

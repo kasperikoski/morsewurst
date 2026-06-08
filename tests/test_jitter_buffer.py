@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+from morsewurst.network.models import PlaybackSettings
+from morsewurst.network.protocol import make_key_message
+
 from morsewurst.network.jitter_buffer import JitterBuffer, _as_int, _round_up_ms
 from morsewurst.network.models import PlaybackSettings
 
@@ -203,3 +206,136 @@ def test_jitter_buffer_ignores_zero_duration_tone_without_starting_player() -> N
 
     assert player.start_calls == 0
     assert player.scheduled == []
+
+
+class FakeLiveTonePlayerForKeyStream:
+    def __init__(self) -> None:
+        self.started = False
+        self.start_calls = 0
+        self.clear_calls = 0
+        self.scheduled: list[dict[str, object]] = []
+        self.live_starts: list[dict[str, object]] = []
+        self.live_stops: list[dict[str, object]] = []
+
+    def start(self) -> None:
+        self.started = True
+        self.start_calls += 1
+
+    def clear(self) -> None:
+        self.clear_calls += 1
+        self.scheduled.clear()
+        self.live_starts.clear()
+        self.live_stops.clear()
+
+    def schedule_tone(self, **kwargs: object) -> None:
+        self.scheduled.append(kwargs)
+
+    def start_live_tone(self, **kwargs: object) -> None:
+        self.live_starts.append(kwargs)
+
+    def stop_live_tone(self, **kwargs: object) -> None:
+        self.live_stops.append(kwargs)
+
+
+def test_jitter_buffer_plays_key_down_up_as_live_tone() -> None:
+    player = FakeLiveTonePlayerForKeyStream()
+    buffer = JitterBuffer(
+        player,  # type: ignore[arg-type]
+        playback_settings=PlaybackSettings(
+            enabled=True,
+            jitter_buffer_ms=0,
+            frequency_hz=700.0,
+            volume=0.5,
+            waveform="square",
+        ),
+        late_grace_ms=10_000,
+        drop_late_ms=20_000,
+    )
+
+    down_message = make_key_message(
+        key_event={"v": 1, "type": "key", "src": "straight", "state": "down", "t": 1_000_000},
+        sender_id="client-1",
+        sender_name="Tester",
+        seq=1,
+        stream_id="stream-1",
+    )
+    up_message = make_key_message(
+        key_event={"v": 1, "type": "key", "src": "straight", "state": "up", "t": 1_100_000},
+        sender_id="client-1",
+        sender_name="Tester",
+        seq=2,
+        stream_id="stream-1",
+    )
+
+    buffer.push_message(down_message)
+    buffer.push_message(up_message)
+
+    assert player.start_calls == 1
+    assert player.scheduled == []
+    assert len(player.live_starts) == 1
+    assert len(player.live_stops) == 1
+    assert player.live_starts[0]["key"] == player.live_stops[0]["key"]
+    assert player.live_starts[0]["frequency_hz"] == 700.0
+    assert player.live_starts[0]["volume"] == 0.5
+    assert player.live_starts[0]["waveform"] == "square"
+
+
+def test_jitter_buffer_does_not_collapse_repeated_straight_key_taps() -> None:
+    player = FakeLiveTonePlayerForKeyStream()
+    buffer = JitterBuffer(
+        player,  # type: ignore[arg-type]
+        playback_settings=PlaybackSettings(
+            enabled=True,
+            jitter_buffer_ms=750,
+            frequency_hz=700.0,
+            volume=0.5,
+            waveform="square",
+        ),
+        late_grace_ms=10_000,
+        drop_late_ms=20_000,
+    )
+
+    messages = [
+        make_key_message(
+            key_event={"v": 1, "type": "key", "src": "straight", "state": "down", "t": 1_000_000},
+            sender_id="client-1",
+            sender_name="Tester",
+            seq=1,
+            stream_id="stream-1",
+        ),
+        make_key_message(
+            key_event={"v": 1, "type": "key", "src": "straight", "state": "up", "t": 1_080_000},
+            sender_id="client-1",
+            sender_name="Tester",
+            seq=2,
+            stream_id="stream-1",
+        ),
+        make_key_message(
+            key_event={"v": 1, "type": "key", "src": "straight", "state": "down", "t": 1_180_000},
+            sender_id="client-1",
+            sender_name="Tester",
+            seq=3,
+            stream_id="stream-1",
+        ),
+        make_key_message(
+            key_event={"v": 1, "type": "key", "src": "straight", "state": "up", "t": 1_260_000},
+            sender_id="client-1",
+            sender_name="Tester",
+            seq=4,
+            stream_id="stream-1",
+        ),
+    ]
+
+    for message in messages:
+        buffer.push_message(message)
+
+    assert player.scheduled == []
+    assert len(player.live_starts) == 2
+    assert len(player.live_stops) == 2
+
+    first_key = player.live_starts[0]["key"]
+    second_key = player.live_starts[1]["key"]
+
+    assert first_key != second_key
+    assert player.live_stops[0]["key"] == first_key
+    assert player.live_stops[1]["key"] == second_key

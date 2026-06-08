@@ -13,7 +13,7 @@ The device can also work as a USB keyboard. In that mode, it types decoded chara
 The program code is uploaded with the Arduino IDE from the file:
 
 ```text
-Morsewurst_keyer.ino
+morsewurst_keyer_1_1.ino
 ```
 
 The 3D-printable enclosure file is:
@@ -318,38 +318,65 @@ The display is physically installed upside down in the enclosure because the int
 
 ## Telemetry for Morsewurst
 
-The device sends timing events over USB CDC Serial in JSON format. Morsewurst reads these lines and uses them to analyse timing, rhythm, and decoding during practice.
+The device sends timing events over USB CDC Serial in JSON format. Morsewurst reads these lines and uses them to analyse timing, rhythm, raw telemetry and decoding during practice.
 
-Example tone event:
+Morsewurst Keyer 1.1 sends the start of a key press or keyer-generated element immediately as a `key` event, and sends another `key` event when it ends. This lets Morsewurst display and relay active input immediately instead of waiting until the full key press or full element has already finished.
+
+Straight key down event:
 
 ```json
 {
   "v": 1,
-  "type": "tone",
+  "type": "key",
   "src": "straight",
-  "t0": 123456789,
-  "t1": 123556789,
-  "dur": 100000
+  "state": "down",
+  "t": 123456789
 }
 ```
 
-In iambic mode, the element and unit length may also be included:
+Straight key up event:
 
 ```json
 {
   "v": 1,
-  "type": "tone",
+  "type": "key",
+  "src": "straight",
+  "state": "up",
+  "t": 123556789
+}
+```
+
+In iambic mode, the keyer already knows the generated element when it starts, so `el`, `unit` and `wpm` may also be included:
+
+```json
+{
+  "v": 1,
+  "type": "key",
   "src": "iambic",
   "el": ".",
-  "t0": 123456789,
-  "t1": 123516789,
-  "dur": 60000,
+  "state": "down",
+  "t": 123456789,
   "unit": 60000,
   "wpm": 20.0
 }
 ```
 
-The important point is that `t0`, `t1`, and `dur` are values measured by the ESP32. USB and Python latency affects when the event appears on the computer, but it does not change these values already measured by the ESP32.
+```json
+{
+  "v": 1,
+  "type": "key",
+  "src": "iambic",
+  "el": ".",
+  "state": "up",
+  "t": 123516789,
+  "unit": 60000,
+  "wpm": 20.0
+}
+```
+
+The important point is that `t` is a microsecond timestamp measured by the ESP32. USB and Python latency affects when the event appears on the computer, but it does not change the values already measured by the ESP32.
+
+Morsewurst derives the completed tone data needed by decoding, dot/dash classification, scoring and timing analysis from the same down/up events. With a straight key, dot or dash classification is done only after the `up` event has arrived and the key press duration is known.
 
 ## Measurement accuracy
 
@@ -488,7 +515,7 @@ Useful messages for identification are:
 ```text
 hello
 heartbeat
-tone
+key
 ```
 
 A good compatible device sends a `hello` message after startup or after the serial connection is opened, and sends a `heartbeat` message regularly even when the key is not being pressed.
@@ -502,19 +529,19 @@ This helps Morsewurst find the correct COM port or serial port even when the use
 Example:
 
 ```json
-{"v":1,"type":"hello","app":"morsewurst","device":"Morsewurst","fw":"1.0","mode":"raw_timing"}
+{"v":1,"type":"hello","app":"morsewurst","device":"Morsewurst","fw":"1.1","mode":"raw_timing"}
 ```
 
 Fields:
 
-| Field    | Type   | Meaning                                                    |
-| -------- | ------ | ---------------------------------------------------------- |
-| `v`      | number | Protocol version. The current version is `1`.              |
-| `type`   | string | Message type. Here, `hello`.                               |
-| `app`    | string | Application identifier. Recommended value is `morsewurst`. |
-| `device` | string | Device name.                                               |
-| `fw`     | string | Firmware or software version.                              |
-| `mode`   | string | Telemetry mode. Recommended value is `raw_timing`.         |
+| Field    | Type   | Meaning                                                                                                      |
+| -------- | ------ | ------------------------------------------------------------------------------------------------------------ |
+| `v`      | number | Protocol version. The current version is `1`.                                                                |
+| `type`   | string | Message type. Here, `hello`.                                                                                 |
+| `app`    | string | Application identifier. Recommended value is `morsewurst`.                                                   |
+| `device` | string | Device name.                                                                                                 |
+| `fw`     | string | Firmware or software version. Morsewurst 0.99.15 and later use version 1.1 or newer with the official keyer. |
+| `mode`   | string | Telemetry mode. Recommended value is `raw_timing`.                                                           |
 
 ### Heartbeat message
 
@@ -525,7 +552,7 @@ The recommended sending interval is about 5 seconds.
 Example:
 
 ```json
-{"v":1,"type":"heartbeat","app":"morsewurst","device":"morsewurst","fw":"1.0","mode":"raw_timing","uptime":5000000,"wpm":20,"telemetry":true}
+{"v":1,"type":"heartbeat","app":"morsewurst","device":"morsewurst","fw":"1.1","mode":"raw_timing","uptime":5000000,"wpm":20,"telemetry":true}
 ```
 
 Fields:
@@ -542,32 +569,32 @@ Fields:
 | `wpm`       | number  | The device’s current WPM setting, if one exists.                   |
 | `telemetry` | boolean | `true` when raw timing telemetry is enabled.                       |
 
-`heartbeat` does not replace actual timing events, but it is important for practical compatibility. Without it, Morsewurst may only find the device when the first `tone` event arrives.
+`heartbeat` does not replace actual timing events, but it is important for practical compatibility. Without it, Morsewurst may only find the device when the first `key` event arrives.
 
-### Tone message
+### Key message
 
-The most important message for Morsewurst’s timing analysis is `tone`.
+The primary timing message for Morsewurst timing analysis is `key`.
 
-`tone` reports the timing of one sound, key press, or Morse element.
+`key` reports the state of the key or keyer-generated element as a real-time down/up event. The event is sent immediately when the key press or element starts, and again immediately when it ends.
 
-Minimum form:
+Minimum form for a straight key:
 
 ```json
-{"v":1,"type":"tone","src":"straight","t0":1000000,"t1":1100000,"dur":100000}
+{"v":1,"type":"key","src":"straight","state":"down","t":1000000}
+{"v":1,"type":"key","src":"straight","state":"up","t":1100000}
 ```
 
 Fields:
 
-| Field  | Type   | Required | Meaning                                               |
-| ------ | ------ | -------- | ----------------------------------------------------- |
-| `v`    | number | yes      | Protocol version. The current version is `1`.         |
-| `type` | string | yes      | Message type. For timing events, the value is `tone`. |
-| `src`  | string | yes      | Event source, for example `straight` or `iambic`.     |
-| `t0`   | number | yes      | Start time of the key press or sound in microseconds. |
-| `t1`   | number | yes      | End time of the key press or sound in microseconds.   |
-| `dur`  | number | yes      | Duration in microseconds. Usually `t1 - t0`.          |
+| Field   | Type   | Required | Meaning                                                           |
+| ------- | ------ | -------- | ----------------------------------------------------------------- |
+| `v`     | number | yes      | Protocol version. The current version is `1`.                     |
+| `type`  | string | yes      | Message type. For timing events, the value is `key`.              |
+| `src`   | string | yes      | Event source, for example `straight` or `iambic`.                 |
+| `state` | string | yes      | `down` when the sound or key press starts, and `up` when it ends. |
+| `t`     | number | yes      | Event timestamp in microseconds.                                  |
 
-If the device only sends raw timing data from a straight key, this minimum form is enough.
+Morsewurst derives the completed duration data needed by the decoder and analysis code from these down/up pairs.
 
 ### Timestamps
 
@@ -605,19 +632,20 @@ For a straight key, the recommended source value is:
 straight
 ```
 
-For a straight key, the device does not need to decide whether the press was a dot or a dash. It is enough to send the start time, end time, and duration of the press.
+For a straight key, the device does not need to decide whether the press was a dot or a dash. It is enough to send the start and end of the key press as separate `key` events.
 
 Example:
 
 ```json
-{"v":1,"type":"tone","src":"straight","t0":123456789,"t1":123556789,"dur":100000}
+{"v":1,"type":"key","src":"straight","state":"down","t":123456789}
+{"v":1,"type":"key","src":"straight","state":"up","t":123556789}
 ```
 
 Morsewurst can then estimate from the timing whether the event was a dot, dash, letter gap, or word gap.
 
 ### Iambic key events
 
-If the device implements the iambic keyer logic itself, it can also send information about whether the produced element was a dot or a dash.
+If the device implements the iambic keyer logic itself, it should send the start and end of the keyer-generated sound element as `key` events.
 
 For an iambic key, the recommended source value is:
 
@@ -628,13 +656,15 @@ iambic
 Example of a dot:
 
 ```json
-{"v":1,"type":"tone","src":"iambic","el":".","t0":1000000,"t1":1060000,"dur":60000,"unit":60000,"wpm":20.0}
+{"v":1,"type":"key","src":"iambic","el":".","state":"down","t":1000000,"unit":60000,"wpm":20.0}
+{"v":1,"type":"key","src":"iambic","el":".","state":"up","t":1060000,"unit":60000,"wpm":20.0}
 ```
 
 Example of a dash:
 
 ```json
-{"v":1,"type":"tone","src":"iambic","el":"-","t0":1200000,"t1":1380000,"dur":180000,"unit":60000,"wpm":20.0}
+{"v":1,"type":"key","src":"iambic","el":"-","state":"down","t":1200000,"unit":60000,"wpm":20.0}
+{"v":1,"type":"key","src":"iambic","el":"-","state":"up","t":1380000,"unit":60000,"wpm":20.0}
 ```
 
 Additional fields:
@@ -686,8 +716,9 @@ Each JSON object must be sent on its own line.
 Correct:
 
 ```text
-{"v":1,"type":"heartbeat","app":"morsewurst","device":"Morsewurst","fw":"1.0","mode":"raw_timing","uptime":5000000,"wpm":20,"telemetry":true}
-{"v":1,"type":"tone","src":"straight","t0":6000000,"t1":6100000,"dur":100000}
+{"v":1,"type":"heartbeat","app":"morsewurst","device":"Morsewurst","fw":"1.1","mode":"raw_timing","uptime":5000000,"wpm":20,"telemetry":true}
+{"v":1,"type":"key","src":"straight","state":"down","t":6000000}
+{"v":1,"type":"key","src":"straight","state":"up","t":6100000}
 ```
 
 ### Practical minimum implementation
@@ -700,14 +731,15 @@ The simplest compatible device does this:
 4. Measures the start time of the key press in microseconds
 5. Measures the release time of the key press in microseconds
 6. Calculates the duration of the press in microseconds
-7. Sends one `tone` message for each press
+7. Sends a `key` down message when the press starts and a `key` up message when it is released
 
 Minimum example:
 
 ```json
-{"v":1,"type":"hello","app":"morsewurst","device":"Morsewurst","fw":"1.0","mode":"raw_timing"}
-{"v":1,"type":"heartbeat","app":"morsewurst","device":"Morsewurst","fw":"1.0","mode":"raw_timing","uptime":5000000,"wpm":20,"telemetry":true}
-{"v":1,"type":"tone","src":"straight","t0":6000000,"t1":6100000,"dur":100000}
+{"v":1,"type":"hello","app":"morsewurst","device":"Morsewurst","fw":"1.1","mode":"raw_timing"}
+{"v":1,"type":"heartbeat","app":"morsewurst","device":"Morsewurst","fw":"1.1","mode":"raw_timing","uptime":5000000,"wpm":20,"telemetry":true}
+{"v":1,"type":"key","src":"straight","state":"down","t":6000000}
+{"v":1,"type":"key","src":"straight","state":"up","t":6100000}
 ```
 
 ### Plain text serial output is not enough
@@ -753,12 +785,12 @@ For Morsewurst, USB HID Keyboard mode is not required. The actual compatibility 
 A good Morsewurst-compatible device sends, for example, a sequence like this:
 
 ```json
-{"v":1,"type":"hello","app":"morsewurst","device":"Morsewurst","fw":"1.0","mode":"raw_timing"}
-{"v":1,"type":"heartbeat","app":"morsewurst","device":"Morsewurst","fw":"1.0","mode":"raw_timing","uptime":5000000,"wpm":20,"telemetry":true}
+{"v":1,"type":"hello","app":"morsewurst","device":"Morsewurst","fw":"1.1","mode":"raw_timing"}
+{"v":1,"type":"heartbeat","app":"morsewurst","device":"Morsewurst","fw":"1.1","mode":"raw_timing","uptime":5000000,"wpm":20,"telemetry":true}
 {"v":1,"type":"tone","src":"straight","t0":6000000,"t1":6060000,"dur":60000}
 {"v":1,"type":"tone","src":"straight","t0":6120000,"t1":6300000,"dur":180000}
 {"v":1,"type":"tone","src":"straight","t0":6360000,"t1":6420000,"dur":60000}
-{"v":1,"type":"heartbeat","app":"morsewurst","device":"Morsewurst","fw":"1.0","mode":"raw_timing","uptime":10000000,"wpm":20,"telemetry":true}
+{"v":1,"type":"heartbeat","app":"morsewurst","device":"Morsewurst","fw":"1.1","mode":"raw_timing","uptime":10000000,"wpm":20,"telemetry":true}
 ```
 
 When a device sends lines like these over a USB CDC Serial connection, Morsewurst can read the events, identify the device, and analyse Morse timing regardless of which microcontroller or electronics the device is built with.

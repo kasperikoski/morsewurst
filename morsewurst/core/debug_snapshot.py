@@ -344,6 +344,7 @@ def build_round_debug_snapshot(
 ) -> dict[str, Any]:
     events = list(getattr(round_state, "events", []) or [])
     tones = _tone_events(events)
+    key_events = [event for event in events if isinstance(event, dict) and event.get("type") == "key"]
 
     first_t0 = int(tones[0]["t0"]) if tones else None
     last_t1 = int(tones[-1]["t1"]) if tones else None
@@ -395,6 +396,8 @@ def build_round_debug_snapshot(
         },
         "counts": {
             "raw_event_count": len(events),
+            "key_event_count": len(key_events),
+            "derived_tone_count": len([event for event in tones if event.get("_derived_from") == "v1_key_down_up"]),
             "tone_count": len(tones),
             "decoded_char_count": len(getattr(decoded, "char_infos", []) or []),
             "decoded_element_count": len(getattr(decoded, "element_infos", []) or []),

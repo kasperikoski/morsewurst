@@ -14,6 +14,7 @@ from morsewurst.core.adaptive_decoder import decode_tone_events
 from morsewurst.core.adaptive_timing import DecoderSettings
 from morsewurst.core.live_decoder import LiveMorseDecoder
 from morsewurst.core.scoring import telemetry_visible_text
+from morsewurst.core.telemetry import derive_tone_from_key_pair, key_event_identity
 from morsewurst.core.timing_profile import TimingProfile
 
 if TYPE_CHECKING:
@@ -34,29 +35,35 @@ class DecoderController:
         }
 
     def adaptive_current_device_time_us(self) -> Optional[int]:
-        """Estimate the current device time using the latest tone event."""
+        """Estimate current device time from the latest V1 key or derived tone event."""
         app = self.app
 
-        tone_events = [
-            event
-            for event in app.round.events
-            if event.get("type") == "tone" and isinstance(event.get("t1"), int)
-        ]
+        candidates: list[Dict[str, Any]] = []
 
-        if not tone_events:
+        for event in app.round.events:
+            if event.get("type") == "tone" and isinstance(event.get("t1"), int):
+                candidates.append({"t": int(event["t1"]), "_host_received_time": event.get("_host_received_time")})
+            elif event.get("type") == "key" and isinstance(event.get("t"), int):
+                candidates.append({"t": int(event["t"]), "_host_received_time": event.get("_host_received_time")})
+
+        for event in getattr(app, "active_v1_key_events", {}).values():
+            if isinstance(event, dict) and isinstance(event.get("t"), int):
+                candidates.append({"t": int(event["t"]), "_host_received_time": event.get("_host_received_time")})
+
+        if not candidates:
             return None
 
-        last_event = tone_events[-1]
+        last_event = max(candidates, key=lambda item: int(item["t"]))
         host_received = last_event.get("_host_received_time")
 
         if not isinstance(host_received, (int, float)):
-            return int(last_event["t1"])
+            return int(last_event["t"])
 
         elapsed_us = max(
             0,
             int((time.time() - float(host_received)) * 1_000_000),
         )
-        return int(last_event["t1"]) + elapsed_us
+        return int(last_event["t"]) + elapsed_us
 
     def last_tone_event(self) -> Optional[Dict[str, Any]]:
         """Return the latest raw tone event from the current round."""
@@ -471,12 +478,32 @@ class DecoderController:
             and isinstance(event.get("dur"), (int, float))
         ]
 
-        # Live serial/keyboard telemetry is appended in arrival order. Avoid an
-        # unnecessary full-list sort during every live redraw. Historical or
-        # externally supplied events are still sorted defensively.
-        if events is not None:
-            tones.sort(key=lambda event: int(event["t0"]))
+        if events is None:
+            current_time_us = self.adaptive_current_device_time_us()
+            for down_event in getattr(self.app, "active_v1_key_events", {}).values():
+                if not isinstance(down_event, dict):
+                    continue
+                t0 = down_event.get("t")
+                if not isinstance(t0, int):
+                    continue
+                t1 = int(current_time_us if current_time_us is not None else t0)
+                if t1 <= int(t0):
+                    t1 = int(t0) + 1
+                live_tone = {
+                    "v": 1,
+                    "type": "tone",
+                    "src": down_event.get("src", "unknown"),
+                    "t0": int(t0),
+                    "t1": t1,
+                    "dur": float(t1 - int(t0)),
+                    "_open": True,
+                    "_derived_from": "v1_key_down_up",
+                }
+                if down_event.get("el") in {".", "-"}:
+                    live_tone["el"] = down_event.get("el")
+                tones.append(live_tone)
 
+        tones.sort(key=lambda event: int(event["t0"]))
         return tones
 
     def raw_telemetry_unit_us(
@@ -577,12 +604,13 @@ class DecoderController:
             if x2 <= x1:
                 x2 = x1 + 1
 
+            is_open = bool(event.get("_open"))
             canvas.create_rectangle(
                 x1,
                 y1,
                 x2,
                 y2,
-                fill="#111111",
+                fill="#666666" if is_open else "#111111",
                 outline="#111111",
             )
 

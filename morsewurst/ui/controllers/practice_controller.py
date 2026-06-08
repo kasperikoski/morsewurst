@@ -2560,6 +2560,9 @@ class PracticeController:
         if not enabled or not app.round.accepting_input or app.round.finished:
             return
 
+        if self._has_open_v1_key_event():
+            return
+
         if not app.use_telemetry_as_truth_var.get() or not app.round.events:
             return
 
@@ -2698,6 +2701,14 @@ class PracticeController:
         except Exception:
             return False
 
+    def _has_open_v1_key_event(self) -> bool:
+        """Return True while a V1 key down event has not yet received its up event."""
+        try:
+            active = getattr(self.app, "active_v1_key_events", None)
+            return bool(active)
+        except Exception:
+            return False
+
     def _refresh_live_ui(self, *, force: bool = False) -> None:
         """Run throttled live telemetry redraw and live score refreshes."""
         app = self.app
@@ -2718,11 +2729,12 @@ class PracticeController:
 
         telemetry_dirty = bool(getattr(app, "live_ui_dirty", False))
         telemetry_pending = self._live_decoder_has_pending_symbol()
+        telemetry_key_open = self._has_open_v1_key_event()
 
-        if force or ((telemetry_dirty or telemetry_pending) and telemetry_due):
+        if force or ((telemetry_dirty or telemetry_pending or telemetry_key_open) and telemetry_due):
             decoded = self._update_adaptive_decoded_text(flush_final=False)
             app.decoder_controller.draw_raw_telemetry()
-            app.live_ui_dirty = bool(getattr(decoded, "pending_symbol", ""))
+            app.live_ui_dirty = bool(getattr(decoded, "pending_symbol", "")) or self._has_open_v1_key_event()
             app.last_live_ui_refresh_monotonic = now
             app.app_lifecycle_controller.focus_input()
 
@@ -2811,6 +2823,9 @@ class PracticeController:
         app = self.app
 
         if not app.round.accepting_input or app.round.finished:
+            return
+
+        if self._has_open_v1_key_event():
             return
 
         target_score_no_spaces = score_text(app.round.target, keep_spaces=False)

@@ -806,8 +806,9 @@ def test_live_morsewurst_device_can_be_discovered_when_enabled() -> None:
     assert matches, _format_probe_report(results)
 
     # Keep this fairly broad. The firmware may identify itself by app, device,
-    # a plain heartbeat or a tone event depending on timing and firmware version.
+    # a plain heartbeat, a V1 key event or a derived tone event depending on timing
+    # and firmware version.
     first = matches[0]
     event = first.get("event")
     assert isinstance(event, dict), _format_probe_report(results)
-    assert event.get("type") in {"hello", "heartbeat", "tone"}
+    assert event.get("type") in {"hello", "heartbeat", "key", "tone"}

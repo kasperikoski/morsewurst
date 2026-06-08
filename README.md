@@ -52,7 +52,7 @@ The core local training workflow is functional and continues to be refined. The 
 
 ## 3. Network features
 
-Morsewurst includes network practice support for connecting users through a relay server. Users can join public rooms or create private rooms and exchange real-time Morse tone telemetry.
+Morsewurst includes network practice support for connecting users through a relay server. Users can join public rooms or create private rooms and exchange real-time Morse keying telemetry.
 
 The network system includes relay-side room handling, client reconnect logic, ping and server status checks, jitter-buffered receive playback and a visible network quality indicator. Morsewurst Network is still an actively developed prototype, so occasional glitches and unexpected behaviour may occur.
 
@@ -81,6 +81,7 @@ Network receive playback can also include local radio-style channel noise, with 
 - Python 3.13 recommended
 - Python 3.11 or newer should work, but the project is currently developed and tested mainly with Python 3.13
 - A Morsewurst Keyer or compatible serial telemetry source
+- Morsewurst 0.99.15 and later require Morsewurst Keyer firmware 1.1 or newer when using the official keyer
 - Windows is the main development target
 
 Python itself is not installed by `requirements.txt`. Install Python first, then install the project dependencies.
@@ -174,6 +175,14 @@ The main firmware file is:
 
 ```text
 morsewurst_keyer.ino
+```
+
+For Morsewurst 0.99.15 and later, the official Morsewurst Keyer should use firmware version 1.1 or newer. Firmware 1.1 sends key down/up timing events in real time while keeping the telemetry protocol version as `v:1`.
+
+The firmware file for the 1.1 keyer release is distributed as:
+
+```text
+morsewurst_keyer_1_1.ino
 ```
 
 Build instructions, hardware notes and setup documentation for the keyer can be found in:

@@ -34,8 +34,10 @@ from morsewurst.network.protocol import (
     make_client_hello,
     make_client_ping,
     make_heartbeat,
+    make_key_message,
     make_tone_message,
     normalize_callsign,
+    validate_key_message,
     validate_tone_message,
 )
 from morsewurst.network.public_rooms import (
@@ -704,6 +706,64 @@ def test_tone_broadcast_reaches_other_clients_but_not_sender(tmp_path: Path) -> 
         await alpha.close()
 
     run_async(with_relay(tmp_path, body))
+
+
+
+def test_key_broadcast_reaches_other_clients_but_not_sender(tmp_path: Path) -> None:
+    async def body(relay: RunningRelay) -> None:
+        alpha = await connect_room(
+            relay.uri,
+            room="default",
+            callsign="Alpha",
+            client_id="client-alpha-key",
+        )
+        bravo = await connect_room(
+            relay.uri,
+            room="default",
+            callsign="Bravo",
+            client_id="client-bravo-key",
+        )
+
+        await drain_messages(alpha.websocket)
+        await drain_messages(bravo.websocket)
+
+        key_message = make_key_message(
+            key_event={
+                "v": 1,
+                "type": "key",
+                "src": "straight",
+                "state": "down",
+                "t": 123_456,
+                "dit": 60_000,
+                "wpm": 20.0,
+            },
+            sender_id=alpha.client_id,
+            sender_name=alpha.callsign,
+            seq=11,
+            stream_id="stream-alpha-key-test",
+        )
+
+        await send_json(alpha.websocket, key_message)
+
+        received = await recv_type(bravo.websocket, "key")
+        assert received["sender_id"] == alpha.client_id
+        assert received["sender_name"] == "Alpha"
+        assert received["seq"] == 11
+        assert received["stream_id"] == "stream-alpha-key-test"
+        assert "via_server_id" in received
+
+        clean_key = validate_key_message(received)
+        assert clean_key["v"] == 1
+        assert clean_key["type"] == "key"
+        assert clean_key["src"] == "straight"
+        assert clean_key["state"] == "down"
+        assert clean_key["t"] == 123_456
+
+        await assert_no_message(alpha.websocket)
+
+        await bravo.close()
+        await alpha.close()
+
 
 
 def test_invalid_runtime_messages_warn_but_connection_survives(tmp_path: Path) -> None:

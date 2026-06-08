@@ -39,6 +39,8 @@ class RuntimeController:
         app.last_summary: ScoreSummary | None = None
         app.last_char_results: list[CharacterResult] = []
         app.last_tone_event_key: tuple[str, int, int] | None = None
+        app.last_key_event_key: tuple[str, str, str, str, str, str, int] | None = None
+        app.active_v1_key_events: dict[tuple[str, str, str, str, str], dict[str, Any]] = {}
         app.viewing_history_session_id: int | None = None
 
         app.stats_window: tk.Toplevel | None = None

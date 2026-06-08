@@ -48,6 +48,16 @@ class ScheduledNoiseDuck:
     kind: str
 
 
+@dataclass(slots=True)
+class LiveTone:
+    key: str
+    start_monotonic: float
+    end_monotonic: Optional[float]
+    frequency_hz: float
+    volume: float
+    waveform: str
+
+
 class TonePlayer:
     """Sample-based scheduled tone player for remote Morse telemetry.
 
@@ -89,6 +99,7 @@ class TonePlayer:
 
         self._lock = threading.RLock()
         self._tones: list[ScheduledTone] = []
+        self._live_tones: dict[str, LiveTone] = {}
         self._stream: Any = None
         self._started = False
         self._audio_clock_start_monotonic: Optional[float] = None
@@ -157,6 +168,7 @@ class TonePlayer:
 
         with self._lock:
             self._tones.clear()
+            self._live_tones.clear()
             self._radio_noise_ducks.clear()
             self._radio_noise = None
             self._radio_noise_gain = 0.0
@@ -182,10 +194,12 @@ class TonePlayer:
     def clear(self) -> None:
         with self._lock:
             self._tones.clear()
+            self._live_tones.clear()
 
     def reset_clock(self) -> None:
         with self._lock:
             self._tones.clear()
+            self._live_tones.clear()
             self._audio_clock_start_monotonic = time.monotonic()
             self._frames_rendered = 0
 
@@ -350,6 +364,50 @@ class TonePlayer:
                 )
             )
 
+    def start_live_tone(
+        self,
+        *,
+        key: str,
+        start_monotonic: float,
+        frequency_hz: Optional[float] = None,
+        volume: Optional[float] = None,
+        waveform: Optional[str] = None,
+    ) -> None:
+        """Start a network receive tone whose duration is not known yet."""
+        tone_frequency = self._clamp_frequency(
+            self.frequency_hz if frequency_hz is None else frequency_hz
+        )
+        tone_volume = self._clamp_volume(
+            self.volume if volume is None else volume
+        )
+        tone_waveform = self._normalize_waveform(
+            self.waveform if waveform is None else waveform
+        )
+
+        if tone_volume <= 0.0:
+            return
+
+        if not self._started:
+            self.start()
+
+        with self._lock:
+            self._live_tones[str(key)] = LiveTone(
+                key=str(key),
+                start_monotonic=float(start_monotonic),
+                end_monotonic=None,
+                frequency_hz=tone_frequency,
+                volume=tone_volume,
+                waveform=tone_waveform,
+            )
+
+    def stop_live_tone(self, *, key: str, end_monotonic: Optional[float] = None) -> None:
+        """Close a network receive tone that was opened by a V1 key down event."""
+        with self._lock:
+            tone = self._live_tones.get(str(key))
+            if tone is None:
+                return
+            tone.end_monotonic = time.monotonic() if end_monotonic is None else float(end_monotonic)
+
     def schedule_tone(
         self,
         *,
@@ -455,6 +513,7 @@ class TonePlayer:
 
         with self._lock:
             active_tones = list(self._tones)
+            active_live_tones = list(self._live_tones.values())
 
             # Remove tones that are definitely over. The small grace period keeps
             # the list stable around callback boundary timing.
@@ -463,6 +522,16 @@ class TonePlayer:
                 for tone in self._tones
                 if tone.end_monotonic >= block_start - 0.25
             ]
+
+            # Live tones are opened by V1 key/down and closed by V1 key/up.
+            # Keep an ended live tone briefly so the callback can render the
+            # release envelope after the up event, then remove it.
+            self._live_tones = {
+                key: tone
+                for key, tone in self._live_tones.items()
+                if tone.end_monotonic is None
+                or tone.end_monotonic + self.release_seconds >= block_start - 0.25
+            }
 
         for tone in active_tones:
             if tone.end_monotonic < block_start:
@@ -477,6 +546,34 @@ class TonePlayer:
 
             rel = times[mask] - tone.start_monotonic
             remaining = tone.end_monotonic - times[mask]
+
+            phase = 2.0 * math.pi * tone.frequency_hz * rel
+            wave = self._waveform(phase, tone.waveform)
+            envelope = self._envelope(rel, remaining)
+
+            output[mask] += (wave * envelope * tone.volume).astype(np.float32)
+
+        for tone in active_live_tones:
+            if tone.start_monotonic > block_end:
+                continue
+
+            if tone.end_monotonic is None:
+                if block_end < tone.start_monotonic:
+                    continue
+                mask = times >= tone.start_monotonic
+                if not np.any(mask):
+                    continue
+                rel = times[mask] - tone.start_monotonic
+                remaining = np.full_like(rel, 1_000_000.0, dtype=np.float64)
+            else:
+                release_end = tone.end_monotonic + self.release_seconds
+                if release_end < block_start:
+                    continue
+                mask = (times >= tone.start_monotonic) & (times < release_end)
+                if not np.any(mask):
+                    continue
+                rel = times[mask] - tone.start_monotonic
+                remaining = release_end - times[mask]
 
             phase = 2.0 * math.pi * tone.frequency_hz * rel
             wave = self._waveform(phase, tone.waveform)

@@ -4,6 +4,15 @@ import pytest
 
 from morsewurst.network.protocol import (
     ProtocolError,
+    make_key_message,
+    sanitize_key_event,
+    validate_key_message,
+)
+
+import pytest
+
+from morsewurst.network.protocol import (
+    ProtocolError,
     auth_proof,
     decode_message,
     encode_message,
@@ -134,7 +143,8 @@ def test_client_hello_contains_sanitized_room_and_capabilities() -> None:
     assert message["type"] == "client_hello"
     assert message["room"] == "my-room"
     assert message["room_name"] == "My Room"
-    assert message["capabilities"]["tone_events"] is True
+    assert message["capabilities"]["key_events"] is True
+    assert message["capabilities"]["tone_events"] is False
 
 
 
@@ -327,3 +337,36 @@ def test_tone_message_validation_requires_tone_payload_and_strips_complex_values
     assert clean["wpm"] == 20.5
     assert "device" not in clean
     assert "nested" not in clean
+
+
+def test_key_message_is_sanitized_and_validated() -> None:
+    key_event = {
+        "v": 1,
+        "type": "key",
+        "src": "iambic",
+        "el": ".",
+        "state": "down",
+        "t": 123456,
+        "unit": 60000,
+    }
+
+    clean = sanitize_key_event(key_event)
+    assert clean["v"] == 1
+    assert clean["type"] == "key"
+    assert clean["state"] == "down"
+    assert clean["el"] == "."
+
+    message = make_key_message(
+        key_event=key_event,
+        sender_id="client-1",
+        sender_name="Tester",
+        seq=7,
+        stream_id="stream-1",
+    )
+
+    assert message["type"] == "key"
+    assert message["key"]["v"] == 1
+    assert validate_key_message(message)["t"] == 123456
+
+    with pytest.raises(ProtocolError):
+        sanitize_key_event({"v": 1, "type": "key", "src": "straight", "state": "bad", "t": 1})
