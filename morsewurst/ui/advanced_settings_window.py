@@ -546,20 +546,6 @@ class AdvancedSettingsWindow(tk.Toplevel):
 
         ttk.Checkbutton(
             frame,
-            text=self.app.i18n.t("advanced.input.use_telemetry_as_truth"),
-            variable=self.app.use_telemetry_as_truth_var,
-            command=self.app.input_controller.on_use_telemetry_as_truth_changed,
-        ).pack(anchor=tk.W, pady=(0, 2))
-
-        ttk.Label(
-            frame,
-            text=self.app.i18n.t("advanced.input.use_telemetry_as_truth_hint"),
-            wraplength=420,
-            foreground="#666666",
-        ).pack(anchor=tk.W, pady=(0, 8))
-
-        ttk.Checkbutton(
-            frame,
             text=self.app.i18n.t("advanced.input.keep_focus"),
             variable=self.app.keep_focus_var,
         ).pack(anchor=tk.W, pady=(0, 6))

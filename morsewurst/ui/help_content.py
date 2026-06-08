@@ -87,7 +87,6 @@ HELP_DOCUMENT_SPEC: list[dict[str, str]] = [
     {"type": "paragraph", "key": "help.content.decoder.sources"},
     {"type": "paragraph", "key": "help.content.decoder.confidence"},
     {"type": "paragraph", "key": "help.content.decoder.profile_quality"},
-    {"type": "paragraph", "key": "help.content.decoder.raw_truth"},
     {"type": "code", "key": "help.content.decoder.units"},
     {"type": "note", "key": "help.content.decoder.note"},
 

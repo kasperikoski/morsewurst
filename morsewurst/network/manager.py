@@ -82,6 +82,7 @@ class NetworkManager:
         self._closed.set()
         self._control_ready_event = threading.Event()
         self._room_noise_active = False
+        self._active_local_key_duck_keys: set[str] = set()
 
         log_event(
             "network",
@@ -539,6 +540,7 @@ class NetworkManager:
         self._lobby_websocket = None
         self._control_ready_event.clear()
         self._set_mode("stopped", event="network.manager.mode_changed")
+        self._active_local_key_duck_keys.clear()
         self.jitter_buffer.clear()
         self.tone_player.stop()
         log_event(
@@ -580,6 +582,7 @@ class NetworkManager:
             self._status("warning", f"Key-viestiä ei lähetetty: {exc}")
             return
 
+        self._duck_room_noise_for_local_key(message.get("key", event))
         asyncio.run_coroutine_threadsafe(self._send_tone_message(message), self._loop)
 
     def publish_local_tone(self, event: Dict[str, Any]) -> None:
@@ -735,6 +738,45 @@ class NetworkManager:
                 message="Network room radio noise could not be started.",
                 context={"mode": self._mode},
             )
+
+    def _duck_room_noise_for_local_key(self, event: Dict[str, Any]) -> None:
+        if not self._room_noise_active or not self.playback_settings.radio_noise_enabled:
+            return
+
+        state = str(event.get("state") or "").strip().lower()
+        if state not in {"down", "up"}:
+            return
+
+        duck_key = self._local_key_duck_key(event)
+
+        try:
+            if state == "down":
+                self._active_local_key_duck_keys.add(duck_key)
+                self.tone_player.start_live_noise_duck(kind="tx", key=duck_key)
+            else:
+                if duck_key in self._active_local_key_duck_keys:
+                    self._active_local_key_duck_keys.discard(duck_key)
+                    self.tone_player.stop_live_noise_duck(kind="tx", key=duck_key)
+        except Exception as exc:
+            log_exception(
+                "network",
+                "network.radio_noise.tx_key_duck_failed",
+                exc,
+                level="debug",
+                message="Network room radio noise TX key ducking failed.",
+                context={"mode": self._mode, "key_state": state},
+            )
+
+    def _local_key_duck_key(self, event: Dict[str, Any]) -> str:
+        return ":".join(
+            [
+                str(event.get("src") or "unknown"),
+                str(event.get("device") or ""),
+                str(event.get("mode") or ""),
+                str(event.get("key") or event.get("pin") or ""),
+                str(event.get("el") or ""),
+            ]
+        )
 
     def _duck_room_noise_for_local_tone(self, event: Dict[str, Any]) -> None:
         if not self._room_noise_active or not self.playback_settings.radio_noise_enabled:

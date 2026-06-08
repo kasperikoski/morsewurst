@@ -30,7 +30,6 @@ from morsewurst.core.app_logging import (
 from morsewurst.core.skill_rating import calculate_skill_rating
 from morsewurst.models import RoundState
 from morsewurst.storage.database import Database
-from morsewurst.ui.controllers.results_controller import SOURCE_ADAPTIVE_TELEMETRY
 
 FINISH_REASON_USER_STOPPED = "user_stopped"
 FINISH_REASON_LONG_PAUSE = "long_pause"
@@ -2563,7 +2562,7 @@ class PracticeController:
         if self._has_open_v1_key_event():
             return
 
-        if not app.use_telemetry_as_truth_var.get() or not app.round.events:
+        if not app.round.events:
             return
 
         last_event = app.decoder_controller.last_tone_event()
@@ -2833,14 +2832,7 @@ class PracticeController:
         if not target_score_no_spaces:
             return
 
-        entered, source = app.results_controller.selected_source_text()
         target_len = len(target_score_no_spaces)
-
-        if source != SOURCE_ADAPTIVE_TELEMETRY:
-            if len(score_text(entered, keep_spaces=False)) >= target_len:
-                self.finish_round(FINISH_REASON_COMPLETED, auto_continue=True)
-            return
-
         self._maybe_finish_completed_from_adaptive_telemetry(target_len)
 
     def _maybe_finish_completed_from_adaptive_telemetry(self, target_len: int) -> None:

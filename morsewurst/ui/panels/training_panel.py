@@ -14,7 +14,7 @@ def build_training_panel(app: tk.Misc, parent: ttk.Frame) -> None:
     """Build the active training panel.
 
     This panel contains the current target, raw telemetry visualization,
-    hidden HID fallback input and decoded telemetry text.
+    and decoded telemetry text.
     """
 
     target_frame = ttk.LabelFrame(parent, text=app.i18n.t("training.target_title"))

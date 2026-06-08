@@ -49,6 +49,17 @@ class ScheduledNoiseDuck:
 
 
 @dataclass(slots=True)
+class LiveNoiseDuck:
+    key: str
+    start_monotonic: float
+    end_monotonic: Optional[float]
+    depth: float
+    attack_seconds: float
+    release_seconds: float
+    kind: str
+
+
+@dataclass(slots=True)
 class LiveTone:
     key: str
     start_monotonic: float
@@ -126,6 +137,7 @@ class TonePlayer:
         self._radio_noise_stop_after_fade = False
         self._radio_noise_duck_gain = 1.0
         self._radio_noise_ducks: list[ScheduledNoiseDuck] = []
+        self._radio_noise_live_ducks: dict[str, LiveNoiseDuck] = {}
 
     @property
     def started(self) -> bool:
@@ -170,6 +182,7 @@ class TonePlayer:
             self._tones.clear()
             self._live_tones.clear()
             self._radio_noise_ducks.clear()
+            self._radio_noise_live_ducks.clear()
             self._radio_noise = None
             self._radio_noise_gain = 0.0
             self._radio_noise_target_gain = 0.0
@@ -195,11 +208,13 @@ class TonePlayer:
         with self._lock:
             self._tones.clear()
             self._live_tones.clear()
+            self._radio_noise_live_ducks.clear()
 
     def reset_clock(self) -> None:
         with self._lock:
             self._tones.clear()
             self._live_tones.clear()
+            self._radio_noise_live_ducks.clear()
             self._audio_clock_start_monotonic = time.monotonic()
             self._frames_rendered = 0
 
@@ -289,6 +304,8 @@ class TonePlayer:
             if not self._radio_noise_enabled:
                 self._radio_noise_target_gain = 0.0
                 self._radio_noise_stop_after_fade = True
+                self._radio_noise_ducks.clear()
+                self._radio_noise_live_ducks.clear()
                 return
 
             if self._radio_noise is not None and not changed:
@@ -325,6 +342,7 @@ class TonePlayer:
                 self._radio_noise = None
                 self._radio_noise_gain = 0.0
                 self._radio_noise_ducks.clear()
+                self._radio_noise_live_ducks.clear()
 
     def duck_noise(
         self,
@@ -364,6 +382,56 @@ class TonePlayer:
                 )
             )
 
+    def start_live_noise_duck(
+        self,
+        *,
+        kind: str,
+        key: str,
+        start_monotonic: float | None = None,
+    ) -> None:
+        """Start ducking room noise for a key/tone whose duration is not known yet."""
+
+        kind_key = self._normalize_noise_duck_kind(kind)
+        if not self._noise_ducking_enabled(kind_key):
+            return
+
+        start = time.monotonic() if start_monotonic is None else float(start_monotonic)
+        live_key = self._live_noise_duck_key(kind_key, key)
+
+        with self._lock:
+            if not self._radio_noise_enabled:
+                return
+
+            self._radio_noise_live_ducks[live_key] = LiveNoiseDuck(
+                key=live_key,
+                start_monotonic=start,
+                end_monotonic=None,
+                depth=self._radio_noise_duck_config(kind_key, "depth_percent") / 100.0,
+                attack_seconds=max(0.001, self._radio_noise_duck_config(kind_key, "attack_ms") / 1000.0),
+                release_seconds=max(0.001, self._radio_noise_duck_config(kind_key, "release_ms") / 1000.0),
+                kind=kind_key,
+            )
+
+    def stop_live_noise_duck(
+        self,
+        *,
+        kind: str,
+        key: str,
+        end_monotonic: float | None = None,
+    ) -> None:
+        """Stop a live noise duck and let it return through the configured hold/release."""
+
+        kind_key = self._normalize_noise_duck_kind(kind)
+        live_key = self._live_noise_duck_key(kind_key, key)
+        end = time.monotonic() if end_monotonic is None else float(end_monotonic)
+        hold_seconds = self._radio_noise_duck_config(kind_key, "hold_ms") / 1000.0
+
+        with self._lock:
+            event = self._radio_noise_live_ducks.get(live_key)
+            if event is None:
+                return
+            event.end_monotonic = max(event.start_monotonic, end) + hold_seconds
+
     def start_live_tone(
         self,
         *,
@@ -390,6 +458,8 @@ class TonePlayer:
         if not self._started:
             self.start()
 
+        self.start_live_noise_duck(kind="rx", key=str(key), start_monotonic=float(start_monotonic))
+
         with self._lock:
             self._live_tones[str(key)] = LiveTone(
                 key=str(key),
@@ -407,6 +477,8 @@ class TonePlayer:
             if tone is None:
                 return
             tone.end_monotonic = time.monotonic() if end_monotonic is None else float(end_monotonic)
+
+        self.stop_live_noise_duck(kind="rx", key=str(key), end_monotonic=end_monotonic)
 
     def schedule_tone(
         self,
@@ -641,6 +713,7 @@ class TonePlayer:
                     self._radio_noise_gain = 0.0
                     self._radio_noise_duck_gain = 1.0
                     self._radio_noise_ducks.clear()
+                    self._radio_noise_live_ducks.clear()
                 if index + 1 < len(values):
                     values[index + 1:] = 0.0
                 break
@@ -648,20 +721,21 @@ class TonePlayer:
         return values
 
     def _radio_noise_duck_target_locked(self, moment: float) -> tuple[float, float, float]:
-        active: list[ScheduledNoiseDuck] = []
-        release_tail: list[ScheduledNoiseDuck] = []
-        keep: list[ScheduledNoiseDuck] = []
+        active: list[ScheduledNoiseDuck | LiveNoiseDuck] = []
+        release_tail: list[ScheduledNoiseDuck | LiveNoiseDuck] = []
+        scheduled_keep: list[ScheduledNoiseDuck] = []
+        live_keep: dict[str, LiveNoiseDuck] = {}
 
         for event in self._radio_noise_ducks:
-            release_until = event.end_monotonic + event.release_seconds + 0.25
-            if release_until >= moment:
-                keep.append(event)
-            if event.start_monotonic <= moment <= event.end_monotonic:
-                active.append(event)
-            elif event.end_monotonic < moment <= release_until:
-                release_tail.append(event)
+            if self._collect_noise_duck_state(event, moment, active, release_tail):
+                scheduled_keep.append(event)
 
-        self._radio_noise_ducks = keep
+        for key, event in self._radio_noise_live_ducks.items():
+            if self._collect_noise_duck_state(event, moment, active, release_tail):
+                live_keep[key] = event
+
+        self._radio_noise_ducks = scheduled_keep
+        self._radio_noise_live_ducks = live_keep
 
         if active:
             strongest = max(active, key=lambda event: event.depth)
@@ -673,6 +747,31 @@ class TonePlayer:
             return 1.0, strongest_recent.attack_seconds, strongest_recent.release_seconds
 
         return 1.0, 0.08, 0.45
+
+    def _collect_noise_duck_state(
+        self,
+        event: ScheduledNoiseDuck | LiveNoiseDuck,
+        moment: float,
+        active: list[ScheduledNoiseDuck | LiveNoiseDuck],
+        release_tail: list[ScheduledNoiseDuck | LiveNoiseDuck],
+    ) -> bool:
+        end_monotonic = event.end_monotonic
+
+        if end_monotonic is None:
+            if event.start_monotonic <= moment:
+                active.append(event)
+            return True
+
+        release_until = end_monotonic + event.release_seconds + 0.25
+        if release_until < moment:
+            return False
+
+        if event.start_monotonic <= moment <= end_monotonic:
+            active.append(event)
+        elif end_monotonic < moment <= release_until:
+            release_tail.append(event)
+
+        return True
 
     def _advance_gain_locked(self, *, current: float, target: float, attack_ms: float, release_ms: float) -> float:
         return self._advance_gain_seconds_locked(
@@ -856,6 +955,19 @@ class TonePlayer:
             float(getattr(config, "NETWORK_RADIO_NOISE_TONE_LOW_LOW_PASS_HZ", 1800)),
             float(getattr(config, "NETWORK_RADIO_NOISE_TONE_LOW_HIGH_PASS_HZ", 100)),
         )
+
+    def _normalize_noise_duck_kind(self, kind: str) -> str:
+        kind_key = str(kind or "rx").strip().lower()
+        return "tx" if kind_key == "tx" else "rx"
+
+    def _noise_ducking_enabled(self, kind: str) -> bool:
+        kind_key = self._normalize_noise_duck_kind(kind)
+        if kind_key == "tx":
+            return bool(self._radio_noise_tx_ducking_enabled)
+        return bool(self._radio_noise_rx_ducking_enabled)
+
+    def _live_noise_duck_key(self, kind: str, key: str) -> str:
+        return f"{self._normalize_noise_duck_kind(kind)}:{str(key)}"
 
     def _radio_noise_duck_config(self, kind: str, field: str) -> float:
         kind_key = "tx" if kind == "tx" else "rx"

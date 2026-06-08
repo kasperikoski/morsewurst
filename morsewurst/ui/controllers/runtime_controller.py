@@ -253,7 +253,6 @@ class RuntimeController:
         app.character_mix_punctuation_var = tk.IntVar(
             value=int(getattr(config, "DEFAULT_CHARACTER_MIX_PUNCTUATION_PERCENT", 5))
         )
-        app.use_telemetry_as_truth_var = tk.BooleanVar(value=True)
         app.keep_focus_var = tk.BooleanVar(value=True)
         app.auto_connect_serial_var = tk.BooleanVar(
             value=getattr(config, "SERIAL_AUTO_CONNECT_DEFAULT", True)

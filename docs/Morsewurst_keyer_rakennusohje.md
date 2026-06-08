@@ -54,7 +54,7 @@ https://partco.fi/tuote/adafruit-esp32-s3-feather-with-stemma-qt-8mb-329
 - 3,5 mm stereokuulokeliitin, mieluiten kytkimellinen malli
 - 10 kΩ logaritminen monopotentiometri äänenvoimakkuudelle
 - 2 kpl 1 kΩ metallikalvovastuksia
-- 1 kpl 2,2 kΩ metallikalvovastus
+- 1 kpl 2,2 tai 10,0 kΩ metallikalvovastus
 - Johtoa, mieluiten useampaa väriä
 - Tarvittaessa Wago-liittimiä, maadoituskisko tai muu tapa yhdistää GND-johdot siististi
 

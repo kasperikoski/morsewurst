@@ -304,17 +304,13 @@ class InputController:
         return None
 
     def apply_keyboard_morse_setting_constraints(self, *, show_status: bool = True) -> None:
-        """Keep keyboard Morse mode in a safe telemetry-based configuration."""
+        """Keep keyboard Morse mode from fighting with serial auto-connect."""
         app = self.app
 
         if not self.keyboard_morse_enabled():
             return
 
         changed = False
-
-        if not app.use_telemetry_as_truth_var.get():
-            app.use_telemetry_as_truth_var.set(True)
-            changed = True
 
         if app.auto_connect_serial_var.get():
             app.auto_connect_serial_var.set(False)
@@ -324,10 +320,7 @@ class InputController:
             log_app_event(
                 "app.input.keyboard_morse_constraints_applied",
                 message="Keyboard Morse constraints were applied.",
-                context={
-                    "use_telemetry_as_truth": bool(app.use_telemetry_as_truth_var.get()),
-                    "auto_connect_serial": bool(app.auto_connect_serial_var.get()),
-                },
+                context={"auto_connect_serial": bool(app.auto_connect_serial_var.get())},
             )
             app.serial_controller.update_serial_buttons()
 
@@ -335,7 +328,7 @@ class InputController:
             app.status_controller.set_main_status(
                 app.i18n.t(
                     "input.keyboard_morse.constraints_applied",
-                    "Keyboard Morse uses raw telemetry. Telemetry was set as truth and serial auto-connect was disabled.",
+                    "Keyboard Morse disabled serial auto-connect.",
                 ),
                 state="normal",
             )
@@ -373,28 +366,6 @@ class InputController:
                     "Keyboard Morse disabled.",
                 ),
                 state="normal",
-            )
-
-        app.practice_controller.evaluate_live()
-        app.app_lifecycle_controller.focus_input(force=True)
-
-    def on_use_telemetry_as_truth_changed(self) -> None:
-        """Prevent telemetry scoring from being disabled while keyboard Morse is active."""
-        app = self.app
-
-        if self.keyboard_morse_enabled() and not app.use_telemetry_as_truth_var.get():
-            log_app_event(
-                "app.input.telemetry_as_truth_forced",
-                level="warning",
-                message="Telemetry-as-truth was forced because Keyboard Morse is enabled.",
-            )
-            app.use_telemetry_as_truth_var.set(True)
-            app.status_controller.set_main_status(
-                app.i18n.t(
-                    "input.keyboard_morse.telemetry_required",
-                    "Keyboard Morse requires telemetry as truth, so the setting was not disabled.",
-                ),
-                state="warning",
             )
 
         app.practice_controller.evaluate_live()

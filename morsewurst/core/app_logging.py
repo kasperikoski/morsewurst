@@ -136,7 +136,6 @@ def summarize_ui_settings(data: Mapping[str, Any] | None) -> dict[str, Any]:
         "practice_wxmor",
         "wxmor_profile",
         "sound_enabled",
-        "use_telemetry_as_truth",
         "keep_focus",
         "auto_connect_serial",
         "keyboard_morse_enabled",

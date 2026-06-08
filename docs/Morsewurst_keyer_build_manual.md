@@ -54,7 +54,7 @@ https://partco.fi/tuote/adafruit-esp32-s3-feather-with-stemma-qt-8mb-329
 * 3.5 mm stereo headphone jack, preferably a switched model
 * 10 kΩ logarithmic mono potentiometer for volume
 * 2 pcs 1 kΩ metal film resistors
-* 1 pc 2.2 kΩ metal film resistor
+* 1 pc 2.2 or 10 kΩ metal film resistor
 * Wire, preferably in several colours
 * If needed, Wago connectors, a ground rail, or another neat way to join GND wires
 

@@ -203,11 +203,6 @@ class SettingsController:
         """Load telemetry, serial, keyboard Morse, decoder, debug and raw display settings."""
         app = self.app
 
-        self.set_bool_from_data(
-            data,
-            "use_telemetry_as_truth",
-            app.use_telemetry_as_truth_var,
-        )
         self.set_bool_from_data(data, "keep_focus", app.keep_focus_var)
         self.set_bool_from_data(
             data,
@@ -672,7 +667,6 @@ class SettingsController:
                 app.sound_event_vars["serial_disconnected"].get()
             ),
             "sound_level_up": bool(app.sound_event_vars["level_up"].get()),
-            "use_telemetry_as_truth": bool(app.use_telemetry_as_truth_var.get()),
             "keep_focus": bool(app.keep_focus_var.get()),
             "auto_connect_serial": bool(app.auto_connect_serial_var.get()),
             "keyboard_morse_enabled": bool(app.keyboard_morse_enabled_var.get()),

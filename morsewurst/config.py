@@ -9,7 +9,7 @@ import sys
 from pathlib import Path
 
 APP_NAME = "Morsewurst"
-APP_VERSION = "0.99.15"
+APP_VERSION = "0.99.15.1"
 
 # ============================================================
 # Update check

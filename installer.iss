@@ -1,5 +1,5 @@
 #define MyAppName "Morsewurst"
-#define MyAppVersion "0.99.15"
+#define MyAppVersion "0.99.15.1"
 #define MyAppPublisher "Kasperi Koski"
 #define MyAppExeName "Morsewurst.exe"
 
