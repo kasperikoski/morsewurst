@@ -79,6 +79,67 @@ class WindowController:
         except Exception:
             pass
 
+    def secondary_morse_mode_active(self, *, except_attribute: str | None = None) -> str | None:
+        """Return the active secondary Morse input mode, if one owns the key stream."""
+        app = self.app
+
+        if except_attribute != "scratchpad_window":
+            scratchpad_window = self.existing_window_or_none("scratchpad_window")
+            if scratchpad_window is not None:
+                return "scratchpad"
+
+        if except_attribute != "network_window":
+            if bool(getattr(app, "network_modal_active", False)):
+                return "network"
+            network_window = self.existing_window_or_none("network_window")
+            if network_window is not None:
+                return "network"
+
+        if except_attribute != "koch_window":
+            if str(getattr(app, "active_mode", "main") or "main") == "koch":
+                return "koch"
+            koch_window = self.existing_window_or_none("koch_window")
+            if koch_window is not None:
+                return "koch"
+
+        return None
+
+    def show_secondary_mode_conflict(self, mode: str) -> None:
+        """Tell the user why another Morse input window cannot be opened."""
+        try:
+            messagebox.showinfo(
+                config.APP_NAME,
+                self.app.i18n.t(
+                    "mode.conflict.message",
+                    "Close the active {mode} window before opening another Morse input mode.",
+                    mode=self.app.i18n.t(f"mode.name.{mode}", mode),
+                ),
+            )
+        except Exception:
+            pass
+
+    def practice_active_for_secondary_window(self) -> bool:
+        """Return True while the classic practice mode is running or counting down."""
+        app = self.app
+        return bool(
+            getattr(app, "practice_running", False)
+            or getattr(app, "start_countdown_running", False)
+            or getattr(getattr(app, "round", None), "active", False)
+            or getattr(getattr(app, "round", None), "accepting_input", False)
+        )
+
+    def show_practice_active_conflict(self) -> None:
+        try:
+            messagebox.showinfo(
+                config.APP_NAME,
+                self.app.i18n.t(
+                    "mode.conflict.practice_active",
+                    "Stop the current practice before opening another Morse input mode.",
+                ),
+            )
+        except Exception:
+            pass
+
     def _window_icon_path(self) -> Path | None:
         """Return the configured runtime window icon path."""
         configured_icon = getattr(config, "APP_WINDOW_ICON", None)
@@ -193,6 +254,15 @@ class WindowController:
         if self.raise_existing_window("network_window"):
             return
 
+        active_mode = self.secondary_morse_mode_active(except_attribute="network_window")
+        if active_mode is not None:
+            self.show_secondary_mode_conflict(active_mode)
+            return
+
+        if self.practice_active_for_secondary_window():
+            self.show_practice_active_conflict()
+            return
+
         from morsewurst.ui.network import NetworkLobbyWindow
 
         self.app.network_window = NetworkLobbyWindow(self.app)
@@ -203,6 +273,15 @@ class WindowController:
         if self.raise_existing_window("koch_window"):
             return
 
+        active_mode = self.secondary_morse_mode_active(except_attribute="koch_window")
+        if active_mode is not None:
+            self.show_secondary_mode_conflict(active_mode)
+            return
+
+        if self.practice_active_for_secondary_window():
+            self.show_practice_active_conflict()
+            return
+
         from morsewurst.ui.koch import KochWindow
 
         self.app.koch_window = KochWindow(self.app)
@@ -211,6 +290,30 @@ class WindowController:
             "app.window.opened",
             message="Koch receive-practice window opened.",
             context={"window": "koch_window"},
+        )
+
+    def open_scratchpad_window(self) -> None:
+        """Open the live Scratchpad window, or focus it if it is already open."""
+        if self.raise_existing_window("scratchpad_window"):
+            return
+
+        active_mode = self.secondary_morse_mode_active(except_attribute="scratchpad_window")
+        if active_mode is not None:
+            self.show_secondary_mode_conflict(active_mode)
+            return
+
+        if self.practice_active_for_secondary_window():
+            self.show_practice_active_conflict()
+            return
+
+        from morsewurst.ui.scratchpad_window import ScratchpadWindow
+
+        self.app.scratchpad_window = ScratchpadWindow(self.app)
+        self.apply_window_icon(self.app.scratchpad_window)
+        log_app_event(
+            "app.window.opened",
+            message="Scratchpad window opened.",
+            context={"window": "scratchpad_window"},
         )
 
     def close_known_windows(self) -> None:
@@ -225,6 +328,7 @@ class WindowController:
             "stats_window",
             "network_window",
             "koch_window",
+            "scratchpad_window",
             "profile_window",
             "backup_window",
         ):

@@ -57,6 +57,36 @@ class LayoutController:
         middle_row.pack(fill=tk.X, pady=(0, 0))
         middle_row.pack_propagate(False)
 
+        summary_height_state: dict[str, bool | None] = {"compact": None}
+
+        def update_summary_row_height(event: tk.Event | None = None) -> None:
+            if event is not None and event.widget is not app:
+                return
+
+            try:
+                threshold = int(getattr(config, "UI_RESULT_COMPACT_HEIGHT_THRESHOLD", 840))
+                normal_height = int(getattr(config, "UI_SUMMARY_ROW_HEIGHT", 185))
+                compact_height = int(
+                    getattr(config, "UI_SUMMARY_ROW_COMPACT_HEIGHT", normal_height)
+                )
+            except (TypeError, ValueError):
+                return
+
+            window_height = int(app.winfo_height())
+            if window_height <= 1:
+                window_height = int(getattr(config, "UI_MIN_HEIGHT", 800))
+
+            compact = window_height < threshold
+            if summary_height_state["compact"] == compact:
+                return
+
+            summary_height_state["compact"] = compact
+            middle_row.configure(height=compact_height if compact else normal_height)
+
+        update_summary_row_height()
+        app.after_idle(update_summary_row_height)
+        app.bind("<Configure>", update_summary_row_height, add="+")
+
         result_column = ttk.Frame(middle_row)
         result_column.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
 

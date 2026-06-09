@@ -1092,6 +1092,21 @@ class PracticeController:
         app = self.app
         start_started_at = time.monotonic()
 
+        if app.scratchpad_controller.is_active():
+            app.start_trigger_timestamps.clear()
+            app.status_controller.set_main_status(
+                app.i18n.t(
+                    "scratchpad.status.practice_blocked",
+                    "Scratchpad is open. Close it before starting a practice.",
+                ),
+                state="warning",
+            )
+            log_app_event(
+                "app.practice.start_blocked_by_scratchpad",
+                message="Practice start was blocked because Scratchpad owns Morse input.",
+            )
+            return
+
         if app.start_countdown_running:
             self._cancel_start_countdown(restore_state_text=False)
 
@@ -2189,7 +2204,8 @@ class PracticeController:
             return
 
         running = app.practice_running or app.start_countdown_running
-        app.start_button.configure(state=tk.DISABLED if running else tk.NORMAL)
+        scratchpad_active = bool(app.scratchpad_controller.is_active())
+        app.start_button.configure(state=tk.DISABLED if running or scratchpad_active else tk.NORMAL)
         app.stop_button.configure(state=tk.NORMAL if running else tk.DISABLED)
 
     def _clear_visible_training_texts(self) -> None:

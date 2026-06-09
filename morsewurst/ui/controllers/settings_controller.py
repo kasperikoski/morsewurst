@@ -51,6 +51,7 @@ class SettingsController:
         self.load_input_and_serial_settings(data)
         self.load_advanced_stat_settings(data)
         self.load_koch_settings(data)
+        self.load_scratchpad_settings(data)
         self.load_window_settings(data)
         log_app_event(
             "app.settings.applied",
@@ -439,6 +440,21 @@ class SettingsController:
             10000,
         )
 
+    def load_scratchpad_settings(self, data: dict[str, Any]) -> None:
+        """Load Scratchpad window geometry and display preferences."""
+        app = self.app
+
+        self.set_string_from_data(
+            data,
+            "scratchpad_window_geometry",
+            app.scratchpad_window_geometry_var,
+        )
+        self.set_bool_from_data(
+            data,
+            "scratchpad_raw_panel_visible",
+            app.scratchpad_raw_panel_visible_var,
+        )
+
     def load_window_settings(self, data: dict[str, Any]) -> None:
         """Restore main window geometry when a valid saved value exists."""
         geometry = data.get("window_geometry")
@@ -714,6 +730,11 @@ class SettingsController:
                 maximum=80.0,
             ),
             "selected_port": str(app.port_var.get()),
+            "scratchpad_window_geometry": str(
+                app.scratchpad_window_geometry_var.get()
+                or getattr(config, "UI_SCRATCHPAD_WINDOW_GEOMETRY", "800x600")
+            ),
+            "scratchpad_raw_panel_visible": bool(app.scratchpad_raw_panel_visible_var.get()),
             "problem_recent_rounds": helpers.safe_int_var(
                 app.problem_recent_rounds_var,
                 default=config.DEFAULT_PROBLEM_RECENT_ROUNDS,

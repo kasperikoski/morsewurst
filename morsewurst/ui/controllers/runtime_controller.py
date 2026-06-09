@@ -57,6 +57,7 @@ class RuntimeController:
         app.network_window: tk.Toplevel | None = None
         app.network_modal_active = False
         app.koch_window: tk.Toplevel | None = None
+        app.scratchpad_window: tk.Toplevel | None = None
 
         app.timing_profiles: dict[str, Any] = (
             app.decoder_controller.default_timing_profiles()
@@ -308,6 +309,13 @@ class RuntimeController:
         )
         app.raw_telemetry_pixels_per_unit_var = tk.DoubleVar(
             value=float(getattr(config, "RAW_TELEMETRY_PIXELS_PER_UNIT", 8.0))
+        )
+
+        app.scratchpad_window_geometry_var = tk.StringVar(
+            value=str(getattr(config, "UI_SCRATCHPAD_WINDOW_GEOMETRY", "800x600"))
+        )
+        app.scratchpad_raw_panel_visible_var = tk.BooleanVar(
+            value=bool(getattr(config, "UI_SCRATCHPAD_RAW_PANEL_DEFAULT_VISIBLE", False))
         )
 
         app.debug_snapshot_enabled_var = tk.BooleanVar(

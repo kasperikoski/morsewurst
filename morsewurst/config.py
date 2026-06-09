@@ -9,7 +9,7 @@ import sys
 from pathlib import Path
 
 APP_NAME = "Morsewurst"
-APP_VERSION = "0.99.15.1"
+APP_VERSION = "0.99.16"
 
 # ============================================================
 # Update check
@@ -217,13 +217,26 @@ TIMER_TICK_MS = 100
 
 UI_WINDOW_GEOMETRY = "1280x880"
 UI_MIN_WIDTH = 1280
-UI_MIN_HEIGHT = 880
+UI_MIN_HEIGHT = 800
 UI_RIGHT_WIDTH = 350
 UI_TARGET_WRAP_LENGTH = 820
 UI_TELEMETRY_WRAP_LENGTH = 740
 UI_RAW_TELEMETRY_HEIGHT = 72
 UI_SUMMARY_ROW_HEIGHT = 330
+UI_SUMMARY_ROW_COMPACT_HEIGHT = 260
 UI_GENERAL_INFO_WIDTH = 360
+
+# Responsive main-window layout. The main action buttons stay in the original
+# two-row layout below this width and collapse into one row at or above it.
+UI_CONTROL_SINGLE_ROW_MIN_WIDTH = 1860
+UI_CONTROL_BUTTON_SPACING_PX = 8
+UI_CONTROL_STATS_SINGLE_ROW_GAP_PX = 8
+
+# Result/general information row. Below this window height, the summary row is
+# shortened and result metrics show the label and value side by side.
+UI_RESULT_COMPACT_HEIGHT_THRESHOLD = 960
+UI_RESULT_COMPACT_VALUE_WIDTH = 16
+UI_RESULT_COMPACT_CELL_PADY = 2
 
 # Koch receive-practice layout.
 # The receive-practice window has its own geometry because it contains a wide
@@ -255,6 +268,20 @@ UI_MAIN_STATUS_FONT_WEIGHT = "normal"
 UI_MAIN_STATUS_EMPHASIS_WEIGHT = "bold"
 UI_MAIN_STATUS_WRAP_MIN_PX = 260
 UI_MAIN_STATUS_WRAP_PADDING_PX = 20
+
+# Scratchpad free-copy window. The text entered in this window is intentionally
+# session-only and is not written to the profile database or settings file.
+# Only the window geometry and display preferences are stored per profile.
+UI_SCRATCHPAD_WINDOW_GEOMETRY = "800x600"
+UI_SCRATCHPAD_WINDOW_MIN_WIDTH = 560
+UI_SCRATCHPAD_WINDOW_MIN_HEIGHT = 420
+UI_SCRATCHPAD_FONT_FAMILY = "Segoe UI"
+UI_SCRATCHPAD_FONT_SIZE = 16
+UI_SCRATCHPAD_STATS_LABEL_FONT_SIZE = 7
+UI_SCRATCHPAD_STATS_VALUE_FONT_SIZE = 8
+UI_SCRATCHPAD_RAW_PANEL_DEFAULT_VISIBLE = False
+UI_SCRATCHPAD_RAW_HISTORY_LIMIT = 12
+UI_SCRATCHPAD_LIVE_REFRESH_MS = 80
 
 HISTORY_VISIBLE_ROWS = 10
 # Number of saved rounds loaded for the compact Recent rounds table.

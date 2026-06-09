@@ -32,6 +32,13 @@ HELP_DOCUMENT_SPEC: list[dict[str, str]] = [
     {"type": "paragraph", "key": "help.content.input.autoconnect"},
     {"type": "note", "key": "help.content.input.note"},
 
+    {"type": "heading", "key": "help.content.scratchpad.heading"},
+    {"type": "paragraph", "key": "help.content.scratchpad.intro"},
+    {"type": "paragraph", "key": "help.content.scratchpad.editing"},
+    {"type": "paragraph", "key": "help.content.scratchpad.stats"},
+    {"type": "paragraph", "key": "help.content.scratchpad.raw"},
+    {"type": "note", "key": "help.content.scratchpad.privacy"},
+
     {"type": "heading", "key": "help.content.practice_settings.heading"},
     {"type": "paragraph", "key": "help.content.practice_settings.intro"},
     {"type": "paragraph", "key": "help.content.practice_settings.characters"},

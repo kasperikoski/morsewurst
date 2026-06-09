@@ -24,6 +24,10 @@ Morsewurst is a Python-based desktop training application for practising Morse c
 
 The application receives real-time keying telemetry from the keyer, decodes the signal, measures sending accuracy and timing quality, and gives detailed feedback about Morse performance. The goal is to make Morse practice measurable, visible and easier to improve over time.
 
+> [!IMPORTANT]
+> Morsewurst 0.99.15 and later require **Morsewurst Keyer firmware 1.1 or newer** when using the official Morsewurst Keyer.  
+> Download the latest application and keyer firmware from: https://kasperikoski.fi/morsewurst
+
 <img src="assets/img/practice.gif" alt="Morsewurst main practice window" width="800">
 
 ## 1. Current status
@@ -234,10 +238,7 @@ Future development is expected to focus on making Morsewurst Network more reliab
 Planned and ongoing work includes:
 
 - Further improving network practice and online room features
-- Making network connection handling, reconnecting and diagnostics clearer
-- Adding more training modes
 - Improving the update workflow so the application can eventually update itself
-- Adding better diagnostics and troubleshooting tools
 - Keeping the documentation clearer and more up to date, including small cleanups like this one
 
 ## 15. License

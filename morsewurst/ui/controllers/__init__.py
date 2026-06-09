@@ -21,6 +21,7 @@ from morsewurst.ui.controllers.profile_controller import ProfileController
 from morsewurst.ui.controllers.results_controller import ResultsController
 from morsewurst.ui.controllers.runtime_controller import RuntimeController
 from morsewurst.ui.controllers.serial_controller import SerialController
+from morsewurst.ui.controllers.scratchpad_controller import ScratchpadController
 from morsewurst.ui.controllers.settings_controller import SettingsController
 from morsewurst.ui.controllers.startup_controller import StartupController
 from morsewurst.ui.controllers.startup_sequence_controller import StartupSequenceController
@@ -47,6 +48,7 @@ __all__ = [
     "ResultsController",
     "RuntimeController",
     "SerialController",
+    "ScratchpadController",
     "SettingsController",
     "StartupController",
     "StartupSequenceController",

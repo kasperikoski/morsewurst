@@ -20,6 +20,7 @@ from morsewurst.ui.controllers import (
     ResultsController,
     RuntimeController,
     SerialController,
+    ScratchpadController,
     SettingsController,
     StartupController,
     StartupSequenceController,
@@ -52,6 +53,7 @@ class MorsewurstApp(tk.Tk):
         self.koch_controller = KochController(self)
         self.layout_controller = LayoutController(self)
         self.serial_controller = SerialController(self)
+        self.scratchpad_controller = ScratchpadController(self)
         self.practice_controller = PracticeController(self)
         self.results_controller = ResultsController(self)
         self.history_controller = HistoryController(self)

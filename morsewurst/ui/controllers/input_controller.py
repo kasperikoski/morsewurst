@@ -672,6 +672,11 @@ class InputController:
         if not self.accept_key_event(clean):
             return
 
+        if app.scratchpad_controller.is_active():
+            app.start_trigger_timestamps.clear()
+            app.scratchpad_controller.handle_key_event(clean)
+            return
+
         try:
             app.network_manager.publish_local_key(dict(clean))
         except Exception:
@@ -741,6 +746,12 @@ class InputController:
             return
 
         if event_type == "tone":
+            if app.scratchpad_controller.is_active():
+                app.start_trigger_timestamps.clear()
+                if not self.should_drop_stale_tone_event(event):
+                    app.scratchpad_controller.handle_tone_event(event)
+                return
+
             try:
                 app.network_manager.publish_local_tone(dict(event))
             except Exception:
@@ -838,6 +849,9 @@ class InputController:
             return True
 
         if str(getattr(app, "active_mode", "main") or "main") == "koch":
+            return True
+
+        if app.scratchpad_controller.is_active():
             return True
 
         koch_window = getattr(app, "koch_window", None)

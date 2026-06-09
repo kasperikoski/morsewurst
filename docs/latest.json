@@ -1,12 +1,15 @@
 {
   "app": "Morsewurst",
-  "latest_version": "0.99.15.1",
+  "latest_version": "0.99.16",
   "release_date": "2026-06-09",
-  "release_url": "https://github.com/kasperikoski/morsewurst/releases/tag/v0.99.15.1",
+  "release_url": "https://github.com/kasperikoski/morsewurst/releases/tag/v0.99.16",
   "download_url": "https://kasperikoski.fi/morsewurst",
   "release_notes": [
-    "Fixed network-mode radio noise ducking so the receiver noise is muted correctly as soon as local key-down telemetry is sent.",
-    "Removed the redundant telemetry-as-truth setting. Morsewurst now always uses decoded telemetry as the authoritative scoring source.",
-    "Includes general bug fixes and cleanup around network playback, live key telemetry and related UI/settings handling."
+    "Added a new Scratchpad/Notepad mode for free Morse writing. Users can open a separate window and copy arbitrary text without starting a practice round or saving the copied text to the database.",
+    "Scratchpad uses live adaptive Morse decoding, supports editable text with undo/copy/select-all shortcuts, automatic word wrapping, scrolling, session-only statistics and a compact raw telemetry visualization.",
+    "Scratchpad window geometry and raw telemetry visibility are saved per profile, while the copied text and session data remain in memory only.",
+    "Improved Morse input routing so Scratchpad, Network, Koch and normal practice modes do not compete for the same key input.",
+    "Added Scratchpad translations and help content for all supported languages.",
+    "Includes fixes for Scratchpad duplicate text insertion, raw telemetry display and WPM calculations during idle time."
   ]
 }
