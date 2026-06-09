@@ -1,15 +1,11 @@
 {
   "app": "Morsewurst",
-  "latest_version": "0.99.16",
+  "latest_version": "0.99.16.1",
   "release_date": "2026-06-09",
-  "release_url": "https://github.com/kasperikoski/morsewurst/releases/tag/v0.99.16",
+  "release_url": "https://github.com/kasperikoski/morsewurst/releases/tag/v0.99.16.1",
   "download_url": "https://kasperikoski.fi/morsewurst",
   "release_notes": [
-    "Added a new Scratchpad/Notepad mode for free Morse writing. Users can open a separate window and copy arbitrary text without starting a practice round or saving the copied text to the database.",
-    "Scratchpad uses live adaptive Morse decoding, supports editable text with undo/copy/select-all shortcuts, automatic word wrapping, scrolling, session-only statistics and a compact raw telemetry visualization.",
-    "Scratchpad window geometry and raw telemetry visibility are saved per profile, while the copied text and session data remain in memory only.",
-    "Improved Morse input routing so Scratchpad, Network, Koch and normal practice modes do not compete for the same key input.",
-    "Added Scratchpad translations and help content for all supported languages.",
-    "Includes fixes for Scratchpad duplicate text insertion, raw telemetry display and WPM calculations during idle time."
+    "Fixed straight-key auto-start handling so contact bounce no longer counts as multiple start-trigger presses.",
+    "The fix affects only the idle auto-start shortcut and does not change Morse decoding, scoring, saved telemetry or network relay behaviour during practice."
   ]
 }

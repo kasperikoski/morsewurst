@@ -890,6 +890,59 @@ class InputController:
         if app.live_decoder is not None:
             app.live_decoder.feed_event(event)
 
+    def start_trigger_event_allowed(self, event: Dict[str, Any], now: float) -> bool:
+        """Return True when an idle auto-start trigger should be counted.
+
+        The normal V1 key stream must stay raw and unmodified for decoding,
+        scoring and network relay. This filter affects only the idle shortcut
+        that starts practice after repeated key presses.
+
+        Physical straight keys can produce very short down/up/down bounce
+        sequences. Those bounces are already ignored later as decoder tones,
+        but the auto-start shortcut used to count the raw down events before
+        that filtering happened. This source-specific debounce prevents one
+        physical straight-key press from counting as multiple start presses.
+        """
+        if event.get("type") == "key":
+            if event.get("state") != "down":
+                return False
+
+            if event.get("src") != "straight" or self.is_keyboard_morse_key_event_dict(event):
+                return True
+
+            try:
+                identity = ("straight_auto_start",) + key_event_identity(event)
+            except Exception:
+                return True
+
+            debounce_seconds = (
+                float(getattr(config, "START_TRIGGER_STRAIGHT_KEY_DEBOUNCE_MS", 120))
+                / 1000.0
+            )
+
+            last_by_identity = getattr(app := self.app, "last_start_trigger_by_identity", None)
+            if last_by_identity is None:
+                last_by_identity = {}
+                app.last_start_trigger_by_identity = last_by_identity
+
+            last_time = last_by_identity.get(identity)
+            if isinstance(last_time, (int, float)) and now - float(last_time) < debounce_seconds:
+                log_app_event(
+                    "app.input.practice_auto_start_straight_bounce_ignored",
+                    message="Straight-key auto-start trigger was ignored as probable contact bounce.",
+                    context={
+                        "src": event.get("src"),
+                        "debounce_ms": int(debounce_seconds * 1000),
+                        "elapsed_ms": round((now - float(last_time)) * 1000.0, 1),
+                    },
+                )
+                return False
+
+            last_by_identity[identity] = now
+            return True
+
+        return event.get("type") == "tone"
+
     def maybe_start_practice_from_key(self, event: Dict[str, Any]) -> None:
         """Start the countdown when enough tone events arrive while practice is idle."""
         app = self.app
@@ -907,6 +960,9 @@ class InputController:
             return
 
         now = time.monotonic()
+
+        if not self.start_trigger_event_allowed(event, now):
+            return
 
         app.start_trigger_timestamps = [
             timestamp

@@ -9,7 +9,7 @@ import sys
 from pathlib import Path
 
 APP_NAME = "Morsewurst"
-APP_VERSION = "0.99.16"
+APP_VERSION = "0.99.16.1"
 
 # ============================================================
 # Update check
@@ -197,6 +197,12 @@ KEYBOARD_MORSE_MIN_TONE_US = 1_000
 # Raw V1 key events are still kept and displayed; only the derived tone
 # used by the decoder is suppressed when it is shorter than this.
 SERIAL_STRAIGHT_KEY_MIN_TONE_US = 10_000
+
+# Debounce only the idle auto-start shortcut for physical straight-key V1
+# key-down events. This prevents contact bounce from counting as several
+# start-trigger presses. It does not affect round telemetry, scoring,
+# decoding or network key relay.
+START_TRIGGER_STRAIGHT_KEY_DEBOUNCE_MS = 80
 
 
 # ============================================================
