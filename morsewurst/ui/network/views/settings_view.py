@@ -4,10 +4,23 @@
 
 from __future__ import annotations
 
+import os
+import subprocess
+import sys
 import tkinter as tk
+from pathlib import Path
+from tkinter import filedialog, messagebox
 
 import morsewurst.config as config
-from morsewurst.core.logging_service import log_event
+from morsewurst.core.logging_service import log_event, log_exception
+from morsewurst.network.identity import (
+    OperatorIdentityError,
+    export_operator_identity,
+    generate_operator_identity,
+    import_operator_identity_file,
+    load_or_create_operator_identity,
+    save_operator_identity,
+)
 from morsewurst.ui.network_matrix_theme import (
     MatrixTheme,
     make_button,
@@ -316,21 +329,248 @@ class SettingsViewMixin:
             self.transmit_enabled_var,
         ).pack(anchor="w")
 
-        make_label(
-            right,
-            self.tr("network.settings.general.empty.title"),
-            font=MatrixTheme.heading_font,
-            foreground=MatrixTheme.text_dim,
-            background=MatrixTheme.panel,
-        ).grid(row=0, column=0, sticky="w", pady=(2, 0))
+        self._render_operator_identity_panel(right, row=0)
+
+    def _render_operator_identity_panel(self, parent: tk.Misc, *, row: int) -> None:
+        box = tk.Frame(parent, background=MatrixTheme.panel)
+        box.grid(row=row, column=0, sticky="ew", pady=(2, 0))
+        box.columnconfigure(0, weight=1)
 
         make_label(
-            right,
-            self.tr("network.settings.general.empty.help"),
+            box,
+            self.tr("network.operator_identity.title"),
+            font=MatrixTheme.heading_font,
+            foreground=MatrixTheme.text,
+            background=MatrixTheme.panel,
+        ).grid(row=0, column=0, sticky="w")
+
+        make_label(
+            box,
+            self.tr("network.operator_identity.help"),
             foreground=MatrixTheme.text_dim,
             background=MatrixTheme.panel,
-            wraplength=self._settings_help_wraplength(right),
-        ).grid(row=1, column=0, sticky="ew", pady=(2, 0))
+            wraplength=self._settings_help_wraplength(parent),
+        ).grid(row=1, column=0, sticky="ew", pady=(2, 8))
+
+        code_box = tk.Frame(box, background=MatrixTheme.input_bg, highlightthickness=1, highlightbackground=MatrixTheme.border)
+        code_box.grid(row=2, column=0, sticky="ew", pady=(0, 8))
+        code_box.columnconfigure(0, weight=1)
+
+        make_label(
+            code_box,
+            variable=self.operator_listener_code_var,
+            font=MatrixTheme.mono_font,
+            foreground=MatrixTheme.accent,
+            background=MatrixTheme.input_bg,
+        ).grid(row=0, column=0, sticky="w", padx=10, pady=8)
+
+        button_row = tk.Frame(box, background=MatrixTheme.panel)
+        button_row.grid(row=3, column=0, sticky="w", pady=(0, 8))
+
+        make_button(
+            button_row,
+            self.tr("network.operator_identity.copy"),
+            self.copy_operator_listener_code,
+        ).pack(side=tk.LEFT)
+
+        make_button(
+            button_row,
+            self.tr("network.operator_identity.export"),
+            self.export_operator_identity_ui,
+        ).pack(side=tk.LEFT, padx=(8, 0))
+
+        make_button(
+            button_row,
+            self.tr("network.operator_identity.import"),
+            self.import_operator_identity_ui,
+        ).pack(side=tk.LEFT, padx=(8, 0))
+
+        make_button(
+            button_row,
+            self.tr("network.operator_identity.regenerate"),
+            self.regenerate_operator_identity_ui,
+        ).pack(side=tk.LEFT, padx=(8, 0))
+
+        folder_row = tk.Frame(box, background=MatrixTheme.panel)
+        folder_row.grid(row=4, column=0, sticky="w", pady=(0, 8))
+
+        make_button(
+            folder_row,
+            self.tr("network.operator_identity.open_profile_folder"),
+            self.open_operator_identity_folder_ui,
+        ).pack(side=tk.LEFT)
+
+        warning_text = self.tr("network.operator_identity.security_note")
+        if getattr(self, "operator_identity_error", ""):
+            warning_text = self.tr("network.operator_identity.error", error=self.operator_identity_error)
+
+        make_label(
+            box,
+            warning_text,
+            foreground=MatrixTheme.text_dim,
+            background=MatrixTheme.panel,
+            wraplength=self._settings_help_wraplength(parent),
+        ).grid(row=5, column=0, sticky="ew")
+
+    def _refresh_operator_identity_label(self) -> None:
+        identity = getattr(self, "operator_identity", None)
+        if identity is None:
+            self.operator_listener_code_var.set(self.tr("network.operator_identity.unavailable"))
+            return
+        self.operator_listener_code_var.set(identity.operator_id)
+
+    def copy_operator_listener_code(self) -> None:
+        identity = getattr(self, "operator_identity", None)
+        if identity is None:
+            self._show_notice(self.tr("network.operator_identity.unavailable"), "warning")
+            return
+
+        try:
+            self.clipboard_clear()
+            self.clipboard_append(identity.operator_id)
+            self.update_idletasks()
+            self._show_notice(self.tr("network.operator_identity.copied"), "success")
+        except Exception as exc:
+            log_exception(
+                "network",
+                "network.operator_identity.copy_failed",
+                exc,
+                level="warning",
+                message="Operator listener code could not be copied to clipboard.",
+                context={},
+            )
+            self._show_notice(str(exc), "warning")
+
+    def _ensure_operator_identity_for_ui(self):
+        identity = getattr(self, "operator_identity", None)
+        if identity is not None:
+            return identity
+        identity = load_or_create_operator_identity()
+        self.operator_identity = identity
+        self.operator_identity_error = ""
+        self._refresh_operator_identity_label()
+        return identity
+
+    def open_operator_identity_folder_ui(self) -> None:
+        target = Path(config.DATA_DIR)
+
+        try:
+            target.mkdir(parents=True, exist_ok=True)
+            if sys.platform.startswith("win"):
+                os.startfile(target)  # type: ignore[attr-defined]
+            elif sys.platform == "darwin":
+                subprocess.Popen(["open", str(target)])
+            else:
+                subprocess.Popen(["xdg-open", str(target)])
+
+            self._show_notice(self.tr("network.operator_identity.profile_folder_opened"), "success")
+        except Exception as exc:
+            log_exception(
+                "network",
+                "network.operator_identity.open_profile_folder_failed",
+                exc,
+                level="warning",
+                message="Operator identity profile folder could not be opened.",
+                context={"path": str(target)},
+            )
+            self._show_notice(
+                self.tr("network.operator_identity.open_profile_folder_failed", error=str(exc)),
+                "warning",
+            )
+
+    def export_operator_identity_ui(self) -> None:
+        try:
+            identity = self._ensure_operator_identity_for_ui()
+        except OperatorIdentityError as exc:
+            self._show_notice(self.tr("network.operator_identity.error", error=str(exc)), "warning")
+            return
+
+        filename = f"morsewurst-operator-identity-{identity.operator_id}.json"
+        target = filedialog.asksaveasfilename(
+            parent=self,
+            title=self.tr("network.operator_identity.export_dialog_title"),
+            initialfile=filename,
+            defaultextension=".json",
+            filetypes=(("JSON", "*.json"), ("All files", "*.*")),
+        )
+        if not target:
+            return
+
+        try:
+            export_operator_identity(identity, Path(target))
+            self._show_notice(self.tr("network.operator_identity.exported"), "success")
+        except Exception as exc:
+            log_exception(
+                "network",
+                "network.operator_identity.export_failed",
+                exc,
+                level="warning",
+                message="Operator identity export failed.",
+                context={},
+            )
+            self._show_notice(self.tr("network.operator_identity.error", error=str(exc)), "warning")
+
+    def import_operator_identity_ui(self) -> None:
+        if getattr(self, "operator_identity", None) is not None:
+            confirmed = messagebox.askyesno(
+                self.tr("network.operator_identity.import_confirm_title"),
+                self.tr("network.operator_identity.import_confirm"),
+                parent=self,
+            )
+            if not confirmed:
+                return
+
+        source = filedialog.askopenfilename(
+            parent=self,
+            title=self.tr("network.operator_identity.import_dialog_title"),
+            filetypes=(("JSON", "*.json"), ("All files", "*.*")),
+        )
+        if not source:
+            return
+
+        try:
+            identity = import_operator_identity_file(Path(source))
+            self.operator_identity = identity
+            self.operator_identity_error = ""
+            self._refresh_operator_identity_label()
+            self._show_notice(self.tr("network.operator_identity.imported"), "success")
+        except Exception as exc:
+            log_exception(
+                "network",
+                "network.operator_identity.import_failed",
+                exc,
+                level="warning",
+                message="Operator identity import failed.",
+                context={},
+            )
+            self._show_notice(self.tr("network.operator_identity.error", error=str(exc)), "warning")
+
+    def regenerate_operator_identity_ui(self) -> None:
+        confirmed = messagebox.askyesno(
+            self.tr("network.operator_identity.regenerate_confirm_title"),
+            self.tr("network.operator_identity.regenerate_confirm"),
+            parent=self,
+        )
+        if not confirmed:
+            return
+
+        try:
+            identity = generate_operator_identity()
+            save_operator_identity(identity)
+            self.operator_identity = identity
+            self.operator_identity_error = ""
+            self._refresh_operator_identity_label()
+            self._show_notice(self.tr("network.operator_identity.regenerated"), "success")
+        except Exception as exc:
+            log_exception(
+                "network",
+                "network.operator_identity.regenerate_failed",
+                exc,
+                level="warning",
+                message="Operator identity regeneration failed.",
+                context={},
+            )
+            self._show_notice(self.tr("network.operator_identity.error", error=str(exc)), "warning")
 
     def _render_audio_settings_tab(self, parent: tk.Misc) -> None:
         columns = self._settings_columns(parent)

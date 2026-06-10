@@ -10,6 +10,7 @@ import tkinter as tk
 
 from morsewurst.core.logging_service import log_event
 from morsewurst.network.defaults import DEFAULT_RELAY_URI
+from morsewurst.network.identity import OperatorIdentityError, load_or_create_operator_identity
 from morsewurst.network.public_rooms import PublicRoom
 from morsewurst.network.settings_store import load_network_settings, network_settings_path
 from morsewurst.ui.network.lobby_actions import LobbyActionsMixin
@@ -69,6 +70,13 @@ class NetworkLobbyWindow(
         self.app = app
         self.settings = load_network_settings()
         self.settings_file_exists = network_settings_path().exists()
+        self.operator_identity_error = ""
+        try:
+            self.operator_identity = load_or_create_operator_identity()
+        except OperatorIdentityError as exc:
+            self.operator_identity = None
+            self.operator_identity_error = str(exc)
+
         log_event(
             "network",
             "network.window.opened",
@@ -128,6 +136,10 @@ class NetworkLobbyWindow(
         # These are updated from NetworkManager payload messages.
         self.last_server_info: dict[str, object] | None = None
         self.last_server_pong: dict[str, object] | None = None
+
+        self.operator_listener_code_var = tk.StringVar(
+            value=self.operator_identity.operator_id if self.operator_identity is not None else self.tr("network.operator_identity.unavailable")
+        )
 
         self.server_summary_var = tk.StringVar(value=self.tr("network.server.updating"))
         self.server_room_status_var = tk.StringVar(value=self.tr("network.server_status.updating"))

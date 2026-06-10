@@ -11,8 +11,10 @@ from dataclasses import dataclass
 from typing import Any, Callable, Dict, Optional
 
 from morsewurst.core.logging_service import log_event, log_exception
+from morsewurst.network.identity import OperatorIdentityError, verify_operator_challenge
 from morsewurst.network.protocol import (
     ProtocolError,
+    attach_server_operator_fields,
     decode_message,
     encode_message,
     make_peer_event,
@@ -27,6 +29,7 @@ from morsewurst.network.protocol import (
     verify_auth,
     make_server_info,
     make_server_pong,
+    sanitize_client_mode,
     sanitize_installation_id,
 )
 
@@ -47,6 +50,9 @@ class ClientInfo:
     websocket: Any
     installation_id: str = ""
     client_version: str = ""
+    client_mode: str = "operator"
+    operator_id: str = ""
+    operator_verified: bool = False
 
 
 class RoomServer:
@@ -212,10 +218,19 @@ class RoomServer:
                 message_type = str(message.get("type") or "")
 
                 if message_type in {"key", "tone"}:
-                    message["via_server_id"] = self.server_id
+                    if info.client_mode == "listener":
+                        await self._send(websocket, make_status("Listener mode is read-only.", level="warning"))
+                        continue
+
+                    outbound_message = attach_server_operator_fields(
+                        message,
+                        operator_id=info.operator_id,
+                        operator_verified=info.operator_verified,
+                    )
+                    outbound_message["via_server_id"] = self.server_id
                     if self.remote_tone_callback is not None:
-                        self.remote_tone_callback(message)
-                    await self._broadcast(message, exclude=websocket)
+                        self.remote_tone_callback(outbound_message)
+                    await self._broadcast(outbound_message, exclude=websocket)
                     continue
 
                 if message_type == "heartbeat":
@@ -304,6 +319,7 @@ class RoomServer:
         callsign = normalize_callsign(str(hello.get("callsign") or "Morsewurst"))
         installation_id = sanitize_installation_id(hello.get("installation_id"))
         client_version = str(hello.get("client_version") or "")[:40]
+        client_mode = sanitize_client_mode(hello.get("client_mode"))
         nonce = new_nonce()
 
         log_event(
@@ -346,6 +362,35 @@ class RoomServer:
         ):
             raise ProtocolError("Huoneen salasana ei täsmää.")
 
+        operator_id = ""
+        operator_verified = False
+        operator_auth = auth.get("operator_auth")
+        if isinstance(operator_auth, dict):
+            try:
+                operator_id = verify_operator_challenge(
+                    operator_auth,
+                    server_id=self.server_id,
+                    server_nonce=nonce,
+                    room=self.room,
+                    client_id=client_id,
+                )
+                operator_verified = True
+                log_event(
+                    "network",
+                    "network.host.operator_auth_success",
+                    message="Hosted room operator authentication succeeded.",
+                    context={"room": self.room, "client_id": client_id, "operator_id": operator_id},
+                )
+            except OperatorIdentityError as exc:
+                log_exception(
+                    "network",
+                    "network.host.operator_auth_failed",
+                    exc,
+                    level="warning",
+                    message="Hosted room operator authentication failed; client remains unverified.",
+                    context={"room": self.room, "client_id": client_id},
+                )
+
         log_event(
             "network",
             "network.host.client_auth_success",
@@ -365,12 +410,21 @@ class RoomServer:
             websocket=websocket,
             installation_id=installation_id,
             client_version=client_version,
+            client_mode=client_mode,
+            operator_id=operator_id,
+            operator_verified=operator_verified,
         )
 
     async def _register_client(self, info: ClientInfo) -> None:
         async with self._lock:
             peers = [
-                {"client_id": client.client_id, "callsign": client.callsign}
+                {
+                    "client_id": client.client_id,
+                    "callsign": client.callsign,
+                    "client_mode": client.client_mode,
+                    "operator_id": client.operator_id,
+                    "operator_verified": client.operator_verified,
+                }
                 for client in self._clients.values()
             ]
             self._clients[info.websocket] = info
@@ -384,10 +438,20 @@ class RoomServer:
                 peers=peers,
                 room_name=self.room,
                 room_id="",
+                client_mode=info.client_mode,
+                operator_id=info.operator_id,
+                operator_verified=info.operator_verified,
             )
         )
         await self._broadcast(
-            make_peer_event(event_type="peer_joined", client_id=info.client_id, callsign=info.callsign),
+            make_peer_event(
+                event_type="peer_joined",
+                client_id=info.client_id,
+                callsign=info.callsign,
+                client_mode=info.client_mode,
+                operator_id=info.operator_id,
+                operator_verified=info.operator_verified,
+            ),
             exclude=info.websocket,
         )
         log_event(
@@ -403,7 +467,14 @@ class RoomServer:
             self._clients.pop(info.websocket, None)
 
         await self._broadcast(
-            make_peer_event(event_type="peer_left", client_id=info.client_id, callsign=info.callsign),
+            make_peer_event(
+                event_type="peer_left",
+                client_id=info.client_id,
+                callsign=info.callsign,
+                client_mode=info.client_mode,
+                operator_id=info.operator_id,
+                operator_verified=info.operator_verified,
+            ),
             exclude=info.websocket,
         )
         log_event(

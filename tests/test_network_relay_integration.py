@@ -225,7 +225,7 @@ def make_lobby_hello(
     installation_id: str = "pytest-lobby-installation",
 ) -> dict[str, Any]:
     return {
-        "v": 4,
+        "v": 5,
         "app": "morsewurst",
         "type": "lobby_hello",
         "client_id": client_id,
@@ -788,7 +788,7 @@ def test_invalid_runtime_messages_warn_but_connection_survives(tmp_path: Path) -
         await send_json(
             client.websocket,
             {
-                "v": 4,
+                "v": 5,
                 "app": "morsewurst",
                 "type": "unknown_runtime_test_message",
             },
@@ -958,7 +958,7 @@ def test_lobby_presence_control_channel_handles_info_ping_heartbeat_and_unknown(
             await send_json(
                 websocket,
                 {
-                    "v": 4,
+                    "v": 5,
                     "app": "morsewurst",
                     "type": "server_info_request",
                     "sender_id": "lobby-client-1",
@@ -983,7 +983,7 @@ def test_lobby_presence_control_channel_handles_info_ping_heartbeat_and_unknown(
             await send_json(
                 websocket,
                 {
-                    "v": 4,
+                    "v": 5,
                     "app": "morsewurst",
                     "type": "strange_lobby_message",
                 },
@@ -1009,7 +1009,7 @@ def test_first_message_public_room_server_info_and_ping_shortcuts_close_cleanly(
             await send_json(
                 public_rooms_ws,
                 {
-                    "v": 4,
+                    "v": 5,
                     "app": "morsewurst",
                     "type": "public_rooms_request",
                     "capabilities": {"public_rooms": True},
@@ -1026,7 +1026,7 @@ def test_first_message_public_room_server_info_and_ping_shortcuts_close_cleanly(
             await send_json(
                 server_info_ws,
                 {
-                    "v": 4,
+                    "v": 5,
                     "app": "morsewurst",
                     "type": "server_info_request",
                     "sender_id": "one-shot-info",
@@ -1059,7 +1059,7 @@ def test_malformed_first_message_does_not_crash_server(tmp_path: Path) -> None:
             await send_json(
                 websocket,
                 {
-                    "v": 4,
+                    "v": 5,
                     "app": "morsewurst",
                     "type": "not_a_valid_first_message",
                 },
@@ -1150,13 +1150,13 @@ def test_user_registry_records_room_and_lobby_connections(tmp_path: Path) -> Non
         assert room_user["last_room_key"] == "default"
         assert room_user["last_room_id"]
         assert room_user["connect_count"] >= 1
-        assert room_user["last_protocol_version"] == 4
+        assert room_user["last_protocol_version"] == 5
 
         assert lobby_user["last_callsign"] == expected_lobby_callsign
         assert lobby_user["last_room_key"] == ""
         assert lobby_user["last_room_id"] == ""
         assert lobby_user["connect_count"] >= 1
-        assert lobby_user["last_protocol_version"] == 4
+        assert lobby_user["last_protocol_version"] == 5
 
         assert expected_room_callsign in room_user.get("callsigns_seen", [])
         assert expected_lobby_callsign in lobby_user.get("callsigns_seen", [])

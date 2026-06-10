@@ -57,8 +57,10 @@ Covered areas include:
 * radio-noise profile sanitization and persistence
 * TX/RX noise-ducking configuration
 * public room client-side handling
+* operator identity generation, import/export and challenge signing
+* relay-side operator identity verification and spoofing protection
+* read-only network listener clients and operator filtering
 * user profile storage
-* legacy data migration into the default profile
 * per-profile data directory selection
 * profile creation, activation, renaming and deletion
 * backup handling and profile registry recovery
@@ -73,7 +75,7 @@ Covered areas include:
 * network UI package/import structure
 * network radio-noise tone preset behaviour
 * TX/RX noise-ducking behaviour
-* real local WebSocket relay behaviour, including room joins, private rooms, ping/server-info handling, key/tone relay broadcast, slow-client protection, relay cleanup and logging
+* real local WebSocket relay behaviour, including room joins, private rooms, ping/server-info handling, key/tone relay broadcast, read-only listeners, operator identity verification, slow-client protection, relay cleanup and logging
 
 
 ## Install test dependencies
@@ -84,10 +86,10 @@ For the basic regression tests:
 python -m pip install pytest
 ```
 
-For the relay integration tests, install the real `websockets` package as well:
+For the relay and operator identity integration tests, install the real `websockets`, `pytest-asyncio` and `cryptography` packages as well:
 
 ```bash
-python -m pip install pytest websockets
+python -m pip install pytest websockets pytest-asyncio cryptography
 ```
 
 If you run the network-related tests in an environment that does not have the full project dependencies installed, `tests/conftest.py` provides a small fallback stub for `websockets` so the pure protocol tests can still import. The relay integration tests require the real `websockets` package and are skipped if it is not available.
@@ -131,7 +133,9 @@ tests/
   test_network_relay_privacy.py
   test_network_tone_player_live_tones.py
   test_network_ui_imports.py
+  test_operator_identity.py
   test_profile_store.py
+  test_relay_operator_identity.py
   test_scoring.py
   test_scratchpad.py
   test_serial_controller.py

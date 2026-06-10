@@ -1,11 +1,33 @@
 {
   "app": "Morsewurst",
-  "latest_version": "0.99.16.1",
-  "release_date": "2026-06-09",
-  "release_url": "https://github.com/kasperikoski/morsewurst/releases/tag/v0.99.16.1",
+  "latest_version": "0.99.17",
+  "release_date": "2026-06-10",
+  "release_url": "https://github.com/kasperikoski/morsewurst/releases/tag/v0.99.17",
   "download_url": "https://kasperikoski.fi/morsewurst",
   "release_notes": [
-    "Fixed straight-key auto-start handling so contact bounce no longer counts as multiple start-trigger presses.",
-    "The fix affects only the idle auto-start shortcut and does not change Morse decoding, scoring, saved telemetry or network relay behaviour during practice."
+    "Added automatic Operator Identity support for Morsewurst Network.",
+    "Operator identities are generated and managed automatically by the app.",
+    "Added shareable MWOP listener codes for following and verifying a specific operator.",
+    "Added Ed25519-based operator authentication between clients and the relay.",
+    "The relay now verifies operator signatures before marking a session as verified.",
+    "The relay now checks that operator IDs match their public keys.",
+    "Added protection against spoofed operator fields in runtime key and tone messages.",
+    "Added server-trusted operator_id and operator_verified fields to relayed messages.",
+    "Added read-only listener mode for monitoring rooms without transmit rights.",
+    "Added optional operator filtering for listener clients.",
+    "Private room passwords remain required and are not bypassed by Operator Identity.",
+    "Kept key telemetry as V1 while moving the WebSocket envelope protocol to V5.",
+    "Fixed remaining server-info messages to use the central V5 protocol helper.",
+    "Improved server-safe network imports for minimal relay installations.",
+    "Improved listener CLI error handling for cleaner failures.",
+    "Added an Operator Identity section to the Network settings UI.",
+    "Added copy, export, import and regenerate actions for the local Operator Identity.",
+    "Added a button for opening the current profile data folder from the Operator Identity section.",
+    "Improved Operator Identity wording and security guidance in the supported UI languages.",
+    "Clarified that the listener code is safe to share, while exported identity files contain a private key and must be kept private.",
+    "Improved the update dialog so long release notes are no longer truncated after short text limits.",
+    "Raised release-note validation and display limits to support longer update descriptions.",
+    "Added and updated regression tests for Operator Identity, listener mode, spoofing protection and protocol version handling.",
+    "Updated Network documentation for Operator Identity, listener mode and V5/V1 protocol behaviour."
   ]
 }

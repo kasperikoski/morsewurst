@@ -587,7 +587,7 @@ class UpdateController:
             pass
 
         if manifest.release_notes:
-            for note in manifest.release_notes[:20]:
+            for note in manifest.release_notes[:500]:
                 notes.insert(tk.END, f"\u2022 {note}\n", "bullet")
         else:
             notes.insert(
@@ -749,11 +749,11 @@ def _clean_release_notes(value: object) -> list[str]:
     notes: list[str] = []
 
     for item in raw_items:
-        text = _clean_text(item, limit=180)
+        text = _clean_text(item, limit=10_000)
         if text:
             notes.append(text)
 
-    return notes[:20]
+    return notes[:500]
 
 
 def _is_safe_http_url(value: str) -> bool:

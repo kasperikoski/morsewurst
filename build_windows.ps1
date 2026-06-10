@@ -34,9 +34,14 @@ $RequiredFiles = @(
     "morsewurst\ui\network\views\settings_view.py",
     "morsewurst\ui\network\views\server_info_view.py",
     "morsewurst\ui\network_matrix_theme.py",
+    "morsewurst\network\__init__.py",
+    "morsewurst\network\defaults.py",
+    "morsewurst\network\identity.py",
+    "morsewurst\network\manager.py",
+    "morsewurst\network\models.py",
+    "morsewurst\network\protocol.py",
     "morsewurst\network\public_rooms.py",
-    "morsewurst\network\settings_store.py",
-    "morsewurst\network\defaults.py"
+    "morsewurst\network\settings_store.py"
 )
 
 foreach ($File in $RequiredFiles) {
@@ -49,6 +54,9 @@ Write-Host "Installing Python dependencies..."
 python -m pip install --upgrade pip
 python -m pip install -r requirements.txt
 python -m pip install --upgrade pyinstaller
+
+Write-Host "Checking Operator Identity dependencies..."
+python -c "from morsewurst.network.identity import generate_operator_identity; identity = generate_operator_identity(); print('Operator Identity dependencies OK:', identity.operator_id)"
 
 Write-Host "Cleaning previous build files..."
 Remove-Item -Recurse -Force "build" -ErrorAction SilentlyContinue
@@ -66,6 +74,7 @@ python -m PyInstaller `
     --collect-all morsewurst `
     --collect-all websockets `
     --collect-all sounddevice `
+    --collect-all cryptography `
     --hidden-import morsewurst.ui.network `
     --hidden-import morsewurst.ui.network.lobby_window `
     --hidden-import morsewurst.ui.network.lobby_actions `
@@ -79,6 +88,10 @@ python -m PyInstaller `
     --hidden-import morsewurst.ui.network.views.settings_view `
     --hidden-import morsewurst.ui.network.views.server_info_view `
     --hidden-import morsewurst.ui.network_matrix_theme `
+    --hidden-import morsewurst.network.identity `
+    --hidden-import morsewurst.network.manager `
+    --hidden-import morsewurst.network.models `
+    --hidden-import morsewurst.network.protocol `
     --hidden-import morsewurst.network.public_rooms `
     --hidden-import morsewurst.network.settings_store `
     --hidden-import morsewurst.core.morse_preview_player `

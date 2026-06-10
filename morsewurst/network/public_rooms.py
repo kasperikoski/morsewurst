@@ -17,6 +17,7 @@ from morsewurst.network.protocol import (
     encode_message,
     make_client_ping,
     make_public_rooms_request,
+    make_server_info_request,
     validate_public_rooms_response,
 )
 
@@ -193,12 +194,7 @@ async def _fetch_server_info_async(
 
 
 async def _fetch_server_info_once(*, server_uri: str) -> dict[str, Any]:
-    request = {
-        "v": 4,
-        "app": "morsewurst",
-        "type": "server_info_request",
-        "sender_id": "lobby",
-    }
+    request = make_server_info_request(sender_id="lobby")
 
     async with connect(
         server_uri,

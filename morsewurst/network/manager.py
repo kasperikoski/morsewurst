@@ -16,6 +16,12 @@ from typing import Any, Dict, Optional
 import morsewurst.config as config
 from morsewurst.core.logging_service import log_event, log_exception
 
+from morsewurst.network.identity import (
+    OperatorIdentity,
+    OperatorIdentityError,
+    load_or_create_operator_identity,
+    sign_operator_challenge,
+)
 from morsewurst.network.jitter_buffer import JitterBuffer
 from morsewurst.network.models import NetworkSettings, PlaybackSettings
 from morsewurst.network.protocol import (
@@ -26,6 +32,7 @@ from morsewurst.network.protocol import (
     make_client_hello,
     make_client_ping,
     make_lobby_hello,
+    make_server_info_request,
     make_key_message,
     make_tone_message,
     new_id,
@@ -58,6 +65,8 @@ class NetworkManager:
         self.last_joined_room_name: str = ""
         self.last_joined_room_id: str = ""
         self.last_joined_room_access: str = ""
+        self.last_operator_id: str = ""
+        self.last_operator_verified: bool = False
 
         self._lobby_websocket = None
 
@@ -832,12 +841,7 @@ class NetworkManager:
             )
             return
 
-        message = {
-            "v": 4,
-            "app": "morsewurst",
-            "type": "server_info_request",
-            "sender_id": self.client_id,
-        }
+        message = make_server_info_request(sender_id=self.client_id)
 
         log_event(
             "network",
@@ -1234,6 +1238,25 @@ class NetworkManager:
             context=_settings_log_context(settings, mode=self._mode),
         )
 
+    def _operator_identity_for_settings(self, settings: NetworkSettings) -> OperatorIdentity | None:
+        identity = getattr(settings, "operator_identity", None)
+        if isinstance(identity, OperatorIdentity):
+            return identity
+
+        try:
+            return load_or_create_operator_identity()
+        except OperatorIdentityError as exc:
+            log_exception(
+                "network",
+                "network.operator_identity.load_failed",
+                exc,
+                level="warning",
+                message="Operator identity could not be loaded; connecting without verified operator identity.",
+                context={"room": getattr(settings, "room", "")},
+            )
+            self._status("warning", f"Operator Identity ei ole käytettävissä: {exc}")
+            return None
+
     async def _client_authenticate(self, websocket: Any, settings: NetworkSettings) -> dict[str, Any]:
         log_event(
             "network",
@@ -1241,6 +1264,10 @@ class NetworkManager:
             message="Room authentication handshake started.",
             context=_settings_log_context(settings, mode=self._mode),
         )
+        operator_identity = self._operator_identity_for_settings(settings)
+        operator_id = operator_identity.operator_id if operator_identity is not None else ""
+        operator_public_key = operator_identity.operator_public_key if operator_identity is not None else ""
+
         await websocket.send(
             encode_message(
                 make_client_hello(
@@ -1249,6 +1276,9 @@ class NetworkManager:
                     client_id=self.client_id,
                     installation_id=settings.installation_id,
                     client_version=getattr(config, "APP_VERSION", ""),
+                    client_mode=getattr(settings, "client_mode", "operator"),
+                    operator_id=operator_id,
+                    operator_public_key=operator_public_key,
                 )
             )
         )
@@ -1268,6 +1298,27 @@ class NetworkManager:
             and challenge.get("can_create_private_room")
             and not challenge.get("room_exists", True)
         )
+        operator_auth = None
+        if operator_identity is not None:
+            try:
+                operator_auth = sign_operator_challenge(
+                    operator_identity,
+                    server_id=str(challenge.get("server_id") or ""),
+                    server_nonce=nonce,
+                    room=str(challenge.get("room") or settings.room),
+                    client_id=self.client_id,
+                )
+            except OperatorIdentityError as exc:
+                log_exception(
+                    "network",
+                    "network.operator_identity.sign_failed",
+                    exc,
+                    level="warning",
+                    message="Operator identity could not sign the server challenge; connecting without verified operator identity.",
+                    context={"room": settings.room},
+                )
+                self._status("warning", f"Operator Identity -todennus ohitettiin: {exc}")
+
         await websocket.send(
             encode_message(
                 make_auth(
@@ -1277,6 +1328,7 @@ class NetworkManager:
                     nonce=nonce,
                     auth_required=auth_required,
                     include_create_verifier=include_create_verifier,
+                    operator_auth=operator_auth,
                 )
             )
         )
@@ -1293,6 +1345,8 @@ class NetworkManager:
         self.last_joined_room_name = str(welcome.get("room_name") or settings.room)
         self.last_joined_room_id = str(welcome.get("room_id") or "")
         self.last_joined_room_access = str(welcome.get("room_access") or "")
+        self.last_operator_id = str(welcome.get("operator_id") or "")
+        self.last_operator_verified = bool(welcome.get("operator_verified"))
 
         log_event(
             "network",
@@ -1304,6 +1358,8 @@ class NetworkManager:
                 "room_name": self.last_joined_room_name,
                 "room_id": self.last_joined_room_id,
                 "room_access": self.last_joined_room_access,
+                "operator_id": self.last_operator_id,
+                "operator_verified": self.last_operator_verified,
             },
         )
         return welcome

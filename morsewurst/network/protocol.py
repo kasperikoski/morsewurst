@@ -15,7 +15,7 @@ import uuid
 from datetime import datetime, timezone
 from typing import Any, Dict, Optional
 
-PROTOCOL_VERSION = 4
+PROTOCOL_VERSION = 5
 APP_ID = "morsewurst"
 
 SUPPORTED_WAVEFORMS = {"sine", "square", "triangle", "saw"}
@@ -24,6 +24,9 @@ CALLSIGN_MAX_LENGTH = 20
 INSTALLATION_ID_MAX_LENGTH = 80
 ROOM_ACCESS_PUBLIC = "public"
 ROOM_ACCESS_PRIVATE = "private"
+CLIENT_MODE_OPERATOR = "operator"
+CLIENT_MODE_LISTENER = "listener"
+CLIENT_MODES = {CLIENT_MODE_OPERATOR, CLIENT_MODE_LISTENER}
 
 _ROOM_SAFE_RE = re.compile(r"[^a-z0-9._-]+")
 _INSTALLATION_ID_SAFE_RE = re.compile(r"[^A-Za-z0-9._:-]+")
@@ -144,6 +147,16 @@ def normalize_callsign(callsign: object) -> str:
         return "Morsewurst"
     return value
 
+def sanitize_client_mode(value: object) -> str:
+    mode = str(value or CLIENT_MODE_OPERATOR).strip().lower()[:24]
+    return mode if mode in CLIENT_MODES else CLIENT_MODE_OPERATOR
+
+
+def sanitize_operator_handshake_value(value: object, *, maximum: int = 256) -> str:
+    text = str(value or "").strip().replace("\r", "").replace("\n", "")
+    return text[:maximum]
+
+
 
 def is_valid_password_verifier(value: object) -> bool:
     return bool(_HEX_SHA256_RE.fullmatch(str(value or "")))
@@ -256,7 +269,11 @@ def make_client_hello(
     client_id: str,
     installation_id: str = "",
     client_version: str = "",
+    client_mode: str = CLIENT_MODE_OPERATOR,
+    operator_id: str = "",
+    operator_public_key: str = "",
 ) -> Dict[str, Any]:
+    mode = sanitize_client_mode(client_mode)
     message = base_message("client_hello")
     message.update(
         {
@@ -266,8 +283,9 @@ def make_client_hello(
             "client_id": str(client_id)[:80],
             "installation_id": sanitize_installation_id(installation_id),
             "client_version": str(client_version or "")[:40],
+            "client_mode": mode,
             "capabilities": {
-                "key_events": True,
+                "key_events": mode != CLIENT_MODE_LISTENER,
                 "tone_events": False,
                 "decoded_text": False,
                 "audio_playback": True,
@@ -275,9 +293,17 @@ def make_client_hello(
                 "public_rooms": True,
                 "server_info": True,
                 "server_ping": True,
+                "operator_identity": True,
+                "listener_mode": True,
             },
         }
     )
+
+    if operator_id:
+        message["operator_id"] = sanitize_operator_handshake_value(operator_id, maximum=64)
+    if operator_public_key:
+        message["operator_public_key"] = sanitize_operator_handshake_value(operator_public_key, maximum=128)
+
     return message
 
 
@@ -319,6 +345,7 @@ def make_auth(
     nonce: str,
     auth_required: bool = True,
     include_create_verifier: bool = False,
+    operator_auth: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     room_id = normalize_room_id(room)
     message = base_message("auth")
@@ -328,6 +355,9 @@ def make_auth(
             "client_id": str(client_id)[:80],
         }
     )
+
+    if operator_auth:
+        message["operator_auth"] = operator_auth
 
     if not auth_required:
         message["proof"] = ""
@@ -354,6 +384,9 @@ def make_welcome(
     room_name: Optional[str] = None,
     room_id: str = "",
     room_access: str = ROOM_ACCESS_PRIVATE,
+    client_mode: str = CLIENT_MODE_OPERATOR,
+    operator_id: str = "",
+    operator_verified: bool = False,
 ) -> Dict[str, Any]:
     access = str(room_access or ROOM_ACCESS_PRIVATE).lower()
     if access not in {ROOM_ACCESS_PUBLIC, ROOM_ACCESS_PRIVATE}:
@@ -374,18 +407,57 @@ def make_welcome(
             "room_access": access,
             "server_id": str(server_id),
             "client_id": str(client_id),
+            "client_mode": sanitize_client_mode(client_mode),
+            "operator_id": str(operator_id or ""),
+            "operator_verified": bool(operator_verified),
             "peers": peers,
         }
     )
     return message
 
 
-def make_peer_event(*, event_type: str, client_id: str, callsign: str) -> Dict[str, Any]:
+def make_peer_event(
+    *,
+    event_type: str,
+    client_id: str,
+    callsign: str,
+    client_mode: str = CLIENT_MODE_OPERATOR,
+    operator_id: str = "",
+    operator_verified: bool = False,
+) -> Dict[str, Any]:
     if event_type not in {"peer_joined", "peer_left"}:
         raise ValueError("event_type must be peer_joined or peer_left")
     message = base_message(event_type)
-    message.update({"client_id": str(client_id), "callsign": normalize_callsign(callsign)})
+    message.update(
+        {
+            "client_id": str(client_id),
+            "callsign": normalize_callsign(callsign),
+            "client_mode": sanitize_client_mode(client_mode),
+            "operator_id": str(operator_id or ""),
+            "operator_verified": bool(operator_verified),
+        }
+    )
     return message
+
+
+def attach_server_operator_fields(message: Dict[str, Any], *, operator_id: str = "", operator_verified: bool = False) -> Dict[str, Any]:
+    """Return a key/tone message copy with server-trusted operator fields.
+
+    The relay must never trust client-supplied operator_id/operator_verified values
+    on high-frequency telemetry messages. These fields are always stripped first
+    and then re-added from the verified session state.
+    """
+
+    clean = dict(message)
+    clean.pop("operator_id", None)
+    clean.pop("operator_verified", None)
+    clean.pop("operator_public_key", None)
+    clean.pop("operator_signature", None)
+
+    if operator_id:
+        clean["operator_id"] = str(operator_id)
+    clean["operator_verified"] = bool(operator_verified and operator_id)
+    return clean
 
 
 def make_status(text: str, *, level: str = "info", code: str = "") -> Dict[str, Any]:
@@ -411,6 +483,15 @@ def make_client_ping(*, sender_id: str, ping_id: str = "") -> Dict[str, Any]:
             "client_sent_ms": now_ms(),
         }
     )
+    return message
+
+
+def make_server_info_request(*, sender_id: str = "") -> Dict[str, Any]:
+    """Build a server-info request using the active envelope protocol version."""
+
+    message = base_message("server_info_request")
+    if sender_id:
+        message["sender_id"] = str(sender_id)[:80]
     return message
 
 

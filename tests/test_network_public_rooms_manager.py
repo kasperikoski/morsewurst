@@ -8,7 +8,13 @@ import pytest
 from morsewurst.network import public_rooms as public_rooms_module
 from morsewurst.network.manager import NetworkManager
 from morsewurst.network.models import NetworkSettings
-from morsewurst.network.protocol import ProtocolError, decode_message, encode_message, make_server_pong
+from morsewurst.network.protocol import (
+    PROTOCOL_VERSION,
+    ProtocolError,
+    decode_message,
+    encode_message,
+    make_server_pong,
+)
 
 
 class FakeConnect:
@@ -84,7 +90,7 @@ def test_fetch_public_rooms_once_sends_request_and_maps_sanitized_rooms(
 
     assert len(fake.sent_messages) == 1
     request = fake.sent_messages[0]
-    assert request["v"] == 4
+    assert request["v"] == PROTOCOL_VERSION
     assert request["app"] == "morsewurst"
     assert request["type"] == "public_rooms_request"
     assert request["capabilities"] == {"public_rooms": True}
@@ -141,7 +147,7 @@ def test_fetch_server_info_once_requires_server_info_response(
 
     assert len(fake.sent_messages) == 1
     request = fake.sent_messages[0]
-    assert request["v"] == 4
+    assert request["v"] == PROTOCOL_VERSION
     assert request["app"] == "morsewurst"
     assert request["type"] == "server_info_request"
     assert request["sender_id"] == "lobby"
@@ -246,8 +252,10 @@ def test_network_manager_server_queries_use_client_queue_when_control_channel_re
 
     first = manager._client_send_queue.get_nowait()
     second = manager._client_send_queue.get_nowait()
+    assert first["v"] == PROTOCOL_VERSION
     assert first["type"] == "server_info_request"
     assert first["sender_id"] == manager.client_id
+    assert second["v"] == PROTOCOL_VERSION
     assert second["type"] == "client_ping"
     assert second["sender_id"] == manager.client_id
 

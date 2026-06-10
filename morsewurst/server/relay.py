@@ -12,10 +12,12 @@ import time
 from typing import Any
 from dataclasses import dataclass, field
 
+from morsewurst.network.identity import OperatorIdentityError, verify_operator_challenge
 from morsewurst.network.protocol import (
     ProtocolError,
     ROOM_ACCESS_PRIVATE,
     ROOM_ACCESS_PUBLIC,
+    attach_server_operator_fields,
     decode_message,
     encode_message,
     is_valid_password_verifier,
@@ -30,6 +32,7 @@ from morsewurst.network.protocol import (
     new_nonce,
     normalize_callsign,
     normalize_room_id,
+    sanitize_client_mode,
     sanitize_installation_id,
     sanitize_room_display_name,
     verify_auth,
@@ -204,10 +207,25 @@ class RelayServer:
                 session.message_count += 1
 
                 if message_type in {"key", "tone"}:
+                    if session.client_mode == "listener":
+                        LOGGER.warning(
+                            "Listener client %s (%s) attempted to send %s telemetry; ignored.",
+                            session.callsign,
+                            session.client_id,
+                            message_type,
+                        )
+                        await self._send(websocket, make_status("Listener mode is read-only.", level="warning"))
+                        continue
+
                     session.tone_count += 1
                     session.last_tone_at = time.time()
-                    message["via_server_id"] = self.server_id
-                    await self._broadcast(room, message, exclude=websocket)
+                    outbound_message = attach_server_operator_fields(
+                        message,
+                        operator_id=session.operator_id,
+                        operator_verified=session.operator_verified,
+                    )
+                    outbound_message["via_server_id"] = self.server_id
+                    await self._broadcast(room, outbound_message, exclude=websocket)
                     continue
 
                 if message_type == "heartbeat":
@@ -323,6 +341,7 @@ class RelayServer:
         installation_id = sanitize_installation_id(hello.get("installation_id"))
         installation_hash = installation_id_hash(installation_id)
         client_version = str(hello.get("client_version") or "")[:40]
+        client_mode = sanitize_client_mode(hello.get("client_mode"))
 
         try:
             protocol_version = int(hello.get("v") or 0)
@@ -352,6 +371,7 @@ class RelayServer:
         installation_id = sanitize_installation_id(hello.get("installation_id"))
         installation_hash = installation_id_hash(installation_id)
         client_version = str(hello.get("client_version") or "")[:40]
+        client_mode = sanitize_client_mode(hello.get("client_mode"))
 
         try:
             protocol_version = int(hello.get("v") or 0)
@@ -429,6 +449,38 @@ class RelayServer:
                 ):
                     raise RoomError("BAD_ROOM_PASSWORD", "Huoneen salasana ei täsmää.")
 
+            operator_id = ""
+            operator_verified = False
+            operator_auth = auth.get("operator_auth")
+            if isinstance(operator_auth, dict):
+                try:
+                    operator_id = verify_operator_challenge(
+                        operator_auth,
+                        server_id=self.server_id,
+                        server_nonce=nonce,
+                        room=room_key,
+                        client_id=client_id,
+                    )
+                    operator_verified = True
+                    LOGGER.info(
+                        "Operator auth succeeded for client %s room key='%s' operator_id='%s'.",
+                        client_id,
+                        room_key,
+                        operator_id,
+                    )
+                except OperatorIdentityError as exc:
+                    LOGGER.warning(
+                        "Operator auth failed for client %s room key='%s': %s",
+                        client_id,
+                        room_key,
+                        exc,
+                    )
+            else:
+                LOGGER.info(
+                    "Client %s joined without operator identity; traffic will be unverified.",
+                    client_id,
+                )
+
             session = ClientSession(
                 client_id=client_id,
                 callsign=callsign,
@@ -438,6 +490,9 @@ class RelayServer:
                 installation_id_hash=installation_hash,
                 client_version=client_version,
                 protocol_version=protocol_version,
+                client_mode=client_mode,
+                operator_id=operator_id,
+                operator_verified=operator_verified,
             )
             self.registry.add_client(current, session)
 
@@ -445,7 +500,13 @@ class RelayServer:
 
     async def _register_client(self, room: RoomState, session: ClientSession) -> None:
         peers = [
-            {"client_id": peer.client_id, "callsign": peer.callsign}
+            {
+                "client_id": peer.client_id,
+                "callsign": peer.callsign,
+                "client_mode": peer.client_mode,
+                "operator_id": peer.operator_id,
+                "operator_verified": peer.operator_verified,
+            }
             for peer in room.clients.values()
             if peer.websocket is not session.websocket
         ]
@@ -460,6 +521,9 @@ class RelayServer:
                 server_id=self.server_id,
                 client_id=session.client_id,
                 peers=peers,
+                client_mode=session.client_mode,
+                operator_id=session.operator_id,
+                operator_verified=session.operator_verified,
             ),
         )
 
@@ -467,20 +531,35 @@ class RelayServer:
 
         await self._broadcast(
             room,
-            make_peer_event(event_type="peer_joined", client_id=session.client_id, callsign=session.callsign),
+            make_peer_event(
+                event_type="peer_joined",
+                client_id=session.client_id,
+                callsign=session.callsign,
+                client_mode=session.client_mode,
+                operator_id=session.operator_id,
+                operator_verified=session.operator_verified,
+            ),
             exclude=session.websocket,
         )
 
         self.user_registry.record_connect(session)
 
         LOGGER.info(
-            "%s joined %s room key='%s' room_id='%s' name='%s'.",
+            "%s joined %s room key='%s' room_id='%s' name='%s' mode='%s' operator_verified=%s.",
             session.callsign,
             room.access,
             room.room_key,
             room.room_id,
             room.name,
+            session.client_mode,
+            session.operator_verified,
         )
+        if session.client_mode == "listener":
+            LOGGER.info(
+                "Listener joined room key='%s' room_id='%s' operator_filter_is_client_side.",
+                room.room_key,
+                room.room_id,
+            )
 
     async def _unregister_client(self, session: ClientSession) -> None:
         await self._stop_outbound_sender(session.websocket)
@@ -509,7 +588,14 @@ class RelayServer:
 
         await self._broadcast(
             room,
-            make_peer_event(event_type="peer_left", client_id=session.client_id, callsign=session.callsign),
+            make_peer_event(
+                event_type="peer_left",
+                client_id=session.client_id,
+                callsign=session.callsign,
+                client_mode=session.client_mode,
+                operator_id=session.operator_id,
+                operator_verified=session.operator_verified,
+            ),
             exclude=session.websocket,
         )
 
@@ -697,6 +783,9 @@ class RelayServer:
                     event_type="peer_left",
                     client_id=session.client_id,
                     callsign=session.callsign,
+                    client_mode=session.client_mode,
+                    operator_id=session.operator_id,
+                    operator_verified=session.operator_verified,
                 ),
                 exclude=session.websocket,
             )

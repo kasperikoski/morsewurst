@@ -278,6 +278,8 @@ class LobbyActionsMixin:
             server_uri=self._server_uri(),
             transmit_enabled=bool(self.transmit_enabled_var.get()),
             playback=playback,
+            client_mode="operator",
+            operator_identity=getattr(self, "operator_identity", None),
         )
 
     def save_settings(self, *, last_room: str | None = None) -> None:

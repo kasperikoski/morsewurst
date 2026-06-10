@@ -50,6 +50,7 @@ The core local training workflow is functional and continues to be refined. The 
 - Practice history stored locally
 - WX-MOR practice mode for weather-oriented Morse training
 - Morsewurst Network for online practice through a relay server
+- Read-only network listener mode with operator identity verification
 - Network quality indicator with ping and jitter-buffer feedback
 - Windows-oriented desktop use
 - Update-checking support through a remote manifest
@@ -58,7 +59,7 @@ The core local training workflow is functional and continues to be refined. The 
 
 Morsewurst includes network practice support for connecting users through a relay server. Users can join public rooms or create private rooms and exchange real-time Morse keying telemetry.
 
-The network system includes relay-side room handling, client reconnect logic, ping and server status checks, jitter-buffered receive playback and a visible network quality indicator. Morsewurst Network is still an actively developed prototype, so occasional glitches and unexpected behaviour may occur.
+The network system includes relay-side room handling, client reconnect logic, ping and server status checks, jitter-buffered receive playback, read-only listener clients and a visible network quality indicator. Operators have a persistent listener code backed by local cryptographic identity, allowing listeners to follow a specific operator while the relay verifies the operator identity before marking telemetry as trusted. Morsewurst Network is still an actively developed prototype, so occasional glitches and unexpected behaviour may occur.
 
 Network receive playback can also include local radio-style channel noise, with configurable noise profile, tone and level settings. This is intended to make online Morse practice feel closer to listening through a real radio channel while keeping the actual transmitted Morse telemetry clean.
 
@@ -229,6 +230,8 @@ It does not yet download or install updates automatically.
 
 Morsewurst stores practice history locally on the user's computer.
 
+Operator Identity data is stored locally on the user's computer. The exported identity file contains the private operator key and should not be shared. The public listener code can be shared with listeners who need to follow a specific operator in network rooms.
+
 Network features may send real-time practice-related telemetry through the configured relay server when the user chooses to use network practice. Local training does not require network access.
 
 ## 14. Coming next
@@ -239,7 +242,7 @@ Planned and ongoing work includes:
 
 - Further improving network practice and online room features
 - Improving the update workflow so the application can eventually update itself
-- Keeping the documentation clearer and more up to date, including small cleanups like this one
+- Keeping the documentation clear and up to date as the network system evolves
 
 ## 15. License
 

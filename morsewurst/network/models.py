@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from typing import Any
 
 import morsewurst.config as config
 from morsewurst.network.defaults import DEFAULT_RELAY_URI
@@ -48,6 +49,8 @@ class NetworkSettings:
     server_uri: str = DEFAULT_RELAY_URI
     transmit_enabled: bool = True
     playback: PlaybackSettings = field(default_factory=PlaybackSettings)
+    client_mode: str = "operator"
+    operator_identity: Any = None
 
     # Optional TLS support. Leave empty for normal ws:// testing.
     # For real public internet, prefer WSS through a proper reverse proxy or use VPN.

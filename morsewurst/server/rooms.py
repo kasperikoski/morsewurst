@@ -46,6 +46,9 @@ class ClientSession:
     installation_id_hash: str = ""
     client_version: str = ""
     protocol_version: int = 0
+    client_mode: str = "operator"
+    operator_id: str = ""
+    operator_verified: bool = False
     connected_at: float = field(default_factory=time.time)
     last_seen_at: float = field(default_factory=time.time)
     last_tone_at: float | None = None
